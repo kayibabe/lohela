@@ -1,0 +1,35 @@
+# The image is built from the repo root so the frontend can be compiled in a
+# first stage. Keep everything that is not build input out of the context.
+
+# Secrets — env values are injected at runtime via env_file, never baked in.
+.env
+.env.local
+.env.*.local
+
+# VCS and tooling
+.git
+.gitignore
+.github
+.claude
+.mimosa
+.codex-doc-review
+docs
+
+# Node — reinstalled from the lockfile inside the build stage
+frontend/node_modules
+frontend/dist
+npm-debug.log*
+
+# Python
+**/__pycache__
+**/*.py[cod]
+.venv
+venv
+.pytest_cache
+.coverage
+htmlcov
+
+# Local dev helpers
+start.bat
+stop.bat
+docker-compose*.yml

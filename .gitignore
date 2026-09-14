@@ -1,0 +1,51 @@
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+*.egg
+*.egg-info/
+dist/
+build/
+.venv/
+venv/
+env/
+.eggs/
+
+# Pytest
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Alembic
+# (migrations are committed — only exclude if you want to exclude auto-generated)
+
+# IDE
+.vscode/
+.idea/
+.claude/settings.local.json
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Docker
+*.log
+
+# Node (future frontend)
+node_modules/
+.next/
+
+# Docs spec — keep committed as audit reference
+# docs/spec/ is intentionally NOT excluded
+
+# Frontend build copied into the API image at docker build time
+backend/static/

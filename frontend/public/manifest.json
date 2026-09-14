@@ -1,0 +1,13 @@
+﻿{
+  "name": "Lohela â€” Intelligence Beyond Numbers",
+  "short_name": "Lohela",
+  "description": "Auditable football research and paper-trading intelligence",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#17131b",
+  "theme_color": "#1456a0",
+  "icons": [
+    { "src": "/favicon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" },
+    { "src": "/lohela-logo.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}

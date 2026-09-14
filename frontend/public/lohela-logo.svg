@@ -1,0 +1,79 @@
+﻿<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" role="img" aria-label="Lohela">
+  <defs>
+    <linearGradient id="ringGrad" x1="15%" y1="10%" x2="85%" y2="90%">
+      <stop offset="0%" stop-color="#0b376d"/>
+      <stop offset="60%" stop-color="#1456a0"/>
+      <stop offset="100%" stop-color="#2386c8"/>
+    </linearGradient>
+    <linearGradient id="tailGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#1456a0"/>
+      <stop offset="100%" stop-color="#0b376d"/>
+    </linearGradient>
+    <linearGradient id="ringGradDark" x1="15%" y1="10%" x2="85%" y2="90%">
+      <stop offset="0%" stop-color="#35d5e8"/>
+      <stop offset="60%" stop-color="#69e5f1"/>
+      <stop offset="100%" stop-color="#a5f3f8"/>
+    </linearGradient>
+    <linearGradient id="tailGradDark" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#69e5f1"/>
+      <stop offset="100%" stop-color="#35d5e8"/>
+    </linearGradient>
+    <!-- Light-mode variants via CSS -->
+    <style>
+      @media (prefers-color-scheme: light) {
+        .q-ring { stroke: url(#ringGrad); }
+        .q-tail { stroke: url(#tailGrad); }
+        .chart-line { stroke: #35d5e8; }
+        .chart-dot { fill: #2386c8; }
+        .px-a { fill: #0b376d; }
+        .px-b { fill: #1456a0; }
+        .px-c { fill: #2386c8; }
+        .px-d { fill: #35d5e8; }
+      }
+      @media (prefers-color-scheme: dark) {
+        .q-ring { stroke: url(#ringGradDark); }
+        .q-tail { stroke: url(#tailGradDark); }
+        .chart-line { stroke: #a5f3f8; }
+        .chart-dot { fill: #69e5f1; }
+        .px-a { fill: #1456a0; }
+        .px-b { fill: #35d5e8; }
+        .px-c { fill: #69e5f1; }
+        .px-d { fill: #a5f3f8; }
+      }
+    </style>
+  </defs>
+
+  <!-- Q outer ring -->
+  <circle cx="46" cy="46" r="30" fill="none"
+          class="q-ring"
+          stroke="url(#ringGrad)" stroke-width="11" stroke-linecap="round"/>
+
+  <!-- Q tail extending to lower-right -->
+  <line x1="67" y1="67" x2="88" y2="88"
+        class="q-tail"
+        stroke="url(#tailGrad)" stroke-width="11" stroke-linecap="round"/>
+
+  <!-- Analytics trend line inside Q -->
+  <polyline points="25,57 33,43 41,50 50,36 59,41"
+            fill="none" class="chart-line"
+            stroke="#35d5e8" stroke-width="2.8"
+            stroke-linecap="round" stroke-linejoin="round"/>
+
+  <!-- Data point dots -->
+  <circle cx="25" cy="57" r="2.8" class="chart-dot" fill="#2386c8"/>
+  <circle cx="33" cy="43" r="2.8" class="chart-dot" fill="#2386c8"/>
+  <circle cx="41" cy="50" r="2.8" class="chart-dot" fill="#2386c8"/>
+  <circle cx="50" cy="36" r="2.8" class="chart-dot" fill="#2386c8"/>
+  <circle cx="59" cy="41" r="2.8" class="chart-dot" fill="#35d5e8"/>
+
+  <!-- Pixel dissolution â€” scatters off the top-right of the ring -->
+  <rect x="67" y="22" width="7" height="7" rx="1.5" class="px-a" fill="#0b376d" opacity="0.90"/>
+  <rect x="76" y="16" width="6" height="6" rx="1.2" class="px-b" fill="#1456a0" opacity="0.72"/>
+  <rect x="85" y="11" width="5" height="5" rx="1"   class="px-c" fill="#2386c8" opacity="0.55"/>
+  <rect x="76" y="27" width="5" height="5" rx="1"   class="px-b" fill="#1456a0" opacity="0.62"/>
+  <rect x="84" y="23" width="4" height="4" rx="1"   class="px-c" fill="#2386c8" opacity="0.45"/>
+  <rect x="92" y="17" width="3.5" height="3.5" rx="0.8" class="px-d" fill="#35d5e8" opacity="0.35"/>
+  <rect x="90" y="31" width="3" height="3" rx="0.7"  class="px-d" fill="#35d5e8" opacity="0.28"/>
+  <rect x="97" y="11" width="2.5" height="2.5" rx="0.6" class="px-d" fill="#a5f3f8" opacity="0.22"/>
+  <rect x="95" y="25" width="2" height="2" rx="0.5"  class="px-d" fill="#a5f3f8" opacity="0.18"/>
+</svg>

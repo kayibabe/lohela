@@ -1,0 +1,13 @@
+﻿{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "lohela-frontend",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev", "--prefix", "frontend"],
+      "port": 3000,
+      "autoPort": true,
+      "url": "http://localhost:3000"
+    }
+  ]
+}

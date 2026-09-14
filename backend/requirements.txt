@@ -1,0 +1,41 @@
+# Web framework
+fastapi==0.141.1
+uvicorn[standard]==0.30.1
+
+# Database
+sqlalchemy[asyncio]==2.0.30
+alembic==1.13.1
+asyncpg==0.29.0
+psycopg2-binary==2.9.9
+
+# Data validation
+# pydantic>=2.9.0 required by fastapi 0.141.1 (CVE-2026-48710 / GHSA-86qp-5c8j-p5mr
+# starlette Host-header path desync fix, only landed in starlette>=1.0.1)
+pydantic==2.13.5
+pydantic-settings==2.3.0
+
+# HTTP client (async, for API-Football)
+httpx==0.27.0
+
+# Task queue
+celery[redis]==5.4.0
+redis==5.0.4
+
+# Scheduler
+apscheduler==3.10.4
+
+# Data science
+numpy==1.26.4
+scipy==1.13.1
+scikit-learn==1.5.0
+
+# ML models
+pymc==5.15.0
+
+# Utilities
+python-dotenv==1.2.2
+
+# Testing
+pytest==9.0.3
+pytest-asyncio==1.4.0
+httpx==0.27.0
