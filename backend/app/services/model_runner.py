@@ -8,6 +8,7 @@ predictions in the database.
 
 import asyncio
 import logging
+from collections import defaultdict
 from datetime import date, datetime, timezone
 from typing import Optional
 
@@ -70,6 +71,20 @@ MINIMUM_ACTIVE_MODELS = 3
 # threshold (cups, newly tracked leagues) keep using the pooled global fit.
 MIN_LEAGUE_HISTORICAL_MATCHES = 100
 
+# Total match count alone is not sufficient: a competition like the UEFA
+# Champions League can clear MIN_LEAGUE_HISTORICAL_MATCHES while spreading
+# those matches across 100+ teams from qualifying rounds, most of whom play
+# only 2-4 games within the competition. Two data points can't identify two
+# free MLE parameters (attack + defense) per team, so the fit for those
+# teams saturates at the optimizer's bounds and produces implied match
+# totals in the double digits (observed: 83.9 implied goals for one 2026-08
+# fixture, traced to a team's defense parameter sitting at the fit bound
+# off 2 training matches). A round-robin domestic league gives every team
+# dozens of meetings per season; this threshold requires that same kind of
+# repeated within-competition exposure before trusting a per-competition
+# fit over the pooled global one.
+MIN_MEDIAN_MATCHES_PER_TEAM = 15
+
 
 def _group_by_competition(historical: list[dict]) -> dict[int, list[dict]]:
     grouped: dict[int, list[dict]] = {}
@@ -78,14 +93,25 @@ def _group_by_competition(historical: list[dict]) -> dict[int, list[dict]]:
     return grouped
 
 
+def _median_matches_per_team(rows: list[dict]) -> int:
+    counts: dict[int, int] = defaultdict(int)
+    for row in rows:
+        counts[row["home_team_id"]] += 1
+        counts[row["away_team_id"]] += 1
+    values = sorted(counts.values())
+    return values[len(values) // 2] if values else 0
+
+
 def _competitions_meeting_threshold(
     by_competition: dict[int, list[dict]],
     threshold: int = MIN_LEAGUE_HISTORICAL_MATCHES,
+    min_median_matches_per_team: int = MIN_MEDIAN_MATCHES_PER_TEAM,
 ) -> set[int]:
     return {
         competition_id
         for competition_id, rows in by_competition.items()
         if len(rows) >= threshold
+        and _median_matches_per_team(rows) >= min_median_matches_per_team
     }
 
 

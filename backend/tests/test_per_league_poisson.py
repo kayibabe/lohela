@@ -54,6 +54,23 @@ def test_competitions_meeting_threshold_uses_the_documented_default():
     assert qualifying == {1}
 
 
+def test_competitions_meeting_threshold_excludes_high_match_count_thin_team_exposure():
+    """A UEFA-Champions-League-shaped competition: well over the total-match
+    threshold, but each team only plays a handful of matches within it
+    (qualifying rounds draw in ~100+ distinct clubs). Two data points can't
+    identify a team's attack and defense MLE parameters, which saturates
+    them at the optimizer bounds and produces implausible score predictions
+    (observed: 83.9 implied goals for one fixture). This must fall back to
+    the pooled global fit even though it clears MIN_LEAGUE_HISTORICAL_MATCHES.
+    """
+    thin_teams = [_row(1, 100 + i, 200 + i, 1, 1) for i in range(120)]  # 120 matches, 240 teams, 1 each
+    well_exposed = [_row(2, 10, 11, 1, 0)] * 150  # same two teams, 150 matches each
+
+    by_competition = {1: thin_teams, 2: well_exposed}
+    qualifying = _competitions_meeting_threshold(by_competition)
+    assert qualifying == {2}
+
+
 def test_score_match_prefers_the_competition_model_over_the_global_pool():
     """The selection logic mirrors `poisson_model = self._poisson_models.get(...) or self._poisson_model`."""
     runner = ModelRunner(None)  # type: ignore[arg-type]
