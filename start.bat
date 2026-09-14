@@ -1,8 +1,8 @@
 @echo off
-title Lohela â€” Starting
+title Lohela — Starting
 echo.
 echo  ============================
-echo   LOHELA â€” Starting up...
+echo   LOHELA — Starting up...
 echo  ============================
 echo.
 

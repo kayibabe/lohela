@@ -300,19 +300,19 @@ export default function DailyTicketsPage({ date }: DailyTicketsPageProps) {
     {
       key: "conservative" as const,
       name: "Conservative",
-      desc: "Q â‰¥85 Â· 3â€“6 legs Â· 3â€“5Ã—",
+      desc: "Q ≥85 · 3–6 legs · 3–5×",
       color: "var(--conservative)",
     },
     {
       key: "balanced" as const,
       name: "Balanced",
-      desc: "Q â‰¥80 Â· 60% Grade A/A+",
+      desc: "Q ≥80 · 60% Grade A/A+",
       color: "var(--balanced)",
     },
     {
       key: "aggressive" as const,
       name: "Aggressive",
-      desc: "Q â‰¥75 Â· adjusted probability â‰¥5%",
+      desc: "Q ≥75 · adjusted probability ≥5%",
       color: "var(--aggressive)",
     },
   ];
@@ -378,7 +378,7 @@ export default function DailyTicketsPage({ date }: DailyTicketsPageProps) {
                 disabled={pipelineRunning}
                 title="Run the pipeline for today"
               >
-                {pipelineRunning ? "Queuingâ€¦" : "â–¶ Run Todayâ€™s Pipeline"}
+                {pipelineRunning ? "Queuing…" : "▶ Run Today’s Pipeline"}
               </button>
               <button
                 className="btn-ghost"
@@ -386,7 +386,7 @@ export default function DailyTicketsPage({ date }: DailyTicketsPageProps) {
                 disabled={settlementRunning}
                 title="Refresh finished results and settle pending tickets from yesterday and today"
               >
-                {settlementRunning ? "Queuingâ€¦" : "â†» Settle Recent Results"}
+                {settlementRunning ? "Queuing…" : "↻ Settle Recent Results"}
               </button>
             </div>
           </div>
@@ -433,7 +433,7 @@ export default function DailyTicketsPage({ date }: DailyTicketsPageProps) {
               >
                 {label}
                 {key === "matches" && matches.length > 0
-                  ? ` Â· ${new Set(matches.map((row) => row.match_id)).size}`
+                  ? ` · ${new Set(matches.map((row) => row.match_id)).size}`
                   : ""}
               </button>
             ))}
@@ -448,10 +448,10 @@ export default function DailyTicketsPage({ date }: DailyTicketsPageProps) {
               <button className={`quality-guide-item${qualityFilter === "B+" ? " active" : ""}`} onClick={() => { setQualityFilter(qualityFilter === "B+" ? null : "B+"); setTab("matches") }}><b className="grade-badge grade-b-plus">B+</b> qualified</button>
               <button className={`quality-guide-item${qualityFilter === "B" ? " active" : ""}`} onClick={() => { setQualityFilter(qualityFilter === "B" ? null : "B"); setTab("matches") }}><b className="grade-badge grade-b">B</b> acceptable</button>
               <span>
-                <b className="spread-dot strong" /> â‰¤5 pp aligned
+                <b className="spread-dot strong" /> ≤5 pp aligned
               </span>
               <span>
-                <b className="spread-dot caution" /> 10â€“15 pp caution
+                <b className="spread-dot caution" /> 10–15 pp caution
               </span>
               <span>
                 <b className="spread-dot high" /> &gt;15 pp downgrade
@@ -506,22 +506,22 @@ export default function DailyTicketsPage({ date }: DailyTicketsPageProps) {
                 <section className="publication-diagnostics" role="status" aria-label="Publication diagnostics">
                   <div className="publication-diagnostics-heading">
                     <div>
-                      <span className="generation-status-badge">Partial Â· no ticket published</span>
+                      <span className="generation-status-badge">Partial · no ticket published</span>
                       <h3>Candidates were found, but none passed every publication gate.</h3>
                     </div>
                     <span>Generation {data?.generation_id}</span>
                   </div>
                   <div className="publication-funnel" aria-label="Candidate publication funnel">
                     <span><b>{data?.qualified_pool ?? 0}</b><small>model candidates</small></span>
-                    <i aria-hidden="true">â†’</i>
-                    <span><b>{matches.length}</b><small>Q â‰¥75 selections</small></span>
-                    <i aria-hidden="true">â†’</i>
+                    <i aria-hidden="true">→</i>
+                    <span><b>{matches.length}</b><small>Q ≥75 selections</small></span>
+                    <i aria-hidden="true">→</i>
                     <span><b>{qScoreMatchCount}</b><small>distinct matches</small></span>
-                    <i aria-hidden="true">â†’</i>
-                    <span><b>{q85Count}</b><small>Q â‰¥85 selections</small></span>
-                    <i aria-hidden="true">â†’</i>
+                    <i aria-hidden="true">→</i>
+                    <span><b>{q85Count}</b><small>Q ≥85 selections</small></span>
+                    <i aria-hidden="true">→</i>
                     <span className={addableCount === 0 ? "blocked" : ""}><b>{addableCount}</b><small>safe draft legs</small></span>
-                    <i aria-hidden="true">â†’</i>
+                    <i aria-hidden="true">→</i>
                     <span className="blocked"><b>0</b><small>published tickets</small></span>
                   </div>
                   {leadingRejectionReasons.length > 0 && (
@@ -555,7 +555,7 @@ export default function DailyTicketsPage({ date }: DailyTicketsPageProps) {
               <TicketCard
                 ticket={data?.best_value ?? null}
                 tierName="Best Value"
-                tierDesc="Q â‰¥85"
+                tierDesc="Q ≥85"
                 color="var(--purple)"
                 research
                 onSelectLeg={openTicketLeg}

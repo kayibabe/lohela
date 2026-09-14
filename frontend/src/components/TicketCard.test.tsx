@@ -53,7 +53,7 @@ const ticket: Ticket = {
 describe('audited ticket surfaces', () => {
   it('renders the mandatory aggressive risk label and publication audit data', () => {
     const html = renderToStaticMarkup(
-      <TicketCard ticket={ticket} tierName="Aggressive" tierDesc="Q â‰¥75" color="red" />,
+      <TicketCard ticket={ticket} tierName="Aggressive" tierDesc="Q ≥75" color="red" />,
     )
     expect(html).toContain('High Risk / Low Hit Rate')
     expect(html).toContain('Hit probability')
@@ -67,7 +67,7 @@ describe('audited ticket surfaces', () => {
   it('flags a relaxed-tier ticket built on a thin match day', () => {
     const relaxedTicket: Ticket = { ...ticket, relaxed_tier: true, relaxation_level: 2 }
     const html = renderToStaticMarkup(
-      <TicketCard ticket={relaxedTicket} tierName="Balanced" tierDesc="Q â‰¥80" color="blue" />,
+      <TicketCard ticket={relaxedTicket} tierName="Balanced" tierDesc="Q ≥80" color="blue" />,
     )
     expect(html).toContain('Relaxed · Thin Slate')
     expect(html).toContain('level 2')
@@ -75,7 +75,7 @@ describe('audited ticket surfaces', () => {
 
   it('renders a clear empty persisted-ticket state', () => {
     const html = renderToStaticMarkup(
-      <TicketCard ticket={null} tierName="Conservative" tierDesc="Q â‰¥85" color="green" />,
+      <TicketCard ticket={null} tierName="Conservative" tierDesc="Q ≥85" color="green" />,
     )
     expect(html).toContain('No ticket found')
     expect(html).toContain('No combination satisfied every conservative rule')
@@ -116,7 +116,7 @@ describe('audited ticket surfaces', () => {
       home_team: `Home ${index + 1}`,
     }))
     const html = renderToStaticMarkup(
-      <TicketCard ticket={{ ...ticket, legs }} tierName="Aggressive" tierDesc="Q â‰¥75" color="red" onSelectLeg={() => undefined} />,
+      <TicketCard ticket={{ ...ticket, legs }} tierName="Aggressive" tierDesc="Q ≥75" color="red" onSelectLeg={() => undefined} />,
     )
     expect(html).toContain('View all 5 legs')
     expect(html).toContain('Home 4')
@@ -166,7 +166,7 @@ describe('audited ticket surfaces', () => {
       }],
     }
     const html = renderToStaticMarkup(
-      <TicketCard ticket={reviewedTicket} tierName="Balanced" tierDesc="Q â‰¥80" color="blue" />,
+      <TicketCard ticket={reviewedTicket} tierName="Balanced" tierDesc="Q ≥80" color="blue" />,
     )
     expect(html).toContain('Unverified')
     expect(html).not.toContain('+8442.2%')

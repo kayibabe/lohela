@@ -78,7 +78,7 @@ class Settings(BaseSettings):
 
     # The automated twice-daily pipeline updates the "Bayesian" leg's team
     # posteriors via ModelPreparationService. "analytical" is a closed-form
-    # MAP estimate (goals scored/conceded relative to league average) â€” fast
+    # MAP estimate (goals scored/conceded relative to league average) — fast
     # and fully reproducible, which matters for the backtester's no-lookahead
     # guarantees. "advi" runs real PyMC variational inference and is slower
     # and non-deterministic run-to-run; opt in only if that trade-off is
@@ -86,7 +86,7 @@ class Settings(BaseSettings):
     # both methods on demand regardless of this default.
     bayesian_estimation_method: Literal["analytical", "advi"] = "analytical"
 
-    # Data quality thresholds (spec Â§26, Â§7)
+    # Data quality thresholds (spec §26, §7)
     min_data_quality_score: int = 40     # below this: excluded from models
     warn_data_quality_score: int = 60    # below this: flagged
     max_selection_odds_age_hours: float = 2.0
@@ -96,7 +96,7 @@ class Settings(BaseSettings):
     # ratio) can legitimately admit zero combinations even with a healthy
     # qualified pool. AccumulatorBuilder relaxes the tightest gates for missing
     # public tiers, in bounded steps, until this floor is met or the relaxation
-    # ladder is exhausted â€” see accumulator_builder._RELAXATION_STEPS.
+    # ladder is exhausted — see accumulator_builder._RELAXATION_STEPS.
     ticket_relaxation_enabled: bool = True
     min_daily_public_tickets: int = 2
 
@@ -109,10 +109,10 @@ class Settings(BaseSettings):
         # Bookmaker-covered leagues with useful same-day fixture depth.
         62, 307, 357, 72, 79, 106,
         # Weekday-fixture depth (added after the 2026-08-30..09-03 zero-ticket
-        # outage â€” weekday slates from the Tier 1/2 leagues above were too thin
+        # outage — weekday slates from the Tier 1/2 leagues above were too thin
         # to clear the tier gates). All confirmed with live odds coverage for
         # the current season via GET /leagues before adding:
-        # League Cup (England), DFB-Pokal (Germany), Coppa Italia â€” domestic
+        # League Cup (England), DFB-Pokal (Germany), Coppa Italia — domestic
         # cups from already-covered countries, so teams have existing history;
         # cup rounds are scheduled midweek precisely when league play doesn't
         # fill the slate. Plus three more leagues to round out coverage.
@@ -120,13 +120,13 @@ class Settings(BaseSettings):
         179, 144, 253,
     ]
 
-    # Football-Data.co.uk (historical odds CSVs â€” no key required)
+    # Football-Data.co.uk (historical odds CSVs — no key required)
     football_data_base_url: str = "https://www.football-data.co.uk/mmz4281"
 
     # Cache TTLs (seconds)
-    cache_ttl_fixtures: int = 86400   # 24 h â€” retain pulled fixture lists for reference
-    cache_ttl_odds: int = 1800        # 30 min â€” API-Football odds drift, but not per-second
-    cache_ttl_stats: int = 86400      # 24 h â€” per-fixture stats/injuries (historical)
+    cache_ttl_fixtures: int = 86400   # 24 h — retain pulled fixture lists for reference
+    cache_ttl_odds: int = 1800        # 30 min — API-Football odds drift, but not per-second
+    cache_ttl_stats: int = 86400      # 24 h — per-fixture stats/injuries (historical)
 
     @model_validator(mode="after")
     def reject_insecure_production_defaults(self):

@@ -1,12 +1,12 @@
 """
-Stage 1 & 2 of the Lohela pipeline â€” spec Â§26.
+Stage 1 & 2 of the Lohela pipeline — spec §26.
 
 Pulls fixtures, team statistics, injuries, and xG data from API-Football.
 Supports both direct (dashboard.api-football.com) and RapidAPI hosts via
 the API_FOOTBALL_HOST env var.
 
-Rate limit: 100 req/min â€” enforced via asyncio.Semaphore.
-Retry: hand-rolled in APIFootballClient._get â€” 5 attempts, exponential
+Rate limit: 100 req/min — enforced via asyncio.Semaphore.
+Retry: hand-rolled in APIFootballClient._get — 5 attempts, exponential
 backoff on 502/503/504, and Retry-After honoured on 429.
 """
 
@@ -24,7 +24,7 @@ from app.services import cache as _cache
 
 logger = logging.getLogger(__name__)
 
-# 100 req/min â†’ ~1.67 req/s; semaphore of 5 with 0.05s sleep gives ~100/min headroom
+# 100 req/min → ~1.67 req/s; semaphore of 5 with 0.05s sleep gives ~100/min headroom
 _API_SEMAPHORE = asyncio.Semaphore(5)
 
 
@@ -71,18 +71,18 @@ class APIFootballClient:
 
             if resp.status_code == 429:
                 retry_after = int(resp.headers.get("Retry-After", 30))
-                logger.warning("429 rate-limited â€” waiting %ds (attempt %d/%d)", retry_after, attempt, max_attempts)
+                logger.warning("429 rate-limited — waiting %ds (attempt %d/%d)", retry_after, attempt, max_attempts)
                 await asyncio.sleep(retry_after)
                 continue
 
             if resp.status_code in (502, 503, 504) and attempt < max_attempts:
                 wait = 2 ** attempt
-                logger.warning("HTTP %d â€” retrying in %ds", resp.status_code, wait)
+                logger.warning("HTTP %d — retrying in %ds", resp.status_code, wait)
                 await asyncio.sleep(wait)
                 continue
 
             resp.raise_for_status()
-            await asyncio.sleep(0.7)  # ~85 req/min â€” stay under free plan 100 req/min cap
+            await asyncio.sleep(0.7)  # ~85 req/min — stay under free plan 100 req/min cap
             data = resp.json()
             if not force_refresh and ttl > 0:
                 await _cache.set(cache_key, data, ttl)
@@ -263,7 +263,7 @@ class FixtureIngestor:
         """Pull fixtures for `from_date` to `to_date` (default: today + 48h).
 
         Pass `season` explicitly to pull historical data (e.g. season=2024 for
-        the 2024/25 season) â€” useful on free API plans limited to 2022â€“2024.
+        the 2024/25 season) — useful on free API plans limited to 2022–2024.
 
         `skip_enrichment`: when True, skips per-fixture stats/injury API calls.
         Defaults to True for historical ranges (>7 days) to preserve API quota.
@@ -285,7 +285,7 @@ class FixtureIngestor:
             for i, league_id in enumerate(league_ids):
                 competition = await self._get_or_skip_competition(league_id)
                 if competition is None:
-                    logger.warning("League %d not seeded in DB â€” run seed first", league_id)
+                    logger.warning("League %d not seeded in DB — run seed first", league_id)
                     continue
 
                 fixtures = await client.get_fixtures(league_id, season, from_date, to_date)

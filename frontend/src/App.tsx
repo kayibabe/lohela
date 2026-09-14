@@ -89,10 +89,10 @@ export default function App() {
         </div>
         {page !== 'tickets' && <div className="global-page-context"><strong>{NAV.find(item => item.id === page)?.label}</strong><span>{NAV_META[page].hint}</span></div>}
         <span className="global-updated">Updated {lastUpdated.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
-        <button className="global-refresh" onClick={() => { setLastUpdated(new Date()); window.location.reload() }} title="Refresh current page" aria-label="Refresh current page">â†» <span>Refresh</span></button>
+        <button className="global-refresh" onClick={() => { setLastUpdated(new Date()); window.location.reload() }} title="Refresh current page" aria-label="Refresh current page">↻ <span>Refresh</span></button>
         {page === 'tickets' && (
           <div className="date-nav">
-            <button className="date-btn" onClick={() => nav(-1)} title="Previous day">â€¹</button>
+            <button className="date-btn" onClick={() => nav(-1)} title="Previous day">‹</button>
             <div className="date-center">
               <input
                 className="date-input"
@@ -102,7 +102,7 @@ export default function App() {
               />
               <button className="today-btn" onClick={() => setDate(TODAY)}>Today</button>
             </div>
-            <button className="date-btn" onClick={() => nav(1)} title="Next day">â€º</button>
+            <button className="date-btn" onClick={() => nav(1)} title="Next day">›</button>
           </div>
         )}
 

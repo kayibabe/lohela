@@ -3,12 +3,12 @@ Redis-backed TTL cache for external API responses.
 
 All external API calls (API-Football) pass through here so
 that repeated pipeline runs within the TTL window never hit the remote
-endpoint again â€” preserving quota.
+endpoint again — preserving quota.
 
 TTLs (tunable via env):
-  CACHE_TTL_FIXTURES_SECONDS  (default 21600 = 6 h)  â€” fixture lists
-  CACHE_TTL_ODDS_SECONDS      (default 1800  = 30 min) â€” live odds
-  CACHE_TTL_STATS_SECONDS     (default 86400 = 24 h)  â€” per-fixture stats/injuries
+  CACHE_TTL_FIXTURES_SECONDS  (default 21600 = 6 h)  — fixture lists
+  CACHE_TTL_ODDS_SECONDS      (default 1800  = 30 min) — live odds
+  CACHE_TTL_STATS_SECONDS     (default 86400 = 24 h)  — per-fixture stats/injuries
 
 Keys follow the pattern:  lohela:<prefix>:<md5(params)>
 """
@@ -25,7 +25,7 @@ from app.config import settings
 
 logger = logging.getLogger(__name__)
 
-# Shared connection pool â€” created lazily on first use
+# Shared connection pool — created lazily on first use
 _redis: aioredis.Redis | None = None
 _redis_loop: asyncio.AbstractEventLoop | None = None
 
@@ -83,7 +83,7 @@ async def set(key: str, value: Any, ttl: int) -> None:
 
 
 async def delete_prefix(prefix: str) -> int:
-    """Delete all keys under lohela:<prefix>:* â€” used by admin cache-clear."""
+    """Delete all keys under lohela:<prefix>:* — used by admin cache-clear."""
     try:
         client = await _get_client()
         keys = await client.keys(f"lohela:{prefix}:*")
@@ -97,7 +97,7 @@ async def delete_prefix(prefix: str) -> int:
 
 
 async def flush_all() -> int:
-    """Delete every lohela:* key â€” admin-only nuclear option."""
+    """Delete every lohela:* key — admin-only nuclear option."""
     try:
         client = await _get_client()
         keys = await client.keys("lohela:*")

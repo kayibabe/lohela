@@ -36,7 +36,7 @@ interface Props {
 }
 
 const pct = (value: number | null | undefined, signed = false) => {
-  if (value == null) return 'â€”'
+  if (value == null) return '—'
   return `${signed && value >= 0 ? '+' : ''}${(value * 100).toFixed(1)}%`
 }
 
@@ -130,7 +130,7 @@ export default function SelectionDetail({ selection, modelVersion, publishedAt, 
     const summary = [
       `${selection.home_team} vs ${selection.away_team}`,
       `${formatMarket(selection.market)} @ ${selection.best_odds?.toFixed(2) ?? 'n/a'}`,
-      `Q ${selection.q_score.toFixed(1)} Â· model ${pct(selection.model_probability)} Â· edge ${pct(selection.edge, true)}`,
+      `Q ${selection.q_score.toFixed(1)} · model ${pct(selection.model_probability)} · edge ${pct(selection.edge, true)}`,
       'Lohela research / paper trading only',
     ].join('\n')
     await navigator.clipboard?.writeText(summary)
@@ -156,9 +156,9 @@ export default function SelectionDetail({ selection, modelVersion, publishedAt, 
           <div>
             <span className="detail-eyebrow">Selection evidence</span>
             <h2 id="selection-detail-title">{selection.home_team} <span>vs</span> {selection.away_team}</h2>
-            <p>{selection.competition} Â· <span className="kickoff-time">{formatKickoff(selection.kickoff_at)}</span></p>
+            <p>{selection.competition} · <span className="kickoff-time">{formatKickoff(selection.kickoff_at)}</span></p>
           </div>
-          <button ref={closeRef} className="detail-close" onClick={onClose} aria-label="Close selection details">Ã—</button>
+          <button ref={closeRef} className="detail-close" onClick={onClose} aria-label="Close selection details">×</button>
         </div>
 
         <div className="detail-status-row">
@@ -168,22 +168,22 @@ export default function SelectionDetail({ selection, modelVersion, publishedAt, 
         </div>
 
         <section className="decision-strength-card" aria-label="Decision strength review">
-          <div className="evidence-title"><h3>Decision strength</h3><span>Leg-level review Â· advisory</span></div>
+          <div className="evidence-title"><h3>Decision strength</h3><span>Leg-level review · advisory</span></div>
           <div className="decision-strength-grid">
             <Metric label="Calibrated probability" value={pct(selection.model_probability)} />
             <Metric label="Positive edge" value={pct(selection.edge, true)} />
-            <Metric label="Model spread" value={selection.model_agreement == null ? 'â€”' : `${(selection.model_agreement * 100).toFixed(1)} pp`} note={spreadLabel(selection.model_agreement)} />
+            <Metric label="Model spread" value={selection.model_agreement == null ? '—' : `${(selection.model_agreement * 100).toFixed(1)} pp`} note={spreadLabel(selection.model_agreement)} />
             <Metric label="Historical evidence" value="Analytics" note="Use settled market/Q-score samples; not an individual-match guarantee." />
           </div>
-          {strength.cautions.length > 0 && <p className="decision-strength-note"><strong>Review before including:</strong> {strength.cautions.join(' Â· ')}.</p>}
+          {strength.cautions.length > 0 && <p className="decision-strength-note"><strong>Review before including:</strong> {strength.cautions.join(' · ')}.</p>}
           {strength.cautions.length === 0 && <p className="decision-strength-note positive"><strong>Passes the visible checks.</strong> Confirm the published odds before treating this as an acca leg.</p>}
         </section>
 
         <section className="detail-pick">
           <div><span>Market</span><strong>{formatMarket(selection.market)}</strong></div>
-          <div><span>Snapshot odds</span><strong>{selection.best_odds?.toFixed(2) ?? 'â€”'}</strong></div>
+          <div><span>Snapshot odds</span><strong>{selection.best_odds?.toFixed(2) ?? '—'}</strong></div>
           <div><span>Q grade</span><strong>{selection.q_grade ? <GradeBadge grade={selection.q_grade} /> : `Q ${selection.q_score.toFixed(1)}`}</strong></div>
-          <div><span>Match result</span><strong>{selection.home_goals != null && selection.away_goals != null ? `${selection.home_goals}â€“${selection.away_goals}` : 'Unplayed'}</strong></div>
+          <div><span>Match result</span><strong>{selection.home_goals != null && selection.away_goals != null ? `${selection.home_goals}–${selection.away_goals}` : 'Unplayed'}</strong></div>
           <div><span>Market settlement</span><strong>{selection.result === 'pending' && selection.home_goals != null ? 'Pending' : selection.result ?? 'Pending'}</strong></div>
         </section>
 
@@ -191,7 +191,7 @@ export default function SelectionDetail({ selection, modelVersion, publishedAt, 
         {form && activeTab === 'overview' && <section className="form-evidence-card"><div className="evidence-title"><h3>Recent form</h3><span>Last {Math.max(form.home.matches, form.away.matches)} finished matches</span></div><div className="form-teams"><TeamForm team={form.home} /><span className="form-vs">vs</span><TeamForm team={form.away} /></div></section>}
         {form && activeTab === 'stats' && <section className="form-evidence-card"><div className="evidence-title"><h3>Recent team statistics</h3><span>Last five finished matches</span></div><div className="team-stats-grid"><TeamStats team={form.home} /><TeamStats team={form.away} /></div></section>}
         {form && activeTab === 'h2h' && <section className="form-evidence-card"><div className="evidence-title"><h3>Head-to-head</h3><span>Previous finished meetings</span></div>{form.h2h.length ? <div className="h2h-list">{form.h2h.map(game => <div key={game.date + game.score}><span>{game.date}</span><strong>{game.home_team} {game.score} {game.away_team}</strong></div>)}</div> : <div className="detail-empty-note">No previous meetings found in the persisted data.</div>}</section>}
-        {activeTab === 'signals' && <section className="form-evidence-card"><div className="evidence-title"><h3>Lohela signal</h3><span>Current published selection</span></div><div className="signal-summary"><div><span>Market</span><strong>{formatMarket(selection.market)}</strong></div><div><span>Selection</span><strong>{formatSelection(selection.selection)}</strong></div><div><span>Model probability</span><strong>{pct(selection.model_probability)}</strong></div><div><span>Estimated edge</span><strong>{pct(selection.edge, true)}</strong></div><div><span>Q-score</span><strong>{selection.q_score.toFixed(1)} Â· {selection.q_grade ? <GradeBadge grade={selection.q_grade} /> : 'â€”'}</strong></div><div><span>Expected value</span><strong>{pct(selection.expected_value, true)}</strong></div></div></section>}
+        {activeTab === 'signals' && <section className="form-evidence-card"><div className="evidence-title"><h3>Lohela signal</h3><span>Current published selection</span></div><div className="signal-summary"><div><span>Market</span><strong>{formatMarket(selection.market)}</strong></div><div><span>Selection</span><strong>{formatSelection(selection.selection)}</strong></div><div><span>Model probability</span><strong>{pct(selection.model_probability)}</strong></div><div><span>Estimated edge</span><strong>{pct(selection.edge, true)}</strong></div><div><span>Q-score</span><strong>{selection.q_score.toFixed(1)} · {selection.q_grade ? <GradeBadge grade={selection.q_grade} /> : '—'}</strong></div><div><span>Expected value</span><strong>{pct(selection.expected_value, true)}</strong></div></div></section>}
 
         {activeTab === 'probability' && <section className="evidence-card">
           <div className="evidence-title"><h3>Probability evidence</h3><span>Model vs market</span></div>
@@ -208,7 +208,7 @@ export default function SelectionDetail({ selection, modelVersion, publishedAt, 
         {activeTab === 'probability' && <section className="detail-metrics">
           <Metric label="Q score" value={selection.q_score.toFixed(1)} />
           <Metric label="Expected value" value={pct(selection.expected_value, true)} hint="Theoretical value based on the model probability and captured odds. It is not a guaranteed return or win probability." />
-          <Metric label="Model spread" value={selection.model_agreement == null ? 'â€”' : `${(selection.model_agreement * 100).toFixed(1)} pp`} note={spreadLabel(selection.model_agreement)} hint="Standard deviation between the active model probabilities. Up to 5 pp is strong alignment; above 15 pp triggers a confidence downgrade." />
+          <Metric label="Model spread" value={selection.model_agreement == null ? '—' : `${(selection.model_agreement * 100).toFixed(1)} pp`} note={spreadLabel(selection.model_agreement)} hint="Standard deviation between the active model probabilities. Up to 5 pp is strong alignment; above 15 pp triggers a confidence downgrade." />
           <Metric label="Bookmakers" value={(quotes.length || selection.bookmaker_count)?.toString() ?? 'Snapshot'} />
         </section>}
 
@@ -240,7 +240,7 @@ export default function SelectionDetail({ selection, modelVersion, publishedAt, 
               />
             </label>
             <button className="copy-summary-btn detail-bet-confirm" disabled={betting || !canConfirmBet} onClick={confirmIndividualBet}>
-              {betting ? 'Recordingâ€¦' : 'Confirm individual bet'}
+              {betting ? 'Recording…' : 'Confirm individual bet'}
             </button>
           </div>
           {!hasPublishedBetSource && <p className="detail-bet-availability" id="individual-bet-availability">Available only for a published ticket leg with immutable odds provenance.</p>}
@@ -256,8 +256,8 @@ export default function SelectionDetail({ selection, modelVersion, publishedAt, 
 
 interface TeamForm { team: string; results: string[]; wins: number; draws: number; losses: number; matches: number; goals_for: number; goals_against: number; goal_difference: number; avg_goals_for: number; avg_goals_against: number; points_per_game: number }
 interface H2H { date: string; home_team: string; away_team: string; score: string }
-function TeamForm({ team }: { team: TeamForm }) { return <div className="team-form"><strong>{team.team}</strong><div className="form-pills">{team.results.length ? team.results.map((result, index) => <b className={`form-pill ${result.toLowerCase()}`} key={`${result}-${index}`}>{result}</b>) : <span>Form unavailable</span>}</div><small>{team.wins}W Â· {team.draws}D Â· {team.losses}L</small></div> }
-function TeamStats({ team }: { team: TeamForm }) { return <div className="team-stats"><strong>{team.team}</strong><span>Played <b>{team.matches}</b></span><span>Win rate <b>{team.matches ? `${Math.round(team.wins / team.matches * 100)}%` : 'â€”'}</b></span><span>Goals for / against <b>{team.avg_goals_for.toFixed(1)} / {team.avg_goals_against.toFixed(1)}</b></span><span>Goal difference <b>{team.goal_difference > 0 ? '+' : ''}{team.goal_difference}</b></span><span>Points per game <b>{team.points_per_game.toFixed(2)}</b></span></div> }
+function TeamForm({ team }: { team: TeamForm }) { return <div className="team-form"><strong>{team.team}</strong><div className="form-pills">{team.results.length ? team.results.map((result, index) => <b className={`form-pill ${result.toLowerCase()}`} key={`${result}-${index}`}>{result}</b>) : <span>Form unavailable</span>}</div><small>{team.wins}W · {team.draws}D · {team.losses}L</small></div> }
+function TeamStats({ team }: { team: TeamForm }) { return <div className="team-stats"><strong>{team.team}</strong><span>Played <b>{team.matches}</b></span><span>Win rate <b>{team.matches ? `${Math.round(team.wins / team.matches * 100)}%` : '—'}</b></span><span>Goals for / against <b>{team.avg_goals_for.toFixed(1)} / {team.avg_goals_against.toFixed(1)}</b></span><span>Goal difference <b>{team.goal_difference > 0 ? '+' : ''}{team.goal_difference}</b></span><span>Points per game <b>{team.points_per_game.toFixed(2)}</b></span></div> }
 
 function OddsComparison({ quotes, loading, failed }: { quotes: OddsQuote[]; loading: boolean; failed: boolean }) {
   const spread = quotes.length > 1 ? quotes[0].decimal_odds - quotes[quotes.length - 1].decimal_odds : 0
@@ -267,7 +267,7 @@ function OddsComparison({ quotes, loading, failed }: { quotes: OddsQuote[]; load
         <h3>Bookmaker comparison</h3>
         <span>{quotes.length > 1 ? `${spread.toFixed(2)} price spread` : 'Captured prices'}</span>
       </div>
-      {loading && <div className="odds-state"><span className="spinner" />Loading price sourcesâ€¦</div>}
+      {loading && <div className="odds-state"><span className="spinner" />Loading price sources…</div>}
       {!loading && failed && <div className="odds-state">Price comparison is temporarily unavailable.</div>}
       {!loading && !failed && quotes.length === 0 && <div className="odds-state">Only the immutable publication snapshot is available.</div>}
       {!loading && quotes.length > 0 && (
@@ -278,7 +278,7 @@ function OddsComparison({ quotes, loading, failed }: { quotes: OddsQuote[]; load
           {quotes.map(quote => (
             <div className={`odds-table-row${quote.is_best ? ' best' : ''}`} role="row" key={`${quote.bookmaker}-${quote.fetched_at}`}>
               <span role="cell"><strong>{quote.bookmaker}</strong>{quote.is_best && <small>Best</small>}{quote.is_fallback && <small>Fallback</small>}</span>
-              <span role="cell">{quote.opening_odds?.toFixed(2) ?? 'â€”'}</span>
+              <span role="cell">{quote.opening_odds?.toFixed(2) ?? '—'}</span>
               <strong role="cell">{quote.decimal_odds.toFixed(2)}</strong>
               <Movement value={quote.movement} />
             </div>
@@ -290,9 +290,9 @@ function OddsComparison({ quotes, loading, failed }: { quotes: OddsQuote[]; load
 }
 
 function Movement({ value }: { value: number | null }) {
-  if (value == null || Math.abs(value) < 0.005) return <span role="cell" className="odds-move flat">â€”</span>
+  if (value == null || Math.abs(value) < 0.005) return <span role="cell" className="odds-move flat">—</span>
   const drifted = value > 0
-  return <span role="cell" className={`odds-move ${drifted ? 'drift' : 'shorten'}`}>{drifted ? 'â†‘' : 'â†“'} {Math.abs(value).toFixed(2)}</span>
+  return <span role="cell" className={`odds-move ${drifted ? 'drift' : 'shorten'}`}>{drifted ? '↑' : '↓'} {Math.abs(value).toFixed(2)}</span>
 }
 
 function ProbabilityRow({ label, value, tone }: { label: string; value: number | null; tone: string }) {

@@ -1,9 +1,9 @@
-/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-   LOHELA â€” Design System
+/* ═══════════════════════════════════════════════════════════════
+   LOHELA — Design System
    Single source of truth for all component styles.
-   â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+   ═══════════════════════════════════════════════════════════════ */
 
-/* â”€â”€â”€ Tokens â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ─── Tokens ──────────────────────────────────────────────────── */
 :root {
   /* Surface */
   --bg:        #fbfbfa;
@@ -115,7 +115,7 @@
 }
 
 
-/* â”€â”€â”€ Reset â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ─── Reset ───────────────────────────────────────────────────── */
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
 html { font-size: 14px; }
@@ -134,14 +134,14 @@ button, input, select { font-family: inherit; }
 button { cursor: pointer; }
 ul { list-style: none; }
 
-/* â”€â”€â”€ App shell â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ─── App shell ───────────────────────────────────────────────── */
 .app {
   min-height: 100dvh;
   display: flex;
   flex-direction: column;
 }
 
-/* â”€â”€â”€ Header â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ─── Header ──────────────────────────────────────────────────── */
 .app-header {
   position: sticky;
   top: 0;
@@ -290,7 +290,7 @@ ul { list-style: none; }
 .theme-btn:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-bg); }
 .theme-auto { font-size: 10px; font-weight: 700; letter-spacing: 0.05em; }
 
-/* â”€â”€â”€ Main â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ─── Main ────────────────────────────────────────────────────── */
 .main {
   flex: 1;
   width: 100%;
@@ -301,7 +301,7 @@ ul { list-style: none; }
   overflow-x: hidden;
 }
 
-/* â”€â”€â”€ Branded shell â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ─── Branded shell ───────────────────────────────────────────── */
 .app-header {
   background:
     linear-gradient(110deg, color-mix(in srgb, var(--surface) 96%, var(--accent) 4%), var(--surface));
@@ -371,7 +371,7 @@ ul { list-style: none; }
   .ticket-grid { padding: 0 14px 28px; gap: 12px; }
 }
 
-/* â”€â”€â”€ Tracker evidence integrity and responsive workflow â”€â”€â”€â”€â”€ */
+/* ─── Tracker evidence integrity and responsive workflow ───── */
 .tracker-view-tabs {
   display: grid;
   grid-template-columns: repeat(3, max-content);
@@ -542,7 +542,7 @@ ul { list-style: none; }
   .advisory-market { width: 100%; }
 }
 
-/* â”€â”€â”€ Modern dashboard polish â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ─── Modern dashboard polish ───────────────────────────────── */
 body {
   background:
     radial-gradient(circle at 8% -12%, color-mix(in srgb, var(--accent) 8%, transparent), transparent 34rem),
@@ -833,14 +833,14 @@ body {
   .selection-panels { padding: 0 14px; }
 }
 
-/* Page content wrapper â€” used by all new pages */
+/* Page content wrapper — used by all new pages */
 .page-content {
   padding: 24px 24px 48px;
   max-width: 1280px;
   margin: 0 auto;
 }
 
-/* â”€â”€â”€ Daily Tickets page â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ─── Daily Tickets page ─────────────────────────────────────── */
 .daily-tabs{display:flex;gap:8px;overflow-x:auto;margin:22px 0;padding-bottom:2px;border-bottom:1px solid var(--border)}
 .daily-tabs button{border:0;background:transparent;color:var(--muted);padding:12px 14px;white-space:nowrap;border-bottom:2px solid transparent;font-weight:650;cursor:pointer}
 .daily-tabs button.active{color:var(--text);border-color:var(--accent)}
@@ -1069,7 +1069,7 @@ body {
 
 @keyframes spin { to { transform: rotate(360deg); } }
 
-/* â”€â”€â”€ Ticket grid â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ─── Ticket grid ─────────────────────────────────────────────── */
 .ticket-grid {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
@@ -1083,7 +1083,7 @@ body {
 @media (max-width: 1100px) { .ticket-grid { grid-template-columns: repeat(2, 1fr); } }
 @media (max-width: 640px)  { .ticket-grid { grid-template-columns: 1fr; } }
 
-/* â”€â”€â”€ Ticket card â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ─── Ticket card ─────────────────────────────────────────────── */
 .ticket-card {
   background: var(--surface);
   border: 1px solid var(--border);
@@ -1166,7 +1166,7 @@ body {
 .stat-value.positive { color: var(--positive); }
 .stat-value.neutral  { color: var(--text); }
 
-/* â”€â”€â”€ Ticket empty state â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ─── Ticket empty state ─────────────────────────────────────── */
 .empty-card {
   padding: 28px 20px;
   text-align: center;
@@ -1188,7 +1188,7 @@ body {
 }
 .empty-hint { display: block; margin-top: 12px; color: var(--accent); font-size: 10px; font-weight: 700; }
 
-/* â”€â”€â”€ Leg list â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ─── Leg list ────────────────────────────────────────────────── */
 .leg-list {
   display: flex;
   flex-direction: column;
@@ -1306,7 +1306,7 @@ body {
 .settlement-correction { display: inline-block; margin-left: 8px; padding: 2px 6px; border: 1px solid color-mix(in srgb, var(--warning) 35%, var(--border)); border-radius: 999px; color: var(--warning); font-weight: 800; }
 .settlement-pending-note { margin: 0; padding: 9px 10px; border-left: 3px solid var(--warning); background: color-mix(in srgb, var(--warning) 8%, var(--surface)); color: var(--muted); font-size: 11px; line-height: 1.4; }
 
-/* â”€â”€â”€ Grade badge â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ─── Grade badge ─────────────────────────────────────────────── */
 .grade-badge {
   display: inline-block;
   padding: 1px 6px;
@@ -1323,15 +1323,15 @@ body {
 .grade-c      { background: var(--gc-bg); color: var(--gc-text); }
 .grade-reject { background: var(--gr-bg); color: var(--gr-text); }
 
-/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-   SHARED COMPONENTS â€” used by new pages
-   â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+/* ═══════════════════════════════════════════════════════════════
+   SHARED COMPONENTS — used by new pages
+   ═══════════════════════════════════════════════════════════════ */
 
-/* â”€â”€â”€ Positive / negative utilities â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ─── Positive / negative utilities ─────────────────────────── */
 .positive { color: var(--positive); }
 .negative { color: var(--negative); }
 
-/* â”€â”€â”€ Section header â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ─── Section header ─────────────────────────────────────────── */
 .section-header {
   display: flex;
   align-items: baseline;
@@ -1351,7 +1351,7 @@ body {
   color: var(--muted);
 }
 
-/* â”€â”€â”€ KPI stat row â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ─── KPI stat row ───────────────────────────────────────────── */
 .stat-row {
   display: flex;
   gap: 12px;
@@ -1396,7 +1396,7 @@ body {
 .stat-card.negative .kpi-value { color: var(--negative); }
 .stat-sep { color: var(--muted); margin: 0 3px; font-weight: 400; font-size: 18px; }
 
-/* â”€â”€â”€ Buttons â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ─── Buttons ────────────────────────────────────────────────── */
 .btn-primary {
   height: 32px;
   padding: 0 14px;
@@ -1465,7 +1465,7 @@ body {
 .btn-danger-outline:hover { background: #dc262615; }
 .btn-danger-outline:disabled { opacity: 0.45; cursor: not-allowed; }
 
-/* â”€â”€â”€ Forms â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ─── Forms ──────────────────────────────────────────────────── */
 .form-row {
   display: flex;
   gap: 12px;
@@ -1517,7 +1517,7 @@ body {
 
 .form-actions { display: flex; gap: 8px; }
 
-/* â”€â”€â”€ Badges â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ─── Badges ─────────────────────────────────────────────────── */
 .badge {
   display: inline-block;
   font-size: 11px;
@@ -1533,7 +1533,7 @@ body {
   letter-spacing: 0.02em;
 }
 
-/* â”€â”€â”€ Empty state â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ─── Empty state ─────────────────────────────────────────────── */
 .empty-state {
   text-align: center;
   padding: 56px 24px;
@@ -1542,7 +1542,7 @@ body {
   line-height: 1.7;
 }
 
-/* â”€â”€â”€ Alert â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ─── Alert ──────────────────────────────────────────────────── */
 .alert {
   display: flex;
   align-items: center;
@@ -1558,7 +1558,7 @@ body {
 .alert-error { background: #fee2e210; color: var(--negative); border: 1px solid #fee2e230; }
 .alert-close { margin-left: auto; background: none; border: none; color: inherit; font-size: 16px; opacity: 0.7; }
 
-/* â”€â”€â”€ Modal â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ─── Modal ──────────────────────────────────────────────────── */
 .modal-overlay {
   position: fixed;
   inset: 0;
@@ -1588,9 +1588,9 @@ body {
   margin-bottom: 18px;
 }
 
-/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+/* ═══════════════════════════════════════════════════════════════
    TRACKER PAGE
-   â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+   ═══════════════════════════════════════════════════════════════ */
 
 .tracker-toolbar {
   display: flex;
@@ -1697,9 +1697,9 @@ body {
   text-transform: uppercase;
 }
 
-/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+/* ═══════════════════════════════════════════════════════════════
    ANALYTICS PAGE
-   â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+   ═══════════════════════════════════════════════════════════════ */
 
 .analytics-table-wrap {
   overflow-x: auto;
@@ -1797,9 +1797,9 @@ body {
 }
 .pnl-bar-val { min-width: 86px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
-/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+/* ═══════════════════════════════════════════════════════════════
    TOOLS PAGE
-   â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+   ═══════════════════════════════════════════════════════════════ */
 
 .tools-grid {
   display: grid;
@@ -1920,9 +1920,9 @@ body {
 
 .acca-controls { display: flex; align-items: center; gap: 12px; }
 
-/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+/* ═══════════════════════════════════════════════════════════════
    ADMIN PAGE
-   â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+   ═══════════════════════════════════════════════════════════════ */
 
 .admin-grid {
   display: grid;
@@ -2005,7 +2005,7 @@ body {
 
 .stage-desc { font-size: 12px; color: var(--muted); }
 
-/* â”€â”€â”€ Audited research dashboard â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ─── Audited research dashboard ───────────────────────────── */
 .research-disclaimer {
   margin: 5px 0 0;
   color: var(--muted);
@@ -2138,7 +2138,7 @@ body {
   .meta-bar .tickets-banner-actions { width: 100%; margin-left: 0; flex-wrap: wrap; }
 }
 
-/* â”€â”€â”€ Interaction and evidence layer â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ─── Interaction and evidence layer ─────────────────────────── */
 .bottom-nav { display: none; }
 
 .meta-context {
@@ -2152,7 +2152,7 @@ body {
 }
 
 .meta-context > span + span::before {
-  content: 'Â·';
+  content: '·';
   margin-right: 8px;
   color: var(--border2);
 }
@@ -2615,7 +2615,7 @@ body {
   *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
 }
 
-/* â”€â”€â”€ Research analytics workspace â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ─── Research analytics workspace ───────────────────────────── */
 .analytics-page { max-width: 1360px; }
 .analytics-hero {
   display: flex;
@@ -2802,7 +2802,7 @@ body {
 .pick-period-group > summary::-webkit-details-marker { display: none; }
 .pick-period-summary { display: grid; grid-template-columns: minmax(145px, .7fr) minmax(0, 3fr); gap: 14px; align-items: center; min-width: 0; padding: 11px 14px; }
 .pick-period-title { display: flex; align-items: center; gap: 8px; min-width: 0; }
-.pick-period-title::before { content: 'â€º'; flex: 0 0 auto; color: var(--accent); font-size: 18px; line-height: 1; transition: transform .16s ease; }
+.pick-period-title::before { content: '›'; flex: 0 0 auto; color: var(--accent); font-size: 18px; line-height: 1; transition: transform .16s ease; }
 .pick-period-group[open] > summary > .pick-period-summary .pick-period-title::before { transform: rotate(90deg); }
 .pick-period-title span { color: var(--muted); font-size: 8px; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; }
 .pick-period-title strong { overflow: hidden; color: var(--text); font-size: 14px; text-overflow: ellipsis; white-space: nowrap; }
@@ -2884,7 +2884,7 @@ body {
   .pick-period-stats > span:nth-child(4) { border-left: 1px solid var(--border); }
 }
 
-/* â”€â”€â”€ Immutable paper portfolio â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ─── Immutable paper portfolio ──────────────────────────────── */
 .tracker-hero { margin-bottom: 18px; }
 .pipeline-banner-message { margin: -6px 0 14px; padding: 9px 12px; border: 1px solid currentColor; border-radius: var(--r-md); background: var(--panel2); font-size: 11px; }
 .tickets-banner-actions { display: flex; align-items: center; gap: 8px; margin-left: auto; }
@@ -3176,7 +3176,7 @@ body {
 .sidebar-footer { display: flex; align-items: center; gap: 8px; margin-top: auto; padding: 14px 9px 0; border-top: 1px solid var(--border); }
 .sidebar-footer .research-status { flex: 1; font-size: 10px; }
 
-/* â”€â”€â”€ Readability baseline â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ─── Readability baseline ──────────────────────────────────── */
 /* Keep hierarchy, but avoid sub-10px text that is difficult to read at normal zoom. */
 html { font-size: 16px; }
 body { font-size: 1rem; }
@@ -3209,7 +3209,7 @@ body { font-size: 1rem; }
 .match-history-row small, .match-history-meta, .match-history-meta > span { font-size: 12px; }
 .sidebar-footer .theme-btn { width: auto; min-width: 42px; padding: 0 7px; }
 
-/* â”€â”€â”€ Pick ledger readability â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ─── Pick ledger readability ───────────────────────────────── */
 .pick-ledger-table th { font-size: 12px; }
 .pick-ledger-table td { line-height: 1.45; }
 .pick-ledger-table td > small { font-size: 11px; }
@@ -3243,7 +3243,7 @@ body { font-size: 1rem; }
   .view-intro p { margin-top: 8px; }
 }
 
-/* â”€â”€â”€ Accessible typography floor â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ─── Accessible typography floor ───────────────────────────── */
 /* Readable at normal zoom: body 16px, supporting copy 13px,
    controls 14px, and compact badges never below 12px. */
 :root { font-size: 16px; }

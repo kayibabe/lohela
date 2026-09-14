@@ -1,8 +1,8 @@
 @echo off
-title Lohela â€” Stopping
+title Lohela — Stopping
 echo.
 echo  ============================
-echo   LOHELA â€” Shutting down...
+echo   LOHELA — Shutting down...
 echo  ============================
 echo.
 

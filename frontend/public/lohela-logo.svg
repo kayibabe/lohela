@@ -66,7 +66,7 @@
   <circle cx="50" cy="36" r="2.8" class="chart-dot" fill="#2386c8"/>
   <circle cx="59" cy="41" r="2.8" class="chart-dot" fill="#35d5e8"/>
 
-  <!-- Pixel dissolution â€” scatters off the top-right of the ring -->
+  <!-- Pixel dissolution — scatters off the top-right of the ring -->
   <rect x="67" y="22" width="7" height="7" rx="1.5" class="px-a" fill="#0b376d" opacity="0.90"/>
   <rect x="76" y="16" width="6" height="6" rx="1.2" class="px-b" fill="#1456a0" opacity="0.72"/>
   <rect x="85" y="11" width="5" height="5" rx="1"   class="px-c" fill="#2386c8" opacity="0.55"/>

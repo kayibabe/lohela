@@ -1,6 +1,6 @@
 """
-Lohela â€” Football Intelligence & Accumulator Analytics Platform
-FastAPI application entry point â€” spec Â§32, Â§35.
+Lohela — Football Intelligence & Accumulator Analytics Platform
+FastAPI application entry point — spec §32, §35.
 """
 
 import logging
@@ -30,13 +30,13 @@ scheduler = AsyncIOScheduler(timezone="UTC")
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Create tables on startup (development convenience â€” production uses Alembic)
+    # Create tables on startup (development convenience — production uses Alembic)
     if settings.app_env == "development":
         async with engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
         logger.info("Database tables created/verified")
 
-    # Schedule daily pipeline â€” spec Â§34
+    # Schedule daily pipeline — spec §34
     scheduler.add_job(
         _trigger_daily_pipeline,
         CronTrigger(hour=settings.pipeline_early_cron_hour, minute=settings.pipeline_early_cron_minute),
@@ -248,7 +248,7 @@ async def _queue_shadow_learning():
 
 app = FastAPI(
     title="Lohela Intelligence API",
-    description="Football Intelligence & Accumulator Analytics Platform â€” Internal API",
+    description="Football Intelligence & Accumulator Analytics Platform — Internal API",
     version="0.2.0",
     lifespan=lifespan,
     docs_url="/docs",
@@ -322,7 +322,7 @@ _RESERVED_PREFIXES = ("api", "docs", "redoc", "openapi.json", "health")
 def _mount_frontend(application: FastAPI) -> None:
     index_file = FRONTEND_DIR / "index.html"
     if not index_file.is_file():
-        logger.info("No frontend build at %s â€” running API-only", FRONTEND_DIR)
+        logger.info("No frontend build at %s — running API-only", FRONTEND_DIR)
         return
 
     assets_dir = FRONTEND_DIR / "assets"
