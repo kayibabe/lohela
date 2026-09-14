@@ -1,4 +1,4 @@
-﻿"""Celery tasks for the durable twelve-stage research pipeline."""
+"""Celery tasks for the durable twelve-stage research pipeline."""
 
 import asyncio
 import logging

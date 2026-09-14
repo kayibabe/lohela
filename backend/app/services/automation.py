@@ -1,4 +1,4 @@
-﻿"""Persistent checks that make Lohela's in-process schedules self-healing."""
+"""Persistent checks that make Lohela's in-process schedules self-healing."""
 
 from __future__ import annotations
 

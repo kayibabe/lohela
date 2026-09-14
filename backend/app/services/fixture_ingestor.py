@@ -1,4 +1,4 @@
-﻿"""
+"""
 Stage 1 & 2 of the Lohela pipeline â€” spec Â§26.
 
 Pulls fixtures, team statistics, injuries, and xG data from API-Football.

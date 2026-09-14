@@ -1,4 +1,4 @@
-﻿import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import type { CustomAccumulator as ApiCustomAccumulator, DailyTickets, Leg, SelectionSummary, Ticket } from "../../lib/api";
 import {
   createCustomAccumulator,

@@ -1,4 +1,4 @@
-﻿"""
+"""
 Lohela â€” Football Intelligence & Accumulator Analytics Platform
 FastAPI application entry point â€” spec Â§32, Â§35.
 """

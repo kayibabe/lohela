@@ -1,4 +1,4 @@
-﻿"""create the initial Lohela schema
+"""create the initial Lohela schema
 
 Revision ID: 3d52766f0fb9
 Revises: 

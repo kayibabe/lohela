@@ -1,4 +1,4 @@
-﻿import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { fetchSelectionOdds, formatKickoff, formatMarket, formatSelection, type OddsQuote } from '../lib/api'
 import GradeBadge from './GradeBadge'
 

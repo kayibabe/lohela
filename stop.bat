@@ -1,4 +1,4 @@
-﻿@echo off
+@echo off
 title Lohela â€” Stopping
 echo.
 echo  ============================

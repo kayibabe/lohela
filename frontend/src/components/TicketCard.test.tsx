@@ -1,4 +1,4 @@
-﻿import { renderToStaticMarkup } from 'react-dom/server'
+import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 import TicketCard from './TicketCard'
 import SelectionDetail from './SelectionDetail'
@@ -58,10 +58,10 @@ describe('audited ticket surfaces', () => {
     expect(html).toContain('High Risk / Low Hit Rate')
     expect(html).toContain('Hit probability')
     expect(html).toContain('Risk score')
-    expect(html).toContain('Open Â· 1 pending')
+    expect(html).toContain('Open · 1 pending')
     expect(html).toContain('v3')
     expect(html).toContain('Hash aaaaaaaaaa')
-    expect(html).toContain('v3 Â· model 0.2.0')
+    expect(html).toContain('v3 · model 0.2.0')
   })
 
   it('flags a relaxed-tier ticket built on a thin match day', () => {
@@ -69,7 +69,7 @@ describe('audited ticket surfaces', () => {
     const html = renderToStaticMarkup(
       <TicketCard ticket={relaxedTicket} tierName="Balanced" tierDesc="Q â‰¥80" color="blue" />,
     )
-    expect(html).toContain('Relaxed Â· Thin Slate')
+    expect(html).toContain('Relaxed · Thin Slate')
     expect(html).toContain('level 2')
   })
 

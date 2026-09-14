@@ -1,4 +1,4 @@
-﻿"""
+"""
 Redis-backed TTL cache for external API responses.
 
 All external API calls (API-Football) pass through here so

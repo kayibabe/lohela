@@ -1,4 +1,4 @@
-﻿import { useState, type ReactNode } from 'react'
+import { useState, type ReactNode } from 'react'
 import './App.css'
 import DailyTicketsPage, { TODAY } from './pages/DailyTickets'
 import { addDays } from './utils'
