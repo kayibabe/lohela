@@ -13,16 +13,25 @@ depends_on = None
 
 
 def upgrade():
-    op.add_column(
-        "accumulator_tickets",
-        sa.Column("relaxed_tier", sa.Boolean(), nullable=False, server_default=sa.false()),
-    )
-    op.add_column(
-        "accumulator_tickets",
-        sa.Column("relaxation_level", sa.Integer(), nullable=False, server_default="0"),
-    )
+    # Guarded: the historical baseline migration (3d52766f0fb9) dynamically
+    # creates every table from the *current* ORM models, so a fresh database
+    # already has these columns.
+    existing = {c["name"] for c in sa.inspect(op.get_bind()).get_columns("accumulator_tickets")}
+    if "relaxed_tier" not in existing:
+        op.add_column(
+            "accumulator_tickets",
+            sa.Column("relaxed_tier", sa.Boolean(), nullable=False, server_default=sa.false()),
+        )
+    if "relaxation_level" not in existing:
+        op.add_column(
+            "accumulator_tickets",
+            sa.Column("relaxation_level", sa.Integer(), nullable=False, server_default="0"),
+        )
 
 
 def downgrade():
-    op.drop_column("accumulator_tickets", "relaxation_level")
-    op.drop_column("accumulator_tickets", "relaxed_tier")
+    existing = {c["name"] for c in sa.inspect(op.get_bind()).get_columns("accumulator_tickets")}
+    if "relaxation_level" in existing:
+        op.drop_column("accumulator_tickets", "relaxation_level")
+    if "relaxed_tier" in existing:
+        op.drop_column("accumulator_tickets", "relaxed_tier")
