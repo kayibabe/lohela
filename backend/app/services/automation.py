@@ -175,6 +175,7 @@ def find_recent_active_daily_run(
         if (
             not publication_terminal
             and run.completed_at is None
+            and run.status == RunStatus.RUNNING
             and now_utc - _as_utc(run.started_at) < stale_after
         ):
             return run
