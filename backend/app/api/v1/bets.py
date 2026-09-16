@@ -14,9 +14,7 @@ from app.models.bet import Bet, BetStatus
 from app.models import TicketSelection, Match, MatchStatus
 from app.api.security import require_research_access
 
-router = APIRouter(
-    prefix="/bets", tags=["bets"], dependencies=[Depends(require_research_access)]
-)
+router = APIRouter(prefix="/bets", tags=["bets"])
 
 
 async def get_db():
@@ -101,7 +99,7 @@ class BetOut(BaseModel):
 
 # ── Routes ───────────────────────────────────────────────────────────────────
 
-@router.post("", response_model=BetOut, status_code=201)
+@router.post("", response_model=BetOut, status_code=201, dependencies=[Depends(require_research_access)])
 async def create_bet(payload: BetCreate, db: AsyncSession = Depends(get_db)):
     bet = Bet(
         label=payload.label,
@@ -118,7 +116,7 @@ async def create_bet(payload: BetCreate, db: AsyncSession = Depends(get_db)):
     await db.refresh(bet)
     return _to_out(bet)
 
-@router.post("/individual", response_model=BetOut, status_code=201)
+@router.post("/individual", response_model=BetOut, status_code=201, dependencies=[Depends(require_research_access)])
 async def create_individual_bet(payload: IndividualBetCreate, db: AsyncSession = Depends(get_db)):
     selection = (await db.execute(select(TicketSelection).where(TicketSelection.id == payload.selection_id).options(
         selectinload(TicketSelection.match).selectinload(Match.home_team),
@@ -175,7 +173,7 @@ async def get_bet(bet_id: int, db: AsyncSession = Depends(get_db)):
     return _to_out(bet)
 
 
-@router.patch("/{bet_id}/settle", response_model=BetOut)
+@router.patch("/{bet_id}/settle", response_model=BetOut, dependencies=[Depends(require_research_access)])
 async def settle_bet(bet_id: int, payload: BetSettle, db: AsyncSession = Depends(get_db)):
     bet = await db.get(Bet, bet_id)
     if not bet:
@@ -197,7 +195,7 @@ async def settle_bet(bet_id: int, payload: BetSettle, db: AsyncSession = Depends
     return _to_out(bet)
 
 
-@router.delete("/{bet_id}", status_code=204)
+@router.delete("/{bet_id}", status_code=204, dependencies=[Depends(require_research_access)])
 async def delete_bet(bet_id: int, db: AsyncSession = Depends(get_db)):
     bet = await db.get(Bet, bet_id)
     if not bet:
