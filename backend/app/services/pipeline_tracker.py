@@ -88,6 +88,7 @@ async def update_stages(
         if status == RunStatus.FAILED:
             run.status = RunStatus.PARTIAL
             run.error_details = error
+            run.completed_at = now  # mark done so retries aren't blocked for 45 min
         if stage_names[-1] == PIPELINE_STAGES[-1] and status in (
             RunStatus.COMPLETED,
             RunStatus.PARTIAL,
