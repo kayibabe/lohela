@@ -12,9 +12,7 @@ from app.database import get_db
 from app.models import AutomationAlert, PipelineRun
 from app.services.pipeline_tracker import infer_pipeline_run_type
 
-router = APIRouter(
-    prefix="/admin", tags=["admin"], dependencies=[Depends(require_research_access)]
-)
+router = APIRouter(prefix="/admin", tags=["admin"])
 
 
 # ── Pipeline ─────────────────────────────────────────────────────────────────
@@ -170,7 +168,7 @@ async def cache_stats():
     return await _cache.stats()
 
 
-@router.delete("/cache/clear")
+@router.delete("/cache/clear", dependencies=[Depends(require_research_access)])
 async def cache_clear(prefix: str = Query(default=None)):
     """
     Clear cached API responses.
