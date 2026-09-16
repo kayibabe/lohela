@@ -14,14 +14,15 @@ export default defineRailway(() => {
   };
 
   const web = service("web", {
+    // Top-level deploy settings (normalizeDeploy reads config.preDeploy, config.healthcheck etc.)
+    preDeploy: "alembic upgrade head",
+    healthcheck: "/health",
+    healthcheckTimeout: 300,
     build: {
       builder: "DOCKERFILE",
       dockerfilePath: "backend/Dockerfile",
     },
     deploy: {
-      preDeploy: "alembic upgrade head",
-      healthcheckPath: "/health",
-      healthcheckTimeout: 300,
       restartPolicyType: "ON_FAILURE",
       restartPolicyMaxRetries: 10,
     },
@@ -36,6 +37,10 @@ export default defineRailway(() => {
     build: {
       builder: "DOCKERFILE",
       dockerfilePath: "backend/Dockerfile",
+    },
+    deploy: {
+      restartPolicyType: "ON_FAILURE",
+      restartPolicyMaxRetries: 10,
     },
     variables: {
       ...sharedVars,
