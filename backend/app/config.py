@@ -33,6 +33,11 @@ class Settings(BaseSettings):
     rapidapi_key: str = ""
     api_football_host: Literal["direct", "rapidapi"] = "direct"
 
+    @field_validator("api_football_key", "rapidapi_key", mode="before")
+    @classmethod
+    def strip_bom(cls, v: str) -> str:
+        return v.lstrip("﻿").strip() if isinstance(v, str) else v
+
     # Database
     database_url: str = "postgresql+asyncpg://lohela:lohela_pass@localhost:5432/lohela"
 
