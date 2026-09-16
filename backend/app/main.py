@@ -98,6 +98,7 @@ async def lifespan(app: FastAPI):
         settings.pipeline_early_cron_hour, settings.pipeline_early_cron_minute,
         settings.pipeline_morning_cron_hour, settings.pipeline_morning_cron_minute,
     )
+    await _seed_competitions_if_empty()
     await _run_startup_automation()
 
     yield
@@ -222,6 +223,23 @@ async def _scheduler_leadership(scope: str):
         finally:
             await db.execute(text("SELECT pg_advisory_unlock(hashtextextended(:key, 0))"), {"key": key})
             await db.commit()
+
+
+async def _seed_competitions_if_empty():
+    """Seed competition rows on first deploy; no-op on subsequent restarts."""
+    from sqlalchemy import select, func
+    from app.models import Competition, LeagueTier
+    from scripts.seed_competitions import TIER1_COMPETITIONS, TIER2_COMPETITIONS
+
+    async with AsyncSessionLocal() as db:
+        count = (await db.execute(select(func.count()).select_from(Competition))).scalar()
+        if count and count > 0:
+            return
+        logger.info("Competitions table empty — seeding %d competitions", len(TIER1_COMPETITIONS) + len(TIER2_COMPETITIONS))
+        for data in TIER1_COMPETITIONS + TIER2_COMPETITIONS:
+            db.add(Competition(**data, reliability_score=1.0, active=True))
+        await db.commit()
+        logger.info("Competition seed complete")
 
 
 async def _run_startup_automation():
