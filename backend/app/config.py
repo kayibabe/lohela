@@ -1,5 +1,5 @@
 from pydantic_settings import BaseSettings, SettingsConfigDict
-from pydantic import model_validator
+from pydantic import field_validator, model_validator
 from typing import Literal
 from datetime import date, datetime, time, timedelta, timezone
 from zoneinfo import ZoneInfo
@@ -35,6 +35,18 @@ class Settings(BaseSettings):
 
     # Database
     database_url: str = "postgresql+asyncpg://lohela:lohela_pass@localhost:5432/lohela"
+
+    @field_validator("database_url", mode="before")
+    @classmethod
+    def normalize_database_url(cls, v: str) -> str:
+        # Railway (and Heroku/Render) provide postgresql:// or postgres://;
+        # asyncpg requires the postgresql+asyncpg:// scheme.
+        if isinstance(v, str):
+            if v.startswith("postgres://"):
+                return "postgresql+asyncpg://" + v[len("postgres://"):]
+            if v.startswith("postgresql://"):
+                return "postgresql+asyncpg://" + v[len("postgresql://"):]
+        return v
 
     # Redis / Celery
     redis_url: str = "redis://localhost:6379/0"

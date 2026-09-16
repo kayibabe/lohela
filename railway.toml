@@ -1,0 +1,16 @@
+# Railway configuration — web/API service.
+# Deploy this file at the repo root. The Celery worker is a separate Railway
+# service using the same image with a custom start command (see below).
+
+[build]
+builder = "DOCKERFILE"
+dockerfilePath = "backend/Dockerfile"
+
+[deploy]
+# Runs inside the container before traffic is switched to the new deploy.
+# alembic.ini and migrations/ are at /app (WORKDIR) inside the image.
+preDeployCommand = "alembic upgrade head"
+healthcheckPath = "/health"
+healthcheckTimeout = 300
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 10
