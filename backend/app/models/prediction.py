@@ -87,6 +87,20 @@ class Prediction(Base):
     source_implied_probability: Mapped[float | None] = mapped_column(Float, nullable=True)
     source_odds_provenance: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
 
+    # Closing-line value — the best available price at kickoff for this exact
+    # market/selection, captured once and never overwritten. Comparing the
+    # entry price (source_decimal_odds) against this is the standard way to
+    # judge whether a model has real edge, independent of small-sample
+    # win/loss variance. Left null until kickoff passes and a pre-kickoff
+    # odds snapshot exists to compare against.
+    closing_decimal_odds: Mapped[float | None] = mapped_column(Float, nullable=True)
+    closing_implied_probability: Mapped[float | None] = mapped_column(Float, nullable=True)
+    closing_odds_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # (entry_odds / closing_odds) - 1. Positive = we got a better price than
+    # the market settled on (beat the close); negative = the market moved
+    # our way after we already had the worse price.
+    clv_percentage: Mapped[float | None] = mapped_column(Float, nullable=True)
+
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), index=True
     )

@@ -18,6 +18,9 @@ interface ResearchSummary {
 interface IndividualRow { label: string; selections: number; settled: number; wins: number; losses: number; voids: number; staked: number; returned: number; pnl: number; roi: number; hit_rate: number }
 interface IndividualSummary { stake: number; unique_selections: number; settled_selections: number; eligible_predictions?: number; settled_predictions?: number; overall: IndividualRow; by_date: IndividualRow[]; by_month: IndividualRow[]; by_year: IndividualRow[]; by_market: IndividualRow[]; by_competition: IndividualRow[] }
 interface ReliabilityRow { market: string; q_band: string; spread_band: string; selections: number; settled: number; wins: number; losses: number; hit_rate: number | null; roi: number | null; confidence: string }
+interface ClvRow { legs: number; avg_clv_pct: number | null; beat_close_rate: number | null; avg_edge: number | null }
+interface ClvBreakdown extends ClvRow { q_grade?: string; market?: string; month?: string }
+interface ClvSummaryData { overall: ClvRow; by_q_grade: ClvBreakdown[]; by_market: ClvBreakdown[]; by_month: ClvBreakdown[] }
 interface PickMetric { unique_picks: number; settled: number; pending: number; wins: number; losses: number; voids: number; settlement_coverage: number; hit_rate: number | null; priced_settled: number; missing_odds: number; staked: number; returned: number; profit_loss: number; roi: number | null }
 interface RecommendationPick {
   pick_id: string; target_date: string; match_id: number; home_team: string; away_team: string; competition: string; kickoff_at: string
@@ -100,7 +103,34 @@ export default function AnalyticsPage() {
 function AutoMarketResearch({ data, setData }: { data: IndividualSummary | null; setData: (value: IndividualSummary | null) => void }) {
   useEffect(() => { fetch('/api/v1/performance/all-markets?stake=1').then(response => response.ok ? response.json() : null).then(setData).catch(() => setData(null)) }, [setData])
   if (!data) return <AnalyticsEmpty title="No automatic research data" body="Eligible predictions with frozen odds will appear after model and result ingestion." />
-  return <><div className="journal-note"><strong>Automatic all-market research</strong><span>Every latest prediction with a valid pre-kickoff odds snapshot is evaluated. This does not create bets or alter the paper ledger.</span></div><div className="research-kpis"><MetricCard label="Eligible predictions" value={data.eligible_predictions?.toString() ?? '—'} /><MetricCard label="Settled" value={data.settled_predictions?.toString() ?? '—'} /><MetricCard label="Net P&amp;L" value={fmtPnl(data.overall.pnl)} tone={data.overall.pnl >= 0 ? 'positive' : 'negative'} /><MetricCard label="ROI" value={pct(data.overall.roi)} tone={data.overall.roi >= 0 ? 'positive' : 'negative'} /></div><SortableIndividualTable title="By day" rows={data.by_date} /><SortableIndividualTable title="By month" rows={data.by_month} /><SortableIndividualTable title="By year" rows={data.by_year} /><SortableIndividualTable title="By market" rows={data.by_market} market /><SortableIndividualTable title="By league" rows={data.by_competition} /></>
+  return <><div className="journal-note"><strong>Automatic all-market research</strong><span>Every latest prediction with a valid pre-kickoff odds snapshot is evaluated. This does not create bets or alter the paper ledger.</span></div><div className="research-kpis"><MetricCard label="Eligible predictions" value={data.eligible_predictions?.toString() ?? '—'} /><MetricCard label="Settled" value={data.settled_predictions?.toString() ?? '—'} /><MetricCard label="Net P&amp;L" value={fmtPnl(data.overall.pnl)} tone={data.overall.pnl >= 0 ? 'positive' : 'negative'} /><MetricCard label="ROI" value={pct(data.overall.roi)} tone={data.overall.roi >= 0 ? 'positive' : 'negative'} /></div><SortableIndividualTable title="By day" rows={data.by_date} /><SortableIndividualTable title="By month" rows={data.by_month} /><SortableIndividualTable title="By year" rows={data.by_year} /><SortableIndividualTable title="By market" rows={data.by_market} market /><SortableIndividualTable title="By league" rows={data.by_competition} /><ClvPanel /></>
+}
+
+function ClvPanel() {
+  const [data, setData] = useState<ClvSummaryData | null>(null)
+  const [loading, setLoading] = useState(true)
+  useEffect(() => { fetch('/api/v1/performance/clv').then(r => r.ok ? r.json() : null).then(setData).catch(() => setData(null)).finally(() => setLoading(false)) }, [])
+  if (loading) return null
+  if (!data || data.overall.legs === 0) return <section className="analytics-card"><div className="section-header"><div><span className="eyebrow">Beating the market, not just the scoreboard</span><h2 className="section-title">Closing-line value</h2></div></div><AnalyticsEmpty title="No CLV data yet" body="Closing prices are captured automatically once a match's kickoff passes. Check back after today's fixtures kick off." compact /></section>
+  const beatTone = (data.overall.beat_close_rate ?? 0) >= 0.5 ? 'positive' : 'negative'
+  return <section className="analytics-card">
+    <div className="section-header"><div><span className="eyebrow">Beating the market, not just the scoreboard</span><h2 className="section-title">Closing-line value</h2></div><span className="section-subtitle">Entry price vs. the market's price at kickoff — the standard signal of real model edge</span></div>
+    <div className="research-kpis">
+      <MetricCard label="Legs with known CLV" value={data.overall.legs.toString()} />
+      <MetricCard label="Avg CLV" value={data.overall.avg_clv_pct == null ? '—' : pct(data.overall.avg_clv_pct)} note="Entry odds vs. closing odds" tone={data.overall.avg_clv_pct != null && data.overall.avg_clv_pct >= 0 ? 'positive' : 'negative'} />
+      <MetricCard label="Beat the close" value={pct(data.overall.beat_close_rate)} note="Share of legs priced better than closing" tone={beatTone} />
+      <MetricCard label="Avg edge (vig-inclusive)" value={data.overall.avg_edge == null ? '—' : pct(data.overall.avg_edge)} />
+    </div>
+    <ClvTable title="By Q-grade" rows={data.by_q_grade} labelKey="q_grade" />
+    <ClvTable title="By market" rows={data.by_market} labelKey="market" />
+    <ClvTable title="By month" rows={data.by_month} labelKey="month" />
+    <p className="matrix-note">Positive CLV means our entry price was consistently better than where the market closed — the clearest sign the model is finding real value, independent of short-run win/loss variance.</p>
+  </section>
+}
+
+function ClvTable({ title, rows, labelKey }: { title: string; rows: ClvBreakdown[]; labelKey: 'q_grade' | 'market' | 'month' }) {
+  if (rows.length === 0) return null
+  return <div className="analytics-table-wrap"><table className="analytics-table"><thead><tr><th>{title}</th><th>Legs</th><th>Avg CLV</th><th>Beat close</th></tr></thead><tbody>{rows.map(row => <tr key={String(row[labelKey])}><td><strong>{labelKey === 'market' ? formatMarket(String(row[labelKey])) : row[labelKey]}</strong></td><td>{row.legs}</td><td className={row.avg_clv_pct != null && row.avg_clv_pct >= 0 ? 'positive' : 'negative'}>{row.avg_clv_pct == null ? '—' : pct(row.avg_clv_pct)}</td><td>{pct(row.beat_close_rate)}</td></tr>)}</tbody></table></div>
 }
 
 function DataFreshness({ run }: { run: PipelineRun | null }) {

@@ -6,7 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.config import CURRENT_MODEL_VERSION
-from app.services.performance import performance_summary, individual_selection_summary, market_reliability_matrix, all_market_research_summary
+from app.services.performance import performance_summary, individual_selection_summary, market_reliability_matrix, all_market_research_summary, clv_summary
 from app.services.recommendation_ledger import recommendation_pick_ledger
 
 router = APIRouter(prefix="/performance", tags=["performance"])
@@ -28,6 +28,12 @@ async def market_reliability(date_from: date | None = None, date_to: date | None
 @router.get("/all-markets")
 async def all_markets(stake: float = Query(1.0, gt=0, le=100000), date_from: date | None = None, date_to: date | None = None, model_version: str | None = None, db: AsyncSession = Depends(get_db)):
     return await all_market_research_summary(db, stake, date_from, date_to, model_version)
+
+
+@router.get("/clv")
+async def clv(date_from: date | None = None, date_to: date | None = None, model_version: str | None = None, db: AsyncSession = Depends(get_db)):
+    """Closing-line value: did our entry price beat the market's price at kickoff?"""
+    return await clv_summary(db, date_from, date_to, model_version)
 
 
 @router.get("/recommendation-picks")

@@ -277,6 +277,62 @@ async def market_reliability_matrix(db: AsyncSession, date_from: date | None = N
     return rows
 
 
+async def clv_summary(db: AsyncSession, date_from: date | None = None, date_to: date | None = None, model_version: str | None = None) -> dict:
+    """Closing-line-value: did our entry price beat the market's price at kickoff?
+
+    This is the standard way to judge whether a model has genuine edge,
+    independent of short-run win/loss variance. Only predictions where a
+    closing price was actually captured (clv_percentage is not null) are
+    included — legs settled before the capture task could run, or with no
+    pre-kickoff quote history, are excluded rather than guessed at.
+    """
+    result = await db.execute(
+        select(Prediction).join(Match).options(selectinload(Prediction.match))
+        .where(Prediction.clv_percentage.is_not(None))
+        .order_by(Prediction.created_at.desc())
+    )
+    latest: dict[tuple[int, str, str], Prediction] = {}
+    for prediction in result.scalars().all():
+        if model_version and prediction.model_version != model_version:
+            continue
+        match_date = prediction.match.kickoff_at.date()
+        if date_from and match_date < date_from or date_to and match_date > date_to:
+            continue
+        key = (prediction.match_id, prediction.market, prediction.selection)
+        if key not in latest:
+            latest[key] = prediction
+
+    rows = list(latest.values())
+
+    def aggregate(items: list[Prediction]) -> dict:
+        if not items:
+            return {"legs": 0, "avg_clv_pct": None, "beat_close_rate": None, "avg_edge": None}
+        clvs = [p.clv_percentage for p in items]
+        edges = [p.edge for p in items if p.edge is not None]
+        return {
+            "legs": len(items),
+            "avg_clv_pct": round(sum(clvs) / len(clvs), 4),
+            "beat_close_rate": round(sum(c > 0 for c in clvs) / len(clvs), 4),
+            "avg_edge": round(sum(edges) / len(edges), 4) if edges else None,
+        }
+
+    by_q_grade: dict[str, list[Prediction]] = {}
+    by_market: dict[str, list[Prediction]] = {}
+    by_month: dict[str, list[Prediction]] = {}
+    for prediction in rows:
+        by_q_grade.setdefault(prediction.q_grade.value, []).append(prediction)
+        by_market.setdefault(prediction.market, []).append(prediction)
+        month = prediction.match.kickoff_at.date().isoformat()[:7]
+        by_month.setdefault(month, []).append(prediction)
+
+    return {
+        "overall": aggregate(rows),
+        "by_q_grade": [{"q_grade": k, **aggregate(v)} for k, v in sorted(by_q_grade.items())],
+        "by_market": [{"market": k, **aggregate(v)} for k, v in sorted(by_market.items())],
+        "by_month": [{"month": k, **aggregate(v)} for k, v in sorted(by_month.items(), reverse=True)],
+    }
+
+
 def _wilson_interval(wins: int, total: int) -> tuple[float, float]:
     if total == 0:
         return 0.0, 0.0
