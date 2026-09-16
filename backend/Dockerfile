@@ -32,6 +32,6 @@ COPY --from=frontend /build/dist ./static
 
 EXPOSE 8000
 
-# Use a shell entrypoint so hosting platforms can inject PORT at runtime.
-# The default keeps local Docker/Compose usage on the standard API port.
-CMD ["sh", "-c", "exec python -m uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}"]
+# Set CELERY_WORKER=1 on the Railway worker service to start the Celery
+# consumer instead of the API server. Both run from the same image.
+CMD ["sh", "-c", "if [ \"$CELERY_WORKER\" = '1' ]; then exec celery -A app.tasks.pipeline worker --loglevel=info; else exec python -m uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}; fi"]
