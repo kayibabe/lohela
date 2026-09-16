@@ -22,14 +22,61 @@ const COUNTRY_CURRENCY: Record<string, string> = {
   NL: 'EUR', PT: 'EUR', SI: 'EUR', SK: 'EUR',
 }
 
+// IANA timezone city → country code (for countries in COUNTRY_CURRENCY)
+const TIMEZONE_COUNTRY: Record<string, string> = {
+  // Africa
+  'Africa/Blantyre': 'MW', 'Africa/Gaborone': 'BW', 'Africa/Addis_Ababa': 'ET',
+  'Africa/Accra': 'GH', 'Africa/Nairobi': 'KE', 'Africa/Maputo': 'MZ',
+  'Africa/Lagos': 'NG', 'Africa/Kigali': 'RW', 'Africa/Dar_es_Salaam': 'TZ',
+  'Africa/Kampala': 'UG', 'Africa/Johannesburg': 'ZA', 'Africa/Lusaka': 'ZM',
+  'Africa/Harare': 'ZW',
+  // Anglosphere
+  'Australia/Sydney': 'AU', 'Australia/Melbourne': 'AU', 'Australia/Perth': 'AU',
+  'America/Toronto': 'CA', 'America/Vancouver': 'CA',
+  'Europe/London': 'GB',
+  'Asia/Hong_Kong': 'HK', 'Pacific/Auckland': 'NZ', 'Asia/Singapore': 'SG',
+  'America/New_York': 'US', 'America/Chicago': 'US', 'America/Denver': 'US',
+  'America/Los_Angeles': 'US', 'America/Phoenix': 'US',
+  // Asia-Pacific
+  'Asia/Shanghai': 'CN', 'Asia/Kolkata': 'IN', 'Asia/Tokyo': 'JP',
+  'Asia/Seoul': 'KR', 'Asia/Kuala_Lumpur': 'MY', 'Asia/Manila': 'PH',
+  'Asia/Bangkok': 'TH',
+  // Americas
+  'America/Argentina/Buenos_Aires': 'AR', 'America/Sao_Paulo': 'BR',
+  'America/Mexico_City': 'MX',
+  // Europe
+  'Europe/Zurich': 'CH', 'Europe/Prague': 'CZ', 'Europe/Copenhagen': 'DK',
+  'Europe/Budapest': 'HU', 'Europe/Oslo': 'NO', 'Europe/Warsaw': 'PL',
+  'Europe/Bucharest': 'RO', 'Europe/Stockholm': 'SE',
+  'Europe/Vienna': 'AT', 'Europe/Brussels': 'BE', 'Europe/Berlin': 'DE',
+  'Europe/Tallinn': 'EE', 'Europe/Madrid': 'ES', 'Europe/Helsinki': 'FI',
+  'Europe/Paris': 'FR', 'Europe/Athens': 'GR', 'Europe/Dublin': 'IE',
+  'Europe/Rome': 'IT', 'Europe/Vilnius': 'LT', 'Europe/Luxembourg': 'LU',
+  'Europe/Riga': 'LV', 'Europe/Amsterdam': 'NL', 'Europe/Lisbon': 'PT',
+  'Europe/Ljubljana': 'SI', 'Europe/Bratislava': 'SK',
+}
+
 function detectCurrency(): string {
-  const lang =
-    (navigator.languages && navigator.languages[0]) ||
-    navigator.language ||
-    'en-US'
-  const parts = lang.split('-')
-  const country = parts[parts.length - 1].toUpperCase()
-  return COUNTRY_CURRENCY[country] ?? 'USD'
+  // 1. Try every browser language tag in priority order — picks up e.g. 'en-MW'
+  //    even when 'en-GB' is the primary language.
+  const langs = [...(navigator.languages ?? []), navigator.language ?? 'en-US']
+  for (const lang of langs) {
+    const parts = lang.split('-')
+    const country = parts[parts.length - 1].toUpperCase()
+    if (COUNTRY_CURRENCY[country]) return COUNTRY_CURRENCY[country]
+  }
+
+  // 2. OS timezone is set to the user's physical location and is more reliable
+  //    than the UI language when they differ (common in anglophone Africa).
+  try {
+    const tz = Intl.DateTimeFormat().resolvedOptions().timeZone
+    const country = TIMEZONE_COUNTRY[tz]
+    if (country && COUNTRY_CURRENCY[country]) return COUNTRY_CURRENCY[country]
+  } catch {
+    // ignore — Intl not available
+  }
+
+  return 'USD'
 }
 
 const locale = (navigator.languages && navigator.languages[0]) || navigator.language || 'en-US'
