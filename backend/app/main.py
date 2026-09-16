@@ -227,19 +227,12 @@ async def _scheduler_leadership(scope: str):
 
 async def _seed_competitions_if_empty():
     """Seed competition rows on first deploy; no-op on subsequent restarts."""
-    from sqlalchemy import select, func
-    from app.models import Competition, LeagueTier
-    from scripts.seed_competitions import TIER1_COMPETITIONS, TIER2_COMPETITIONS
+    from app.services.seed import seed_competitions_if_empty
 
     async with AsyncSessionLocal() as db:
-        count = (await db.execute(select(func.count()).select_from(Competition))).scalar()
-        if count and count > 0:
-            return
-        logger.info("Competitions table empty — seeding %d competitions", len(TIER1_COMPETITIONS) + len(TIER2_COMPETITIONS))
-        for data in TIER1_COMPETITIONS + TIER2_COMPETITIONS:
-            db.add(Competition(**data, reliability_score=1.0, active=True))
-        await db.commit()
-        logger.info("Competition seed complete")
+        added = await seed_competitions_if_empty(db)
+        if added:
+            logger.info("Competition seed complete: %d competitions added", added)
 
 
 async def _run_startup_automation():

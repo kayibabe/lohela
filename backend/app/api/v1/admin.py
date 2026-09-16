@@ -31,19 +31,14 @@ class HistoricalSyncRequest(BaseModel):
 @router.post("/seed/competitions")
 async def seed_competitions():
     """Seed competition rows if the table is empty. Safe to call multiple times."""
-    from sqlalchemy import select, func
-    from app.models import Competition
+    from app.services.seed import seed_competitions_if_empty, COMPETITIONS
     from app.database import AsyncSessionLocal
-    from scripts.seed_competitions import TIER1_COMPETITIONS, TIER2_COMPETITIONS
 
     async with AsyncSessionLocal() as db:
-        count = (await db.execute(select(func.count()).select_from(Competition))).scalar()
-        if count and count > 0:
-            return {"status": "already_seeded", "competition_count": count}
-        for data in TIER1_COMPETITIONS + TIER2_COMPETITIONS:
-            db.add(Competition(**data, reliability_score=1.0, active=True))
-        await db.commit()
-        return {"status": "seeded", "added": len(TIER1_COMPETITIONS) + len(TIER2_COMPETITIONS)}
+        added = await seed_competitions_if_empty(db)
+        if added:
+            return {"status": "seeded", "added": added}
+        return {"status": "already_seeded", "competition_count": len(COMPETITIONS)}
 
 
 @router.post("/historical/sync")
