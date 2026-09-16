@@ -17,6 +17,10 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
+ENV PYTHONIOENCODING=utf-8 \
+    PYTHONUNBUFFERED=1 \
+    LANG=C.UTF-8
+
 RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
     libpq-dev \

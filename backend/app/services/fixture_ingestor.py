@@ -28,6 +28,11 @@ logger = logging.getLogger(__name__)
 _API_SEMAPHORE = asyncio.Semaphore(5)
 
 
+def _clean(value: str) -> str:
+    """Strip BOM and leading/trailing whitespace from API string fields."""
+    return value.strip().lstrip("﻿")
+
+
 class APIFootballClient:
     """Async HTTP client for API-Football v3."""
 
@@ -388,7 +393,7 @@ class FixtureIngestor:
                 live_phase=live_phase,
                 elapsed_minutes=elapsed_minutes,
                 season=str(data.get("league", {}).get("season", _current_season())),
-                round=data.get("league", {}).get("round"),
+                round=_clean(data.get("league", {}).get("round") or ""),
                 home_goals=goals_data.get("home"),
                 away_goals=goals_data.get("away"),
                 home_goals_ht=score_data.get("halftime", {}).get("home"),
@@ -409,7 +414,7 @@ class FixtureIngestor:
             match.home_team_id = home_team.id
             match.away_team_id = away_team.id
             match.kickoff_at = kickoff_at
-            match.round = data.get("league", {}).get("round") or match.round
+            match.round = _clean(data.get("league", {}).get("round") or "") or match.round
             match.home_goals = goals_data.get("home")
             match.away_goals = goals_data.get("away")
             if not skip_enrichment:
@@ -437,7 +442,7 @@ class FixtureIngestor:
         if team is None:
             team = Team(
                 api_football_id=api_id,
-                name=team_data.get("name", "Unknown"),
+                name=_clean(team_data.get("name", "Unknown")),
                 competition_id=competition.id,
             )
             self.db.add(team)
