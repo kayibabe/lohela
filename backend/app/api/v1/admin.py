@@ -28,6 +28,24 @@ class HistoricalSyncRequest(BaseModel):
     period_end: date
 
 
+@router.post("/seed/competitions")
+async def seed_competitions():
+    """Seed competition rows if the table is empty. Safe to call multiple times."""
+    from sqlalchemy import select, func
+    from app.models import Competition
+    from app.database import AsyncSessionLocal
+    from scripts.seed_competitions import TIER1_COMPETITIONS, TIER2_COMPETITIONS
+
+    async with AsyncSessionLocal() as db:
+        count = (await db.execute(select(func.count()).select_from(Competition))).scalar()
+        if count and count > 0:
+            return {"status": "already_seeded", "competition_count": count}
+        for data in TIER1_COMPETITIONS + TIER2_COMPETITIONS:
+            db.add(Competition(**data, reliability_score=1.0, active=True))
+        await db.commit()
+        return {"status": "seeded", "added": len(TIER1_COMPETITIONS) + len(TIER2_COMPETITIONS)}
+
+
 @router.post("/historical/sync")
 async def sync_historical_results(payload: HistoricalSyncRequest):
     """Queue historical fixture/result ingestion and paper-ticket settlement."""
