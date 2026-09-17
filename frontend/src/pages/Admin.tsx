@@ -26,6 +26,9 @@ interface PipelineSchedule {
 }
 interface PipelineStatus { id: number; target_date: string; run_type: string; trigger_source: string | null; scheduled_window: string | null; status: string; current_stage: string | null; error_details: string | null; started_at: string | null; completed_at: string | null; stages: { name: string; status: string; retry_count: number; input_count: number; output_count: number; error_details: string | null }[] }
 interface AutomationAlert { id: number; severity: string; task_name: string; target_date: string | null; title: string; detail: string; occurrence_count: number; resolved: boolean; last_seen_at: string }
+interface UserRecord { id: number; username: string; email: string; role: 'user' | 'admin'; plan: 'free' | 'pro'; account_status: 'active' | 'suspended' | 'pending'; created_at: string | null; last_login_at: string | null }
+type UserForm = Omit<UserRecord, 'id' | 'created_at' | 'last_login_at'> & { password: string }
+const emptyUserForm: UserForm = { username: '', email: '', password: '', role: 'user', plan: 'free', account_status: 'active' }
 
 function fmt2(n: number) { return String(n).padStart(2, '0') }
 
@@ -54,23 +57,60 @@ export default function AdminPage() {
   })
   const [historyEnd, setHistoryEnd] = useState(localDateString())
   const [syncingHistory, setSyncingHistory] = useState(false)
+  const [users, setUsers] = useState<UserRecord[]>([])
+  const [userForm, setUserForm] = useState<UserForm>(emptyUserForm)
+  const [editingUserId, setEditingUserId] = useState<number | null>(null)
+  const [userBusy, setUserBusy] = useState(false)
+  const [userError, setUserError] = useState<string | null>(null)
 
   const load = useCallback(async () => {
     setLoading(true)
-    const [sys, cache, sched, status, alertData] = await Promise.all([
+    const [sys, cache, sched, status, alertData, userData] = await Promise.all([
       fetch('/api/v1/admin/system/stats').then(r => r.ok ? r.json() : null),
       fetch('/api/v1/admin/cache/stats').then(r => r.ok ? r.json() : null),
       fetch('/api/v1/admin/pipeline/schedule').then(r => r.ok ? r.json() : null),
       fetch('/api/v1/admin/pipeline/status').then(r => r.ok ? r.json() : { runs: [] }),
       fetch('/api/v1/admin/alerts').then(r => r.ok ? r.json() : { alerts: [] }),
+      fetch('/api/v1/admin/users').then(r => r.ok ? r.json() : { users: [] }),
     ])
     setSysStats(sys)
     setCacheStats(cache)
     setSchedule(sched)
     setPipelineRuns((status as { runs: PipelineStatus[] }).runs)
     setAlerts((alertData as { alerts: AutomationAlert[] }).alerts)
+    setUsers((userData as { users: UserRecord[] }).users)
     setLoading(false)
   }, [])
+
+  function updateUserField<K extends keyof UserForm>(field: K, value: UserForm[K]) {
+    setUserForm(current => ({ ...current, [field]: value }))
+  }
+
+  function editUser(user: UserRecord) {
+    setEditingUserId(user.id)
+    setUserForm({ username: user.username, email: user.email, password: '', role: user.role, plan: user.plan, account_status: user.account_status })
+    setUserError(null)
+  }
+
+  async function saveUser(event: React.FormEvent) {
+    event.preventDefault(); setUserBusy(true); setUserError(null)
+    const body = { ...userForm, ...(editingUserId && !userForm.password ? { password: undefined } : {}) }
+    if (editingUserId && !userForm.password) delete (body as { password?: string }).password
+    try {
+      const res = await fetch(editingUserId ? `/api/v1/admin/users/${editingUserId}` : '/api/v1/admin/users', { method: editingUserId ? 'PATCH' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) { setUserError(data.detail ?? 'Could not save user'); return }
+      setUserForm(emptyUserForm); setEditingUserId(null); await load()
+    } finally { setUserBusy(false) }
+  }
+
+  async function removeUser(user: UserRecord) {
+    if (!window.confirm(`Delete ${user.username}?`)) return
+    const res = await fetch(`/api/v1/admin/users/${user.id}`, { method: 'DELETE' })
+    if (!res.ok) { const data = await res.json().catch(() => ({})); setUserError(data.detail ?? 'Could not delete user'); return }
+    if (editingUserId === user.id) { setEditingUserId(null); setUserForm(emptyUserForm) }
+    await load()
+  }
 
   useEffect(() => { load() }, [load])
   useEffect(() => {
@@ -219,6 +259,27 @@ export default function AdminPage() {
               ))}
             </div>
           )}
+        </div>
+
+        {/* System stats */}
+        <div className="admin-card admin-users-card">
+          <h3 className="admin-card-title">User access</h3>
+          <p className="admin-hint">Create, update, suspend, or remove accounts. Passwords are write-only and never displayed.</p>
+          <form className="admin-user-form" onSubmit={saveUser}>
+            <input placeholder="Username" value={userForm.username} onChange={e => updateUserField('username', e.target.value)} required minLength={2} />
+            <input type="email" placeholder="Email" value={userForm.email} onChange={e => updateUserField('email', e.target.value)} required />
+            <input type="password" placeholder={editingUserId ? 'New password (optional)' : 'Password (6+ characters)'} value={userForm.password} onChange={e => updateUserField('password', e.target.value)} minLength={6} required={!editingUserId} />
+            <select value={userForm.role} onChange={e => updateUserField('role', e.target.value as UserForm['role'])}><option value="user">User</option><option value="admin">Admin</option></select>
+            <select value={userForm.plan} onChange={e => updateUserField('plan', e.target.value as UserForm['plan'])}><option value="free">Free</option><option value="pro">Pro</option></select>
+            <select value={userForm.account_status} onChange={e => updateUserField('account_status', e.target.value as UserForm['account_status'])}><option value="active">Active</option><option value="pending">Pending</option><option value="suspended">Suspended</option></select>
+            <button className="btn-primary" type="submit" disabled={userBusy}>{userBusy ? 'Saving…' : editingUserId ? 'Save changes' : 'Create user'}</button>
+            {editingUserId && <button className="btn-ghost" type="button" onClick={() => { setEditingUserId(null); setUserForm(emptyUserForm) }}>Cancel</button>}
+          </form>
+          {userError && <div className="auth-error" role="alert">{userError}</div>}
+          <div className="admin-user-list">
+            {users.map(user => <div className="admin-user-row" key={user.id}><div><strong>{user.username}</strong><span>{user.email}</span></div><span>{user.role} · {user.plan} · {user.account_status}</span><div><button className="btn-ghost btn-sm" onClick={() => editUser(user)}>Edit</button><button className="btn-danger-outline btn-sm" onClick={() => removeUser(user)}>Delete</button></div></div>)}
+            {users.length === 0 && <div className="admin-loading">No users found</div>}
+          </div>
         </div>
 
         {/* System stats */}

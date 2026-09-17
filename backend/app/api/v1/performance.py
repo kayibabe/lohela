@@ -5,11 +5,16 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
+from app.api.security import require_pro_access
 from app.config import CURRENT_MODEL_VERSION
 from app.services.performance import performance_summary, individual_selection_summary, market_reliability_matrix, all_market_research_summary, clv_summary
 from app.services.recommendation_ledger import recommendation_pick_ledger
 
-router = APIRouter(prefix="/performance", tags=["performance"])
+router = APIRouter(
+    prefix="/performance",
+    tags=["performance"],
+    dependencies=[Depends(require_pro_access)],
+)
 
 
 @router.get("/summary")

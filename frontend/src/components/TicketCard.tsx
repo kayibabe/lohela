@@ -40,7 +40,7 @@ export default function TicketCard({ ticket, tierName, tierDesc, color, research
     )
   }
 
-  const evPositive = ticket.expected_value > 0
+  const evPositive = (ticket.expected_value ?? 0) > 0
   const flaggedLegs = ticket.legs.filter(leg => leg.edge != null && leg.edge > 0.30)
   const visibleLegs = expanded ? ticket.legs : ticket.legs.slice(0, 4)
   const resultCounts = ticket.legs.reduce<Record<string, number>>((counts, leg) => { const result = leg.result || 'pending'; counts[result] = (counts[result] ?? 0) + 1; return counts }, {})
@@ -63,7 +63,7 @@ export default function TicketCard({ ticket, tierName, tierDesc, color, research
           : pendingLegs > 0
             ? `Open · ${pendingLegs} pending`
             : 'Published'
-  const riskTone = ticket.risk_score >= 65 ? 'high' : ticket.risk_score >= 45 ? 'moderate' : 'low'
+  const riskTone = ticket.risk_score == null ? 'moderate' : ticket.risk_score >= 65 ? 'high' : ticket.risk_score >= 45 ? 'moderate' : 'low'
   const learningReady = ticket.status === 'settled' || ['won', 'lost', 'void'].includes(ticketResult ?? '')
   const roiLearningReady = learningReady && ticket.legs.every(leg => {
     if (!leg.source_odds_at) return false
@@ -98,19 +98,19 @@ export default function TicketCard({ ticket, tierName, tierDesc, color, research
         <div className="ticket-stats">
           <div className="stat" title="Combined decimal odds for every leg">
             <span className="stat-label">Ticket odds</span>
-            <span className="stat-value neutral">{ticket.combined_odds.toFixed(2)}×</span>
+            <span className="stat-value neutral">{ticket.combined_odds == null ? 'Pro only' : `${ticket.combined_odds.toFixed(2)}×`}</span>
           </div>
           <div className="stat" title="Estimated ticket probability after correlation adjustment">
             <span className="stat-label">Hit probability</span>
-            <span className="stat-value neutral">{(ticket.adjusted_probability * 100).toFixed(1)}%</span>
+            <span className="stat-value neutral">{ticket.adjusted_probability == null ? 'Pro only' : `${(ticket.adjusted_probability * 100).toFixed(1)}%`}</span>
           </div>
           <div className="stat" title="Higher scores indicate a riskier accumulator">
             <span className="stat-label">Risk score</span>
-            <span className={`stat-value risk-${riskTone}`}>{ticket.risk_score.toFixed(0)}/100</span>
+            <span className={`stat-value risk-${riskTone}`}>{ticket.risk_score == null ? 'Pro only' : `${ticket.risk_score.toFixed(0)}/100`}</span>
           </div>
           <div className="stat" title="Average Q-score across all ticket legs">
             <span className="stat-label">Avg Q-score</span>
-            <span className="stat-value neutral">{ticket.avg_q_score.toFixed(1)}</span>
+            <span className="stat-value neutral">{ticket.avg_q_score == null ? 'Pro only' : ticket.avg_q_score.toFixed(1)}</span>
           </div>
           <div className="stat" title="Average model edge across all ticket legs">
             <span className="stat-label">Avg edge</span>
@@ -119,7 +119,7 @@ export default function TicketCard({ ticket, tierName, tierDesc, color, research
           <div className="stat" title={flaggedLegs.length > 0 ? 'Provisional expected value: one or more legs require a value review' : 'Expected value based on the recorded model probabilities and odds'}>
             <span className="stat-label">Ticket EV</span>
             <span className={`stat-value ${flaggedLegs.length > 0 ? 'review' : evPositive ? 'positive' : 'neutral'}`}>
-              {flaggedLegs.length > 0 ? 'Unverified' : PCT(ticket.expected_value)}
+              {flaggedLegs.length > 0 ? 'Unverified' : ticket.expected_value == null ? 'Pro only' : PCT(ticket.expected_value)}
             </span>
           </div>
         </div>
@@ -146,7 +146,7 @@ export default function TicketCard({ ticket, tierName, tierDesc, color, research
               : 'Probability evidence can enter future offline challenger windows; ROI learning is excluded where pre-kickoff odds provenance is incomplete.'}</span>
           </div>
         )}
-        {suggestedStake != null && <div className="ticket-stake-suggestion"><div><span>What-if · half Kelly</span><strong>{suggestedStake > 0 ? `${fmt(suggestedStake)} stake` : 'No positive edge'}</strong></div>{suggestedStake > 0 && <div className="ticket-stake-outcomes"><span>Potential return <b>{fmt(suggestedStake * ticket.combined_odds)}</b></span><span>Potential P&amp;L <b className="positive">+{fmt(suggestedStake * (ticket.combined_odds - 1))}</b></span></div>}</div>}
+        {suggestedStake != null && <div className="ticket-stake-suggestion"><div><span>What-if · half Kelly</span><strong>{suggestedStake > 0 && ticket.combined_odds != null ? `${fmt(suggestedStake)} stake` : 'No positive edge'}</strong></div>{suggestedStake > 0 && ticket.combined_odds != null && <div className="ticket-stake-outcomes"><span>Potential return <b>{fmt(suggestedStake * ticket.combined_odds)}</b></span><span>Potential P&amp;L <b className="positive">+{fmt(suggestedStake * (ticket.combined_odds - 1))}</b></span></div>}</div>}
       </div>
 
       <ul className="leg-list">
@@ -172,12 +172,12 @@ export default function TicketCard({ ticket, tierName, tierDesc, color, research
                 </div>
               </div>
               <div className="leg-right">
-                <span className="leg-odds">{leg.best_odds.toFixed(2)}×</span>
+                <span className="leg-odds">{leg.best_odds == null ? 'Pro only' : `${leg.best_odds.toFixed(2)}×`}</span>
                 {leg.edge != null && (
                   <span className="leg-edge">{PCT(leg.edge)} edge</span>
                 )}
-                {leg.edge != null && leg.edge > 0.30 && leg.best_odds > 1 && <span className="leg-review">Implied {(100 / leg.best_odds).toFixed(0)}% · review</span>}
-                <span className="leg-q">Q {leg.q_score.toFixed(1)}</span>
+                {leg.edge != null && leg.edge > 0.30 && leg.best_odds != null && leg.best_odds > 1 && <span className="leg-review">Implied {(100 / leg.best_odds).toFixed(0)}% · review</span>}
+                <span className="leg-q">Q {leg.q_score == null ? 'Pro only' : leg.q_score.toFixed(1)}</span>
                 <span className={`leg-spread ${leg.model_agreement == null ? 'unknown' : leg.model_agreement <= 0.05 ? 'strong' : leg.model_agreement <= 0.10 ? 'acceptable' : leg.model_agreement <= 0.15 ? 'caution' : 'high'}`}>Spread {leg.model_agreement == null ? '—' : `${(leg.model_agreement * 100).toFixed(1)} pp`}</span>
               </div>
               <span className="leg-open-icon" aria-hidden="true">›</span>

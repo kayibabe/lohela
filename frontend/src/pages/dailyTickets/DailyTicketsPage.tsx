@@ -58,7 +58,7 @@ export default function DailyTicketsPage({ date }: DailyTicketsPageProps) {
 
   const suggestedStake = (ticket: Ticket | null) => {
     const bank = Number(bankroll);
-    if (!ticket || !(bank > 0) || ticket.combined_odds <= 1) return null;
+    if (!ticket || !(bank > 0) || ticket.combined_odds == null || ticket.adjusted_probability == null || ticket.combined_odds <= 1) return null;
     const b = ticket.combined_odds - 1;
     const kelly =
       (ticket.adjusted_probability * b - (1 - ticket.adjusted_probability)) / b;

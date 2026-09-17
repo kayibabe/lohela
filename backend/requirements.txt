@@ -34,6 +34,7 @@ pymc==5.15.0
 
 # Utilities
 python-dotenv==1.2.2
+argon2-cffi==25.1.0
 
 # Testing
 pytest==9.0.3

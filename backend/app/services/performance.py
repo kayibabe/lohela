@@ -90,6 +90,27 @@ async def performance_summary(db: AsyncSession, date_from: date | None = None, d
 
     official_tickets = [ticket for ticket in tickets if ticket.ticket_type != TicketType.BEST_VALUE]
     official_settled_ids = {ticket.id for ticket, _ in settled if ticket.ticket_type != TicketType.BEST_VALUE}
+    overlap = []
+    tickets_by_date: dict[date, list[AccumulatorTicket]] = {}
+    for ticket in official_tickets:
+        tickets_by_date.setdefault(ticket.target_date, []).append(ticket)
+    for target_date, day_tickets in sorted(tickets_by_date.items()):
+        for index, left in enumerate(day_tickets):
+            for right in day_tickets[index + 1:]:
+                left_matches = {selection.match_id for selection in left.selections}
+                right_matches = {selection.match_id for selection in right.selections}
+                shared = len(left_matches & right_matches)
+                overlap.append({
+                    "target_date": target_date.isoformat(),
+                    "left_ticket_type": left.ticket_type.value,
+                    "right_ticket_type": right.ticket_type.value,
+                    "shared_matches": shared,
+                    "left_legs": len(left_matches),
+                    "right_legs": len(right_matches),
+                    "overlap_ratio_of_smaller": round(
+                        shared / min(len(left_matches), len(right_matches)), 4
+                    ) if left_matches and right_matches else 0.0,
+                })
     official_selections: dict[tuple[date, int, str, str], TicketSelection] = {}
     for ticket in official_tickets:
         for selection in ticket.selections:
@@ -126,6 +147,7 @@ async def performance_summary(db: AsyncSession, date_from: date | None = None, d
         "calibration_error": calibration_error,
         "selection_sample_size": len(outcomes),
         "by_ticket_type": breakdown,
+        "ticket_overlap": overlap,
         "evidence_gate": {
             "official_latest_cohorts": len(official_tickets),
             "official_settled_cohorts": len(official_settled_ids),

@@ -6,6 +6,7 @@ from app.models.prediction import Prediction, QGrade
 from app.models.bet import Bet, BetStatus
 from app.models.custom_accumulator import CustomAccumulator, CustomAccumulatorLeg, CustomAccumulatorStatus
 from app.models.automation_alert import AutomationAlert
+from app.models.auth import AuthEvent, User, UserSession
 from app.models.research import (
     RunStatus,
     TicketType,
@@ -38,6 +39,7 @@ __all__ = [
     "Bet", "BetStatus",
     "CustomAccumulator", "CustomAccumulatorLeg", "CustomAccumulatorStatus",
     "AutomationAlert",
+    "User", "UserSession", "AuthEvent",
     "RunStatus", "TicketType", "TicketStatus", "SelectionResult",
     "ModelRun", "ModelLearningRun", "MarketLearningProfile", "ModelLearningPromotion", "StrongestSelectionSnapshot", "TicketGeneration", "AccumulatorTicket", "TicketSelection", "TicketResult",
     "AuditEvent", "ModelPerformance", "LeaguePerformance", "CorrelationCoefficient",

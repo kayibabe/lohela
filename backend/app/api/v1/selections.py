@@ -9,12 +9,17 @@ from sqlalchemy import select, func
 from pydantic import BaseModel
 
 from app.database import get_db
+from app.api.security import require_pro_access
 from app.models import Prediction, Match, MatchStatus, Team, Competition, Odds, ModelRun, RunStatus, TicketType
 from app.config import cat_day_bounds_utc, cat_today
 from app.services.accumulator_builder import AccumulatorBuilder
 from app.services.settlement import evaluate_selection
 
-router = APIRouter(prefix="/selections", tags=["selections"])
+router = APIRouter(
+    prefix="/selections",
+    tags=["selections"],
+    dependencies=[Depends(require_pro_access)],
+)
 
 
 def _finished_selection_result(match: Match, market: str) -> str | None:

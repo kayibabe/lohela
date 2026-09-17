@@ -25,11 +25,11 @@ export function LegRow({ leg, index }: Props) {
       <div className="leg-stats">
         <div className="leg-stat">
           <span className="stat-label">Prob</span>
-          <span className="stat-value">{formatPct(leg.model_probability)}</span>
+          <span className="stat-value">{leg.model_probability == null ? 'Pro only' : formatPct(leg.model_probability)}</span>
         </div>
         <div className="leg-stat">
           <span className="stat-label">Odds</span>
-          <span className="stat-value odds-value">{formatOdds(leg.best_odds)}</span>
+            <span className="stat-value odds-value">{leg.best_odds == null ? 'Pro only' : formatOdds(leg.best_odds)}</span>
         </div>
         {leg.edge != null && (
           <div className="leg-stat">
@@ -41,8 +41,8 @@ export function LegRow({ leg, index }: Props) {
         )}
         <div className="leg-stat">
           <span className="stat-label">Q</span>
-          <span className={`stat-value q-badge ${gradeColor(leg.q_grade)}`}>
-            {leg.q_score.toFixed(1)}
+          <span className={`stat-value q-badge ${gradeColor(leg.q_grade ?? 'C')}`}>
+            {leg.q_score == null ? 'Pro only' : leg.q_score.toFixed(1)}
           </span>
         </div>
       </div>

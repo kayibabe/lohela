@@ -12,9 +12,13 @@ from sqlalchemy.orm import selectinload
 from app.database import AsyncSessionLocal
 from app.models.bet import Bet, BetStatus
 from app.models import TicketSelection, Match, MatchStatus
-from app.api.security import require_research_access
+from app.api.security import require_authenticated_user, require_research_access
 
-router = APIRouter(prefix="/bets", tags=["bets"])
+router = APIRouter(
+    prefix="/bets",
+    tags=["bets"],
+    dependencies=[Depends(require_authenticated_user)],
+)
 
 
 async def get_db():

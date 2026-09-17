@@ -14,6 +14,7 @@ from app.services.accumulator_builder import (
     _pair_correlation,
     _relax_spec,
     selection_rejection_reasons,
+    shared_match_count,
 )
 from app.services.backtesting import _fractional_kelly
 from app.services.calibration import _pearson
@@ -72,6 +73,27 @@ def test_optimizer_rejects_two_selections_from_same_match():
     spec = TicketSpec(TicketType.BALANCED, "Balanced", 2, 7, 1, 20, 80, 0, 1, 0, 0.10)
     combo = (_leg(1, 10, "home_win"), _leg(2, 10, "over_1.5"))
     assert _evaluate_combo(combo, spec, {}) is None
+
+
+def test_optimizer_limits_overlap_with_prior_public_ticket():
+    prior_spec = TicketSpec(TicketType.SAFE, "Conservative", 3, 3, 3, 5, 85, 0, 1, 0, 1.0)
+    prior = _evaluate_combo(
+        (_leg(1, 1, "home_win"), _leg(2, 2, "away_win"), _leg(3, 3, "over_1.5")),
+        prior_spec,
+        {},
+    )
+    assert prior is not None
+
+    next_spec = TicketSpec(TicketType.BALANCED, "Balanced", 3, 3, 3, 5, 80, 0, 1, 0, 1.0)
+    candidate = _find_best_ticket(
+        [_leg(4, 1, "home_win"), _leg(5, 2, "away_win"), _leg(6, 4, "over_1.5")],
+        next_spec,
+        {},
+        prior_tickets=[prior],
+        max_shared_matches=1,
+    )
+    assert candidate is None
+    assert shared_match_count(prior, prior) == 3
 
 
 def test_pairwise_correlation_is_explicit_and_bounded():

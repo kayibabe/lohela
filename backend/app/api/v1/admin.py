@@ -2,17 +2,24 @@
 
 from datetime import date
 
+from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, Query, HTTPException
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import selectinload
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from app.config import cat_today
-from app.api.security import require_research_access
+from app.api.security import require_admin_access
 from app.database import get_db
-from app.models import AutomationAlert, PipelineRun
+from app.models import AutomationAlert, PipelineRun, User
+from app.models.auth import UserSession
+from app.services.auth import hash_password, normalize_email
 from app.services.pipeline_tracker import infer_pipeline_run_type
 
-router = APIRouter(prefix="/admin", tags=["admin"])
+router = APIRouter(
+    prefix="/admin",
+    tags=["admin"],
+    dependencies=[Depends(require_admin_access)],
+)
 
 
 # ── Pipeline ─────────────────────────────────────────────────────────────────
@@ -26,6 +33,119 @@ class PipelineTriggerResponse(BaseModel):
 class HistoricalSyncRequest(BaseModel):
     period_start: date
     period_end: date
+
+
+class UserAccessUpdate(BaseModel):
+    role: str | None = None
+    plan: str | None = None
+    account_status: str | None = None
+
+
+class AdminUserCreate(BaseModel):
+    username: str = Field(min_length=2, max_length=80)
+    email: str = Field(min_length=3, max_length=320)
+    password: str = Field(min_length=6, max_length=256)
+    role: str = "user"
+    plan: str = "free"
+    account_status: str = "active"
+
+
+class AdminUserUpdate(BaseModel):
+    username: str | None = Field(default=None, min_length=2, max_length=80)
+    email: str | None = Field(default=None, min_length=3, max_length=320)
+    password: str | None = Field(default=None, min_length=6, max_length=256)
+    role: str | None = None
+    plan: str | None = None
+    account_status: str | None = None
+
+
+def _validate_user_values(payload):
+    if payload.role is not None and payload.role not in {"user", "admin"}:
+        raise HTTPException(status_code=422, detail="role must be user or admin")
+    if payload.plan is not None and payload.plan not in {"free", "pro"}:
+        raise HTTPException(status_code=422, detail="plan must be free or pro")
+    if payload.account_status is not None and payload.account_status not in {"active", "suspended", "pending"}:
+        raise HTTPException(status_code=422, detail="invalid account_status")
+
+
+def _admin_user_out(user: User):
+    return {
+        "id": user.id, "username": user.username, "email": user.email,
+        "role": user.role, "plan": user.plan, "account_status": user.account_status,
+        "created_at": user.created_at.isoformat() if user.created_at else None,
+        "last_login_at": user.last_login_at.isoformat() if user.last_login_at else None,
+    }
+
+
+@router.get("/users")
+async def list_users(db=Depends(get_db)):
+    rows = (await db.execute(select(User).order_by(User.created_at.desc(), User.id.desc()))).scalars().all()
+    return {"users": [_admin_user_out(user) for user in rows]}
+
+
+@router.post("/users", status_code=201)
+async def create_user(payload: AdminUserCreate, db=Depends(get_db)):
+    _validate_user_values(payload)
+    username = payload.username.strip()
+    if len(username) < 2:
+        raise HTTPException(status_code=422, detail="username must contain at least 2 characters")
+    email = normalize_email(payload.email)
+    duplicate = await db.scalar(select(User).where(User.email == email))
+    if duplicate:
+        raise HTTPException(status_code=409, detail="Username or email already exists")
+    user = User(username=username, email=email, password_hash=hash_password(payload.password), role=payload.role, plan=payload.plan, account_status=payload.account_status)
+    db.add(user)
+    await db.commit()
+    await db.refresh(user)
+    return _admin_user_out(user)
+
+
+@router.patch("/users/{user_id}")
+async def update_user(user_id: int, payload: AdminUserUpdate, db=Depends(get_db)):
+    _validate_user_values(payload)
+    user = await db.get(User, user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    changes = payload.model_dump(exclude_unset=True)
+    if "username" in changes:
+        changes["username"] = changes["username"].strip()
+        if len(changes["username"]) < 2:
+            raise HTTPException(status_code=422, detail="username must contain at least 2 characters")
+    if "email" in changes:
+        changes["email"] = normalize_email(changes["email"])
+    if "password" in changes:
+        changes["password_hash"] = hash_password(changes.pop("password"))
+    if "email" in changes or "username" in changes:
+        duplicate = await db.scalar(select(User).where(User.id != user_id).where(User.email == changes.get("email", user.email)))
+        if duplicate:
+            raise HTTPException(status_code=409, detail="Username or email already exists")
+    for key, value in changes.items():
+        setattr(user, key, value)
+    if "password_hash" in changes or changes.get("account_status") in {"suspended", "pending"}:
+        sessions = (await db.execute(select(UserSession).where(UserSession.user_id == user.id, UserSession.revoked_at.is_(None)))).scalars().all()
+        for session in sessions:
+            session.revoked_at = datetime.now(timezone.utc)
+    await db.commit()
+    await db.refresh(user)
+    return _admin_user_out(user)
+
+
+@router.delete("/users/{user_id}", status_code=204)
+async def delete_user(user_id: int, db=Depends(get_db)):
+    user = await db.get(User, user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    if user.role == "admin":
+        admin_count = await db.scalar(select(func.count()).select_from(User).where(User.role == "admin"))
+        if admin_count <= 1:
+            raise HTTPException(status_code=409, detail="Cannot delete the last admin user")
+    await db.delete(user)
+    await db.commit()
+
+
+@router.patch("/users/{user_id}/access")
+async def update_user_access(user_id: int, payload: UserAccessUpdate, db=Depends(get_db)):
+    return await update_user(user_id, AdminUserUpdate(**payload.model_dump()), db)
 
 
 @router.post("/seed/competitions")
@@ -181,7 +301,7 @@ async def cache_stats():
     return await _cache.stats()
 
 
-@router.delete("/cache/clear", dependencies=[Depends(require_research_access)])
+@router.delete("/cache/clear")
 async def cache_clear(prefix: str = Query(default=None)):
     """
     Clear cached API responses.

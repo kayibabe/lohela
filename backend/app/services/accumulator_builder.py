@@ -170,7 +170,17 @@ class AccumulatorBuilder:
                     **{**spec.__dict__, "min_q_score": float(research_min_qscore)}
                 )
             eligible = [leg for leg in pool if not selection_rejection_reasons(leg, effective_spec, calibration)]
-            output[spec.ticket_type] = _find_best_ticket(eligible, effective_spec, coefficients)
+            prior_public = [
+                ticket for ticket_type, ticket in output.items()
+                if ticket is not None and ticket_type in (TicketType.SAFE, TicketType.BALANCED, TicketType.AGGRESSIVE)
+            ]
+            output[spec.ticket_type] = _find_best_ticket(
+                eligible,
+                effective_spec,
+                coefficients,
+                prior_tickets=prior_public if not spec.internal_only else [],
+                max_shared_matches=settings.max_shared_matches_between_tickets,
+            )
 
         if research_min_qscore is None and settings.ticket_relaxation_enabled:
             self._apply_minimum_ticket_relaxation(output, pool, calibration, coefficients)
@@ -217,7 +227,19 @@ class AccumulatorBuilder:
                     leg for leg in pool
                     if not selection_rejection_reasons(leg, relaxed_spec, calibration)
                 ]
-                ticket = _find_best_ticket(eligible, relaxed_spec, coefficients)
+                prior_public = [
+                    existing for existing_type, existing in output.items()
+                    if existing is not None
+                    and existing_type in public_types
+                    and existing_type != ticket_type
+                ]
+                ticket = _find_best_ticket(
+                    eligible,
+                    relaxed_spec,
+                    coefficients,
+                    prior_tickets=prior_public,
+                    max_shared_matches=settings.max_shared_matches_between_tickets,
+                )
                 if ticket is not None:
                     ticket.relaxed = True
                     ticket.relaxation_level = level
@@ -557,6 +579,9 @@ def _find_best_ticket(
     pool: list[Leg],
     spec: TicketSpec,
     learned: dict[tuple[str, str, str, int | None], float],
+    *,
+    prior_tickets: list[Ticket] | None = None,
+    max_shared_matches: int | None = None,
 ) -> Optional[Ticket]:
     candidates = sorted(
         pool,
@@ -588,6 +613,25 @@ def _find_best_ticket(
             continue
         for _, legs in partials:
             ticket = _evaluate_combo(legs, spec, learned)
-            if ticket is not None and _objective(ticket) > best_score:
+            if ticket is not None and _within_ticket_overlap_limit(
+                ticket,
+                prior_tickets or [],
+                max_shared_matches,
+            ) and _objective(ticket) > best_score:
                 best, best_score = ticket, _objective(ticket)
     return best
+
+
+def shared_match_count(left: Ticket, right: Ticket) -> int:
+    """Return the number of matches exposed by both ticket portfolios."""
+    return len({leg.match_id for leg in left.legs} & {leg.match_id for leg in right.legs})
+
+
+def _within_ticket_overlap_limit(
+    ticket: Ticket,
+    prior_tickets: list[Ticket],
+    limit: int | None,
+) -> bool:
+    if limit is None:
+        return True
+    return all(shared_match_count(ticket, prior) <= limit for prior in prior_tickets)

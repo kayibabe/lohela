@@ -8,11 +8,11 @@ export interface Leg {
   kickoff_at: string
   market: string
   selection: string
-  model_probability: number
+  model_probability: number | null
   model_agreement?: number | null
-  best_odds: number
-  q_score: number
-  q_grade: string
+  best_odds: number | null
+  q_score: number | null
+  q_grade: string | null
   edge: number | null
   expected_value: number | null
   source_odds_at: string | null
@@ -23,6 +23,7 @@ export interface Leg {
   live_phase?: string | null
   elapsed_minutes?: number | null
   selection_settled_at?: string | null
+  locked_fields?: string[]
 }
 
 export interface Ticket {
@@ -32,14 +33,14 @@ export interface Ticket {
   status: string
   version: number
   legs: Leg[]
-  combined_odds: number
-  combined_probability: number
-  adjusted_probability: number
-  correlation_penalty: number
-  expected_value: number
-  risk_score: number
-  confidence_score: number
-  avg_q_score: number
+  combined_odds: number | null
+  combined_probability: number | null
+  adjusted_probability: number | null
+  correlation_penalty: number | null
+  expected_value: number | null
+  risk_score: number | null
+  confidence_score: number | null
+  avg_q_score: number | null
   avg_edge: number | null
   model_version: string
   published_at: string
@@ -53,6 +54,7 @@ export interface Ticket {
   settled_at?: string | null
   settlement_source?: string | null
   settlement_version?: number | null
+  locked_fields?: string[]
 }
 
 export interface DailyTickets {

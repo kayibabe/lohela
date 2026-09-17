@@ -5,13 +5,14 @@ from __future__ import annotations
 from datetime import date
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import func, select
 from sqlalchemy.orm import selectinload
 
 from app.config import cat_today
+from app.api.security import get_optional_current_user, require_pro_access, require_research_access
 from app.database import get_db
 from app.models import (
     AccumulatorTicket,
@@ -27,6 +28,29 @@ from app.services.pipeline_tracker import infer_pipeline_run_type
 
 router = APIRouter(prefix="/tickets", tags=["tickets"])
 
+PUBLIC_TICKET_TYPES = [TicketType.SAFE, TicketType.BALANCED, TicketType.AGGRESSIVE]
+
+
+def _can_reveal(user) -> bool:
+    # Direct service-level calls are trusted; HTTP requests resolve this dependency
+    # to None or an actual User before reaching the handler.
+    if hasattr(user, "dependency"):
+        return True
+    return bool(user and (getattr(user, "role", None) == "admin" or getattr(user, "plan", None) == "pro"))
+
+
+async def require_internal_ticket_access(
+    request: Request,
+    include_internal: bool = Query(default=False),
+    x_research_key: str | None = Header(default=None),
+    user=Depends(get_optional_current_user),
+) -> None:
+    """Require the research key when an internal ticket stream is requested."""
+    if include_internal and user and (user.role == "admin" or user.plan == "pro"):
+        return
+    if include_internal:
+        await require_research_access(request, x_research_key)
+
 
 class LegOut(BaseModel):
     model_config = {"protected_namespaces": ()}
@@ -39,11 +63,11 @@ class LegOut(BaseModel):
     kickoff_at: str
     market: str
     selection: str
-    model_probability: float
+    model_probability: float | None
     model_agreement: Optional[float]
-    best_odds: float
-    q_score: float
-    q_grade: str
+    best_odds: float | None
+    q_score: float | None
+    q_grade: str | None
     edge: Optional[float]
     expected_value: Optional[float]
     source_odds_at: Optional[str]
@@ -54,6 +78,7 @@ class LegOut(BaseModel):
     live_phase: Optional[str]
     elapsed_minutes: Optional[int]
     selection_settled_at: Optional[str]
+    locked_fields: list[str] = Field(default_factory=list)
 
 
 class TicketOut(BaseModel):
@@ -64,14 +89,14 @@ class TicketOut(BaseModel):
     status: str
     version: int
     legs: list[LegOut]
-    combined_odds: float
-    combined_probability: float
-    adjusted_probability: float
-    correlation_penalty: float
-    expected_value: float
-    risk_score: float
-    confidence_score: float
-    avg_q_score: float
+    combined_odds: float | None
+    combined_probability: float | None
+    adjusted_probability: float | None
+    correlation_penalty: float | None
+    expected_value: float | None
+    risk_score: float | None
+    confidence_score: float | None
+    avg_q_score: float | None
     avg_edge: Optional[float]
     model_version: str
     published_at: str
@@ -85,6 +110,7 @@ class TicketOut(BaseModel):
     settled_at: Optional[str]
     settlement_source: Optional[str]
     settlement_version: Optional[int]
+    locked_fields: list[str] = Field(default_factory=list)
 
 
 class DailyTicketsOut(BaseModel):
@@ -117,10 +143,10 @@ class TicketHistoryOut(BaseModel):
     status: str
     version: int
     leg_count: int
-    combined_odds: float
-    adjusted_probability: float
-    risk_score: float
-    avg_q_score: float
+    combined_odds: float | None
+    adjusted_probability: float | None
+    risk_score: float | None
+    avg_q_score: float | None
     model_version: str
     published_at: str
     publication_hash: str
@@ -131,6 +157,7 @@ class TicketHistoryOut(BaseModel):
     return_amount: Optional[float]
     profit_loss: Optional[float]
     settled_at: Optional[str]
+    locked_fields: list[str] = Field(default_factory=list)
 
 
 class MatchHistoryOut(BaseModel):
@@ -155,11 +182,15 @@ class MatchHistoryOut(BaseModel):
 async def get_daily_tickets(
     date: Optional[date] = Query(default=None, description="Target date (default: today)"),
     db: AsyncSession = Depends(get_db),
+    include_internal: bool = Query(default=False),
+    _: None = Depends(require_internal_ticket_access),
+    user=Depends(get_optional_current_user),
 ):
     """Return latest persisted versions. This endpoint never regenerates tickets."""
     target = date or cat_today()
-    rows = await get_latest_published_tickets(db, target, include_internal=True)
-    mapped = {ticket.ticket_type: _ticket(ticket) for ticket in rows}
+    rows = await get_latest_published_tickets(db, target, include_internal=include_internal)
+    reveal = _can_reveal(user)
+    mapped = {ticket.ticket_type: _ticket(ticket, reveal=reveal) for ticket in rows}
     generation_result = await db.execute(
         select(TicketGeneration)
         .where(TicketGeneration.target_date == target)
@@ -204,7 +235,7 @@ async def get_daily_tickets(
         .order_by(AccumulatorTicket.ticket_type, AccumulatorTicket.version.desc())
     )
     latest_ids = {ticket.ticket_id for ticket in mapped.values() if ticket}
-    superseded = [_history_ticket(ticket) for ticket in history_result.scalars().all() if ticket.id not in latest_ids]
+    superseded = [_history_ticket(ticket, reveal=reveal) for ticket in history_result.scalars().all() if ticket.id not in latest_ids]
     return DailyTicketsOut(
         target_date=target.isoformat(),
         qualified_pool=qualified_pool,
@@ -254,19 +285,17 @@ async def get_daily_tickets(
 @router.get("/history", response_model=list[TicketHistoryOut])
 async def get_ticket_history(
     limit: int = Query(default=100, ge=1, le=200),
-    include_internal: bool = Query(default=True),
+    include_internal: bool = Query(default=False),
     include_superseded: bool = Query(
         default=False,
         description="Include every immutable published version instead of latest cohorts only",
     ),
     db: AsyncSession = Depends(get_db),
+    _: None = Depends(require_internal_ticket_access),
+    user=Depends(get_optional_current_user),
 ):
     """Return immutable ticket history, latest cohorts by default."""
-    ticket_types = list(TicketType) if include_internal else [
-        TicketType.SAFE,
-        TicketType.BALANCED,
-        TicketType.AGGRESSIVE,
-    ]
+    ticket_types = list(TicketType) if include_internal else PUBLIC_TICKET_TYPES
     if include_superseded:
         result = await db.execute(
             select(AccumulatorTicket)
@@ -289,7 +318,11 @@ async def get_ticket_history(
             )
             .limit(limit)
         )
-        return [_history_ticket(ticket) for ticket in result.scalars().all()]
+        reveal = _can_reveal(user)
+        return [
+            _history_ticket(ticket) if reveal else _history_ticket(ticket, reveal=False)
+            for ticket in result.scalars().all()
+        ]
 
     latest_versions = (
         select(
@@ -319,18 +352,26 @@ async def get_ticket_history(
         .order_by(AccumulatorTicket.target_date.desc(), AccumulatorTicket.ticket_type)
         .limit(limit)
     )
-    return [_history_ticket(ticket) for ticket in result.scalars().all()]
+    reveal = _can_reveal(user)
+    return [
+        _history_ticket(ticket) if reveal else _history_ticket(ticket, reveal=False)
+        for ticket in result.scalars().all()
+    ]
 
 
 @router.get("/matches/history", response_model=list[MatchHistoryOut])
 async def get_match_history(
     limit: int = Query(default=500, ge=1, le=2000),
     db: AsyncSession = Depends(get_db),
+    _: object = Depends(require_pro_access),
 ):
     """Return one match record per published match, with its latest outcomes."""
     latest_versions = (
         select(AccumulatorTicket.target_date, AccumulatorTicket.ticket_type, func.max(AccumulatorTicket.version).label("version"))
-        .where(AccumulatorTicket.status.in_([TicketStatus.PUBLISHED, TicketStatus.SETTLED, TicketStatus.VOID]))
+        .where(
+            AccumulatorTicket.ticket_type.in_(PUBLIC_TICKET_TYPES),
+            AccumulatorTicket.status.in_([TicketStatus.PUBLISHED, TicketStatus.SETTLED, TicketStatus.VOID]),
+        )
         .group_by(AccumulatorTicket.target_date, AccumulatorTicket.ticket_type).subquery()
     )
     result = await db.execute(
@@ -362,15 +403,25 @@ async def get_match_history(
 
 
 @router.get("/{ticket_id}", response_model=TicketOut)
-async def get_ticket(ticket_id: int, db: AsyncSession = Depends(get_db)):
+async def get_ticket(
+    ticket_id: int,
+    request: Request,
+    x_research_key: str | None = Header(default=None),
+    db: AsyncSession = Depends(get_db),
+    user=Depends(get_optional_current_user),
+):
     ticket = await get_ticket_by_id(db, ticket_id)
     if ticket is None:
         raise HTTPException(status_code=404, detail="Ticket not found")
-    return _ticket(ticket)
+    if ticket.ticket_type == TicketType.BEST_VALUE:
+        await require_research_access(request, x_research_key)
+    reveal = bool(user and (getattr(user, "role", None) == "admin" or getattr(user, "plan", None) == "pro"))
+    return _ticket(ticket, reveal=reveal)
 
 
-def _ticket(ticket: AccumulatorTicket) -> TicketOut:
+def _ticket(ticket: AccumulatorTicket, *, reveal: bool = True) -> TicketOut:
     latest_result = max(ticket.results, key=lambda item: item.version, default=None)
+    locked = [] if reveal else ["probability", "odds", "q_score", "edge", "expected_value", "risk_score"]
     return TicketOut(
         ticket_id=ticket.id,
         ticket_type=ticket.ticket_type.value,
@@ -382,16 +433,16 @@ def _ticket(ticket: AccumulatorTicket) -> TicketOut:
         }[ticket.ticket_type],
         status=ticket.status.value,
         version=ticket.version,
-        legs=[_leg(selection) for selection in ticket.selections],
-        combined_odds=ticket.combined_odds,
-        combined_probability=ticket.combined_probability,
-        adjusted_probability=ticket.adjusted_probability,
-        correlation_penalty=ticket.correlation_penalty,
-        expected_value=ticket.expected_value,
-        risk_score=ticket.risk_score,
-        confidence_score=ticket.confidence_score,
-        avg_q_score=ticket.average_q_score,
-        avg_edge=ticket.average_edge,
+        legs=[_leg(selection, reveal=reveal) for selection in ticket.selections],
+        combined_odds=ticket.combined_odds if reveal else None,
+        combined_probability=ticket.combined_probability if reveal else None,
+        adjusted_probability=ticket.adjusted_probability if reveal else None,
+        correlation_penalty=ticket.correlation_penalty if reveal else None,
+        expected_value=ticket.expected_value if reveal else None,
+        risk_score=ticket.risk_score if reveal else None,
+        confidence_score=ticket.confidence_score if reveal else None,
+        avg_q_score=ticket.average_q_score if reveal else None,
+        avg_edge=ticket.average_edge if reveal else None,
         model_version=ticket.model_version,
         published_at=ticket.published_at.isoformat(),
         publication_hash=ticket.publication_hash,
@@ -404,10 +455,11 @@ def _ticket(ticket: AccumulatorTicket) -> TicketOut:
         settled_at=latest_result.settled_at.isoformat() if latest_result else None,
         settlement_source=latest_result.source if latest_result else None,
         settlement_version=latest_result.version if latest_result else None,
+        locked_fields=locked,
     )
 
 
-def _history_ticket(ticket: AccumulatorTicket) -> TicketHistoryOut:
+def _history_ticket(ticket: AccumulatorTicket, *, reveal: bool = True) -> TicketHistoryOut:
     latest_result = max(ticket.results, key=lambda item: item.version, default=None)
     names = {
         TicketType.SAFE: "Conservative",
@@ -423,10 +475,10 @@ def _history_ticket(ticket: AccumulatorTicket) -> TicketHistoryOut:
         status=ticket.status.value,
         version=ticket.version,
         leg_count=len(ticket.selections),
-        combined_odds=ticket.combined_odds,
-        adjusted_probability=ticket.adjusted_probability,
-        risk_score=ticket.risk_score,
-        avg_q_score=ticket.average_q_score,
+        combined_odds=ticket.combined_odds if reveal else None,
+        adjusted_probability=ticket.adjusted_probability if reveal else None,
+        risk_score=ticket.risk_score if reveal else None,
+        avg_q_score=ticket.average_q_score if reveal else None,
         model_version=ticket.model_version,
         published_at=ticket.published_at.isoformat(),
         publication_hash=ticket.publication_hash,
@@ -437,10 +489,11 @@ def _history_ticket(ticket: AccumulatorTicket) -> TicketHistoryOut:
         return_amount=latest_result.return_amount if latest_result else None,
         profit_loss=latest_result.profit_loss if latest_result else None,
         settled_at=latest_result.settled_at.isoformat() if latest_result else None,
+        locked_fields=[] if reveal else ["odds", "probability", "q_score", "risk_score"],
     )
 
 
-def _leg(selection: TicketSelection) -> LegOut:
+def _leg(selection: TicketSelection, *, reveal: bool = True) -> LegOut:
     match = selection.match
     return LegOut(
         selection_id=selection.id,
@@ -452,13 +505,13 @@ def _leg(selection: TicketSelection) -> LegOut:
         kickoff_at=match.kickoff_at.isoformat(),
         market=selection.market,
         selection=selection.selection,
-        model_probability=selection.probability_snapshot,
+        model_probability=selection.probability_snapshot if reveal else None,
         model_agreement=selection.prediction.model_agreement if selection.prediction else None,
-        best_odds=selection.odds_snapshot,
-        q_score=selection.q_score_snapshot,
-        q_grade=_grade_label(selection.q_score_snapshot),
-        edge=selection.edge_snapshot,
-        expected_value=selection.probability_snapshot * selection.odds_snapshot - 1.0,
+        best_odds=selection.odds_snapshot if reveal else None,
+        q_score=selection.q_score_snapshot if reveal else None,
+        q_grade=_grade_label(selection.q_score_snapshot) if reveal else None,
+        edge=selection.edge_snapshot if reveal else None,
+        expected_value=selection.probability_snapshot * selection.odds_snapshot - 1.0 if reveal else None,
         source_odds_at=selection.source_odds_at.isoformat() if selection.source_odds_at else None,
         result=selection.result.value,
         match_status=match.status.value,
@@ -467,6 +520,7 @@ def _leg(selection: TicketSelection) -> LegOut:
         live_phase=match.live_phase,
         elapsed_minutes=match.elapsed_minutes,
         selection_settled_at=selection.settled_at.isoformat() if selection.settled_at else None,
+        locked_fields=[] if reveal else ["probability", "odds", "q_score", "edge", "expected_value"],
     )
 
 

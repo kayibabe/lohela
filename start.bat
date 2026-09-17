@@ -54,9 +54,12 @@ if errorlevel 1 (
 )
 
 echo Waiting for the API to become healthy...
+set "API_PORT=8000"
+for /f "tokens=2 delims=:" %%p in ('docker compose port backend 8000 2^>nul') do set "API_PORT=%%p"
+
 set "API_READY=0"
 for /l %%i in (1,1,30) do (
-    powershell -NoProfile -Command "try { if ((Invoke-WebRequest -UseBasicParsing http://127.0.0.1:8000/health).StatusCode -eq 200) { exit 0 } } catch {} ; exit 1" >nul 2>&1
+    powershell -NoProfile -Command "try { if ((Invoke-WebRequest -UseBasicParsing http://127.0.0.1:%API_PORT%/health).StatusCode -eq 200) { exit 0 } } catch {} ; exit 1" >nul 2>&1
     if not errorlevel 1 (
         set "API_READY=1"
         goto :api_ready
@@ -95,7 +98,7 @@ echo  ============================
 echo   LOHELA is running!
 echo.
 echo   App      : http://localhost:3000
-echo   API docs : http://localhost:8000/docs
+echo   API docs : http://localhost:%API_PORT%/docs
 echo.
 echo   Run stop.bat to shut down.
 echo  ============================

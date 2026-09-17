@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import './App.css'
 import DailyTicketsPage, { TODAY } from './pages/DailyTickets'
 import { addDays } from './utils'
@@ -6,11 +6,15 @@ import TrackerPage from './pages/Tracker'
 import AnalyticsPage from './pages/Analytics'
 import ToolsPage from './pages/Tools'
 import AdminPage from './pages/Admin'
+import LoginPage from './pages/Login'
+import UpgradePage from './pages/Upgrade'
+import { AuthControls, useAuth } from './auth'
 
 type Theme = 'dark' | 'light' | 'system'
-type Page = 'tickets' | 'tracker' | 'analytics' | 'tools' | 'admin'
+type ModulePage = 'tickets' | 'tracker' | 'analytics' | 'tools' | 'admin'
+type Page = ModulePage | 'login' | 'upgrade'
 
-const NAV: { id: Page; label: string }[] = [
+const NAV: { id: ModulePage; label: string }[] = [
   { id: 'tickets',   label: 'Tickets'   },
   { id: 'tracker',   label: 'Tracker'   },
   { id: 'analytics', label: 'Analytics' },
@@ -18,7 +22,7 @@ const NAV: { id: Page; label: string }[] = [
   { id: 'admin',     label: 'Admin'     },
 ]
 
-const NAV_META: Record<Page, { icon: string; hint: string }> = {
+const NAV_META: Record<ModulePage, { icon: string; hint: string }> = {
   tickets: { icon: 'sparkles', hint: 'Daily published research' },
   tracker: { icon: 'list', hint: 'System evidence and confirmed journal' },
   analytics: { icon: 'chart', hint: 'Performance and calibration' },
@@ -38,10 +42,41 @@ function NavIcon({ name }: { name: string }) {
 }
 
 export default function App() {
-  const [page, setPage] = useState<Page>('tickets')
+  const { user, loading } = useAuth()
+  const [page, setPage] = useState<Page>(() => routePage(window.location.pathname))
+  const [returnPath, setReturnPath] = useState<ModulePage>('tickets')
   const [date, setDate] = useState(TODAY)
   const [theme, setTheme] = useState<Theme>('system')
   const [lastUpdated, setLastUpdated] = useState(() => new Date())
+
+  useEffect(() => {
+    const onPopState = () => setPage(routePage(window.location.pathname))
+    window.addEventListener('popstate', onPopState)
+    return () => window.removeEventListener('popstate', onPopState)
+  }, [])
+
+  useEffect(() => {
+    if (!loading && page === 'login' && user) {
+      navigate('tickets', undefined, true)
+      return
+    }
+    if (!loading && page !== 'login' && page !== 'upgrade') {
+      const guarded = guardPage(page, user)
+      if (guarded !== page) navigate(guarded, guarded === 'login' ? page : undefined, true)
+    }
+  }, [loading, page, user])
+
+  function navigate(next: Page, requested?: ModulePage, replace = false) {
+    if (next === 'login' && requested) setReturnPath(requested)
+    setPage(next)
+    const path = next === 'login' ? '/login' : next === 'upgrade' ? '/upgrade' : `/${next}`
+    window.history[replace ? 'replaceState' : 'pushState']({}, '', path)
+  }
+
+  function goTo(next: ModulePage) {
+    const guarded = guardPage(next, user)
+    navigate(guarded, guarded === 'login' ? next : undefined)
+  }
 
   const cycleTheme = () => {
     setTheme(t => {
@@ -57,10 +92,18 @@ export default function App() {
 
   const nav = (n: number) => setDate(d => addDays(d, n))
 
+  if (page === 'login') {
+    return (
+      <div className="auth-standalone">
+        <LoginPage onSuccess={() => navigate(returnPath)} />
+      </div>
+    )
+  }
+
   return (
     <div className="app">
       <aside className="app-sidebar">
-        <a className="brand" href="/" aria-label="Lohela home" onClick={(event) => { event.preventDefault(); setPage('tickets') }}>
+        <a className="brand" href="/" aria-label="Lohela home" onClick={(event) => { event.preventDefault(); goTo('tickets') }}>
           <img className="brand-logo" src="/lohela-logo.svg" alt="" />
           <span className="brand-copy">
             <span className="brand-name">Lohela</span>
@@ -70,15 +113,20 @@ export default function App() {
         <nav className="sidebar-nav" aria-label="Primary navigation">
           <span className="sidebar-label">Workspace</span>
           {NAV.slice(0, 4).map(n => (
-            <button key={n.id} className={`nav-tab${page === n.id ? ' active' : ''}`} onClick={() => setPage(n.id)} title={NAV_META[n.id].hint}>
+            <button key={n.id} className={`nav-tab${page === n.id ? ' active' : ''}`} onClick={() => goTo(n.id)} title={NAV_META[n.id].hint}>
               <span className="nav-icon"><NavIcon name={NAV_META[n.id].icon} /></span>{n.label}
             </button>
           ))}
-          <span className="sidebar-label sidebar-label-admin">System</span>
-          <button className={`nav-tab${page === 'admin' ? ' active' : ''}`} onClick={() => setPage('admin')} title={NAV_META.admin.hint}>
-            <span className="nav-icon"><NavIcon name={NAV_META.admin.icon} /></span>Admin
-          </button>
+          {user?.role === 'admin' && <>
+            <span className="sidebar-label sidebar-label-admin">System</span>
+            <button className={`nav-tab${page === 'admin' ? ' active' : ''}`} onClick={() => goTo('admin')} title={NAV_META.admin.hint}>
+              <span className="nav-icon"><NavIcon name={NAV_META.admin.icon} /></span>Admin
+            </button>
+          </>}
         </nav>
+        <div className="sidebar-account">
+          <AuthControls onSignedOut={() => navigate('login', undefined, true)} />
+        </div>
       </aside>
       <header className="app-header">
         <div className="main-header-status">
@@ -87,7 +135,7 @@ export default function App() {
             <span className="theme-auto">{theme === 'system' ? 'Auto' : theme}</span>
           </button>
         </div>
-        {page !== 'tickets' && <div className="global-page-context"><strong>{NAV.find(item => item.id === page)?.label}</strong><span>{NAV_META[page].hint}</span></div>}
+        {isModulePage(page) && page !== 'tickets' && <div className="global-page-context"><strong>{NAV.find(item => item.id === page)?.label}</strong><span>{NAV_META[page].hint}</span></div>}
         <span className="global-updated">Updated {lastUpdated.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
         <button className="global-refresh" onClick={() => { setLastUpdated(new Date()); window.location.reload() }} title="Refresh current page" aria-label="Refresh current page">↻ <span>Refresh</span></button>
         {page === 'tickets' && (
@@ -109,20 +157,21 @@ export default function App() {
       </header>
 
       <main className="main">
-        {page === 'tickets'   && <DailyTicketsPage key={date} date={date} />}
-        {page === 'tracker'   && <TrackerPage onOpenTickets={(targetDate) => { if (targetDate) setDate(targetDate); setPage('tickets') }} />}
+        {page === 'upgrade' && <UpgradePage onBack={() => goTo('tickets')} />}
+        {page === 'tickets' && <DailyTicketsPage key={date} date={date} />}
+        {page === 'tracker' && <TrackerPage onOpenTickets={(targetDate) => { if (targetDate) setDate(targetDate); goTo('tickets') }} />}
         {page === 'analytics' && <AnalyticsPage />}
-        {page === 'tools'     && <ToolsPage />}
-        {page === 'admin'     && <AdminPage />}
+        {page === 'tools' && <ToolsPage />}
+        {page === 'admin' && user?.role === 'admin' && <AdminPage />}
       </main>
 
 
       <nav className="bottom-nav" aria-label="Primary navigation">
-        {NAV.map(item => (
+        {NAV.filter(item => item.id !== 'admin' || user?.role === 'admin').map(item => (
           <button
             key={item.id}
             className={page === item.id ? 'active' : ''}
-            onClick={() => setPage(item.id)}
+            onClick={() => goTo(item.id)}
             aria-current={page === item.id ? 'page' : undefined}
           >
             <span aria-hidden="true"><NavIcon name={NAV_META[item.id].icon} /></span>
@@ -132,4 +181,24 @@ export default function App() {
       </nav>
     </div>
   )
+}
+
+function routePage(pathname: string): Page {
+  const path = pathname.replace(/\/$/, '')
+  if (path === '/login') return 'login'
+  if (path === '/upgrade') return 'upgrade'
+  if (path === '/tickets') return 'tickets'
+  if (path === '/tracker' || path === '/analytics' || path === '/tools' || path === '/admin') return path.slice(1) as ModulePage
+  return 'login'
+}
+
+function isModulePage(page: Page): page is ModulePage {
+  return page !== 'login' && page !== 'upgrade'
+}
+
+function guardPage(page: ModulePage, user: ReturnType<typeof useAuth>['user']): Page {
+  if (page === 'admin' && user?.role !== 'admin') return user ? 'upgrade' : 'login'
+  if ((page === 'tickets' || page === 'tracker' || page === 'analytics') && !user) return 'login'
+  if (page === 'analytics' && user?.role !== 'admin' && user?.plan !== 'pro') return 'upgrade'
+  return page
 }

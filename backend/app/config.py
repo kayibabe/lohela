@@ -60,6 +60,9 @@ class Settings(BaseSettings):
     app_env: str = "development"
     secret_key: str = "change_me_in_production"
     research_api_key: str = ""
+    auth_cookie_name: str = "lohela_session"
+    auth_session_days: int = 30
+    auth_allow_registration: bool = True
     log_level: str = "INFO"
 
     # Pipeline windows: 00:15 CAT (22:15 UTC previous day) and 05:00 CAT (03:00 UTC).
@@ -108,6 +111,9 @@ class Settings(BaseSettings):
     warn_data_quality_score: int = 60    # below this: flagged
     max_selection_odds_age_hours: float = 2.0
     min_selection_edge: float = 0.03
+    # Published public tiers are alternatives, not duplicate exposure. A
+    # later tier may share at most this many matches with an earlier tier.
+    max_shared_matches_between_tickets: int = 2
 
     # On thin weekday slates the full-strength tier gates (esp. high-grade-leg
     # ratio) can legitimately admit zero combinations even with a healthy

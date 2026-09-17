@@ -16,8 +16,10 @@ from app.api.v1 import (
     backtests,
     custom_accumulators,
 )
+from app.api import auth
 
 router = APIRouter(prefix="/api/v1")
+router.include_router(auth.router)
 router.include_router(ingest.router)
 router.include_router(models.router)
 router.include_router(selections.router)

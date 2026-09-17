@@ -7,7 +7,7 @@ from datetime import date, timedelta
 from celery import Celery
 from celery.signals import task_failure
 
-from app.config import CURRENT_MODEL_VERSION, settings
+from app.config import CURRENT_MODEL_VERSION, cat_today, settings
 
 logger = logging.getLogger(__name__)
 
@@ -204,7 +204,7 @@ def enrich_data(self, target_date: str | None = None, pipeline_run_id: int | Non
 
     async def _run():
         async with AsyncSessionLocal() as db:
-            target = date.fromisoformat(target_date) if target_date else date.today()
+            target = date.fromisoformat(target_date) if target_date else cat_today()
             preparation = await ModelPreparationService(db).prepare(target)
             count = await DataEnricher(db).enrich_all_scheduled(
                 target
