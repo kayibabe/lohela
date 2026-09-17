@@ -57,17 +57,8 @@ const TIMEZONE_COUNTRY: Record<string, string> = {
 }
 
 function detectCurrency(): string {
-  // 1. Try every browser language tag in priority order — picks up e.g. 'en-MW'
-  //    even when 'en-GB' is the primary language.
-  const langs = [...(navigator.languages ?? []), navigator.language ?? 'en-US']
-  for (const lang of langs) {
-    const parts = lang.split('-')
-    const country = parts[parts.length - 1].toUpperCase()
-    if (COUNTRY_CURRENCY[country]) return COUNTRY_CURRENCY[country]
-  }
-
-  // 2. OS timezone is set to the user's physical location and is more reliable
-  //    than the UI language when they differ (common in anglophone Africa).
+  // The OS timezone is the best indicator of the local operating currency when
+  // the UI language differs from the user's location (for example, en-GB in Malawi).
   try {
     const tz = Intl.DateTimeFormat().resolvedOptions().timeZone
     const country = TIMEZONE_COUNTRY[tz]
@@ -76,10 +67,29 @@ function detectCurrency(): string {
     // ignore — Intl not available
   }
 
+  // Fall back to browser language tags, which can still provide a useful
+  // country signal when timezone information is unavailable.
+  const langs = [...(navigator.languages ?? []), navigator.language ?? 'en-US']
+  for (const lang of langs) {
+    const parts = lang.split('-')
+    const country = parts[parts.length - 1].toUpperCase()
+    if (COUNTRY_CURRENCY[country]) return COUNTRY_CURRENCY[country]
+  }
+
   return 'USD'
 }
 
-const locale = (navigator.languages && navigator.languages[0]) || navigator.language || 'en-US'
+function detectLocalLocale(): string {
+  try {
+    const country = TIMEZONE_COUNTRY[Intl.DateTimeFormat().resolvedOptions().timeZone]
+    if (country) return `en-${country}`
+  } catch {
+    // ignore — Intl not available
+  }
+  return (navigator.languages && navigator.languages[0]) || navigator.language || 'en-US'
+}
+
+const locale = detectLocalLocale()
 const currency = detectCurrency()
 
 const _fmt = new Intl.NumberFormat(locale, {
