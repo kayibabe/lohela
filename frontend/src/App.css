@@ -1167,6 +1167,11 @@ body {
 .stat-value.neutral  { color: var(--text); }
 
 /* ─── Ticket empty state ─────────────────────────────────────── */
+.app-fatal-error { min-height: 100vh; display: grid; place-items: center; padding: 24px; background: var(--bg); color: var(--text); }
+.app-fatal-card { width: min(100%, 520px); padding: 32px; border: 1px solid var(--border); border-radius: 16px; background: var(--surface); box-shadow: var(--shadow); }
+.app-fatal-card h1 { margin: 8px 0 10px; }
+.app-fatal-card p { margin: 0 0 20px; color: var(--muted); line-height: 1.6; }
+
 .empty-card {
   padding: 28px 20px;
   text-align: center;
@@ -2175,7 +2180,7 @@ body {
 .auth-page { min-height: 70vh; display: grid; place-items: center; padding: 32px 16px; }
 .auth-standalone { min-height: 100dvh; display: grid; place-items: center; position: relative; padding: 24px; background: var(--bg); }
 .auth-standalone .auth-page { min-height: 100dvh; width: 100%; box-sizing: border-box; }
-.auth-card { width: min(920px, 100%); overflow: hidden; border: 1px solid color-mix(in srgb, var(--border) 80%, transparent); border-radius: 24px; background: var(--surface); box-shadow: 0 28px 80px rgba(17, 41, 72, .16); }
+.auth-card { width: min(920px, 100%); max-width: 100%; overflow: hidden; border: 1px solid color-mix(in srgb, var(--border) 80%, transparent); border-radius: 24px; background: var(--surface); box-shadow: 0 28px 80px rgba(17, 41, 72, .16); }
 .auth-card-brand { display: inline-flex; align-items: center; gap: 10px; margin: 28px 0 6px 34px; color: var(--text); text-decoration: none; }
 .auth-card-brand img { width: 31px; height: 31px; }
 .auth-card-brand span { display: grid; gap: 2px; }
@@ -2183,7 +2188,8 @@ body {
 .auth-card-brand small { color: var(--accent); font-size: 10px; }
 .auth-form-panel .auth-card-brand { align-self: center; flex-direction: column; align-items: center; gap: 9px; margin: 0 0 26px; text-align: center; }
 .auth-form-panel .auth-card-brand img { width: 58px; height: 58px; }
-.auth-card-body { display: grid; grid-template-columns: .92fr 1.08fr; }
+.auth-card-body { display: grid; grid-template-columns: .92fr 1.08fr; min-width: 0; }
+.auth-card-body > * { min-width: 0; }
 .auth-benefits { display: flex; flex-direction: column; justify-content: center; min-height: 480px; padding: 52px; background: linear-gradient(145deg, #0c4d91 0%, #1263b0 57%, #0a3f79 100%); color: #fff; position: relative; overflow: hidden; }
 .auth-benefits::after { content: ''; position: absolute; width: 280px; height: 280px; right: -100px; bottom: -120px; border: 1px solid rgba(255,255,255,.18); border-radius: 50%; box-shadow: 0 0 0 26px rgba(255,255,255,.05), 0 0 0 52px rgba(255,255,255,.04); }
 .auth-kicker { position: relative; z-index: 1; color: #a9d4ff; font-size: 11px; font-weight: 800; letter-spacing: .14em; text-transform: uppercase; }
@@ -2193,13 +2199,13 @@ body {
 .auth-benefit-list { position: relative; z-index: 1; display: grid; gap: 14px; margin-top: 34px; color: rgba(255,255,255,.92); font-size: 12px; }
 .auth-benefit-list span { display: flex; align-items: center; gap: 10px; }
 .auth-benefit-list b { color: #a9d4ff; font-size: 10px; letter-spacing: .08em; }
-.auth-form-panel { display: flex; flex-direction: column; align-items: center; padding: 52px 58px; text-align: center; }
+.auth-form-panel { display: flex; flex-direction: column; align-items: center; width: 100%; min-width: 0; padding: 52px 58px; text-align: center; }
 .auth-form-panel h2 { margin: 8px 0 9px; font-size: 30px; letter-spacing: -.035em; }
 .auth-form-panel > p { margin: 0 0 28px; color: var(--muted); line-height: 1.55; }
 .auth-card form { display: grid; gap: 14px; }
-.auth-form-panel form { width: 100%; text-align: left; }
-.auth-card label { display: grid; gap: 6px; color: var(--muted); font-size: 12px; }
-.auth-card input { box-sizing: border-box; width: 100%; padding: 13px 14px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface2); color: var(--text); transition: border-color .15s, box-shadow .15s; }
+.auth-form-panel form { width: 100%; max-width: 100%; text-align: left; }
+.auth-card label { display: grid; gap: 6px; min-width: 0; color: var(--muted); font-size: 12px; }
+.auth-card input { box-sizing: border-box; width: 100%; max-width: 100%; padding: 13px 14px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface2); color: var(--text); transition: border-color .15s, box-shadow .15s; }
 .auth-card input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 15%, transparent); }
 .auth-card .btn-primary { width: 100%; height: 48px; margin-top: 8px; padding: 0 14px; border-radius: 10px; font-size: 14px; box-shadow: 0 8px 18px color-mix(in srgb, var(--accent) 28%, transparent); }
 .auth-switch { width: 100%; margin-top: 12px; }
@@ -2210,13 +2216,22 @@ body {
 .sidebar-account .auth-control { width: 100%; }
 
 @media (max-width: 700px) {
-  .auth-standalone { padding: 72px 12px 20px; }
-  .auth-card-body { grid-template-columns: 1fr; }
+  .auth-standalone { padding: 20px 0; overflow-x: hidden; }
+  .auth-standalone .auth-page { padding-inline: 0; }
+  .auth-standalone .auth-card { border-radius: 0; }
+  .auth-card-body { grid-template-columns: minmax(0, 1fr); max-width: 100vw; }
   .auth-card-brand { margin-left: 28px; }
   .auth-benefits { min-height: auto; padding: 30px 28px; }
   .auth-benefits h1 { font-size: 34px; }
   .auth-benefit-list { grid-template-columns: 1fr; margin-top: 24px; }
-  .auth-form-panel { padding: 32px 28px; }
+  .auth-form-panel { padding: 32px 40px 32px 28px; }
+  .auth-form-panel form, .auth-form-panel .auth-switch { width: calc(100vw - 68px); max-width: calc(100vw - 68px); }
+}
+
+/* Keep keyboard navigation visible at every viewport and theme. */
+:where(button, a, input, select):focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--accent) 78%, white);
+  outline-offset: 2px;
 }
 
 .meta-context > span + span::before {

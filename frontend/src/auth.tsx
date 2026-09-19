@@ -33,31 +33,42 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     fetch('/api/v1/auth/me')
       .then(async response => response.ok ? (await parseResponse(response)).user ?? null : null)
       .then(setUser)
+      .catch(() => setError('The authentication service is unavailable. Please try again.'))
       .finally(() => setLoading(false))
   }, [])
 
   async function authenticate(path: 'login' | 'register', username: string | undefined, email: string, password: string) {
     setError(null)
-    const response = await fetch(`/api/v1/auth/${path}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ...(username ? { username } : {}), email, password }),
-    })
-    const data = await parseResponse(response)
-    if (!response.ok || !data.user) {
-      setError(data.detail ?? 'Authentication failed')
+    try {
+      const response = await fetch(`/api/v1/auth/${path}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...(username ? { username } : {}), email, password }),
+      })
+      const data = await parseResponse(response)
+      if (!response.ok || !data.user) {
+        setError(data.detail ?? 'Authentication failed')
+        return false
+      }
+      setUser(data.user)
+      return true
+    } catch {
+      setError('Unable to reach the authentication service. Check your connection and try again.')
       return false
     }
-    setUser(data.user)
-    return true
   }
 
   async function login(email: string, password: string) { return authenticate('login', undefined, email, password) }
   async function register(username: string, email: string, password: string) { return authenticate('register', username, email, password) }
 
   async function logout() {
-    await fetch('/api/v1/auth/logout', { method: 'POST' })
-    setUser(null)
+    try {
+      await fetch('/api/v1/auth/logout', { method: 'POST' })
+    } finally {
+      // Clear local identity even when the server is temporarily unavailable.
+      // This prevents a stale UI session from surviving a failed sign-out.
+      setUser(null)
+    }
   }
 
   const value = useMemo(() => ({ user, loading, error, login, register, logout }), [user, loading, error])

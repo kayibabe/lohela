@@ -131,7 +131,7 @@ export default function App() {
       <header className="app-header">
         <div className="main-header-status">
           <span className="research-status"><span className="status-dot" /> Paper research</span>
-          <button className="theme-btn" onClick={cycleTheme} title={`Theme: ${theme}`}>
+          <button className="theme-btn" onClick={cycleTheme} title={`Theme: ${theme}`} aria-label={`Theme: ${theme}. Change theme`}>
             <span className="theme-auto">{theme === 'system' ? 'Auto' : theme}</span>
           </button>
         </div>
@@ -140,7 +140,7 @@ export default function App() {
         <button className="global-refresh" onClick={() => { setLastUpdated(new Date()); window.location.reload() }} title="Refresh current page" aria-label="Refresh current page">↻ <span>Refresh</span></button>
         {page === 'tickets' && (
           <div className="date-nav">
-            <button className="date-btn" onClick={() => nav(-1)} title="Previous day">‹</button>
+            <button className="date-btn" onClick={() => nav(-1)} title="Previous day" aria-label="Previous day">‹</button>
             <div className="date-center">
               <input
                 className="date-input"
@@ -150,13 +150,13 @@ export default function App() {
               />
               <button className="today-btn" onClick={() => setDate(TODAY)}>Today</button>
             </div>
-            <button className="date-btn" onClick={() => nav(1)} title="Next day">›</button>
+            <button className="date-btn" onClick={() => nav(1)} title="Next day" aria-label="Next day">›</button>
           </div>
         )}
 
       </header>
 
-      <main className="main">
+      <main className="main" id="main-content" tabIndex={-1}>
         {page === 'upgrade' && <UpgradePage onBack={() => goTo('tickets')} />}
         {page === 'tickets' && <DailyTicketsPage key={date} date={date} />}
         {page === 'tracker' && <TrackerPage onOpenTickets={(targetDate) => { if (targetDate) setDate(targetDate); goTo('tickets') }} />}
