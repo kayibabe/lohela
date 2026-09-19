@@ -136,6 +136,11 @@ class PoissonDixonColes:
     Uses MLE via scipy.optimize.minimize.
     """
 
+    # Above this many distinct teams, joint MLE over every attack/defense
+    # pair stops converging reliably (see fit()); switch to closed-form team
+    # rates plus a 2-parameter shared fit instead.
+    LARGE_N_THRESHOLD = 150
+
     def __init__(self, rho: float = -0.10, home_advantage: float = 1.20) -> None:
         self.rho = rho
         self.home_advantage = home_advantage  # multiplicative factor on λ
@@ -150,6 +155,12 @@ class PoissonDixonColes:
         """
         from scipy.optimize import minimize
         import numpy as np
+
+        # A failed refit must not leave an older fit available for prediction.
+        self._fitted = False
+        self.team_params = {}
+        if not matches:
+            raise ValueError("Poisson-DC fitting requires historical matches")
 
         team_ids = list({m["home_team_id"] for m in matches} | {m["away_team_id"] for m in matches})
         idx = {t: i for i, t in enumerate(team_ids)}
@@ -180,7 +191,95 @@ class PoissonDixonColes:
                 )
             return -ll
 
+        # A zero-vector start forces the optimizer to discover every team's
+        # scoring level from scratch, which needs far more function/gradient
+        # evaluations as the team count grows — at pooled multi-league scale
+        # (500+ teams, 1000+ free parameters) this can exceed L-BFGS-B's
+        # evaluation budget before converging at all (observed: "TOTAL NO. of
+        # f AND g EVALUATIONS EXCEEDS LIMIT" on a 564-team pooled fit). Warm-
+        # starting from each team's own observed scoring rate — the same
+        # closed-form estimate the analytical Bayesian path uses — puts the
+        # optimizer near the optimum already, so it only needs to refine for
+        # the Dixon-Coles low-score correction and shared home-advantage term.
+        scored: dict[int, list[int]] = {}
+        conceded: dict[int, list[int]] = {}
+        for m in matches:
+            h, a = m["home_team_id"], m["away_team_id"]
+            hg, ag = m["home_goals"], m["away_goals"]
+            scored.setdefault(h, []).append(hg)
+            conceded.setdefault(h, []).append(ag)
+            scored.setdefault(a, []).append(ag)
+            conceded.setdefault(a, []).append(hg)
+        league_avg = float(np.mean([m["home_goals"] + m["away_goals"] for m in matches]) / 2)
+        league_avg = league_avg if league_avg > 0 else 1.3
+
+        log_attack = np.zeros(n)
+        log_defense = np.zeros(n)
+        for team_id, i in idx.items():
+            attack_rate = max(0.05, float(np.mean(scored.get(team_id, [league_avg]))))
+            defense_multiplier = max(0.05, float(np.mean(conceded.get(team_id, [league_avg]))) / league_avg)
+            log_attack[i] = np.clip(math.log(attack_rate), -2.5, 2.5)
+            log_defense[i] = np.clip(math.log(defense_multiplier), -2.5, 2.5)
+
+        if n > self.LARGE_N_THRESHOLD:
+            # A joint MLE over 2n+2 parameters stops being tractable for
+            # L-BFGS-B once a pooled multi-league fit crosses a few hundred
+            # teams — most of those teams have only a handful of matches each,
+            # which makes the likelihood surface flat/ill-conditioned in their
+            # directions regardless of warm-starting (observed: still "TOTAL
+            # NO. of f AND g EVALUATIONS EXCEEDS LIMIT" at 564 teams even from
+            # the closed-form warm start below). Past this size, use the
+            # closed-form per-team rates directly — the same estimator the
+            # analytical Bayesian path already relies on — and only fit the
+            # two SHARED parameters (home advantage, Dixon-Coles rho) by MLE.
+            # That fit is 2-dimensional regardless of team count, so it stays
+            # fast and convergent at any pool size.
+            attacks_fixed = np.exp(log_attack)
+            defenses_fixed = np.exp(log_defense)
+
+            def neg_log_likelihood_shared(x) -> float:
+                home_adv = math.exp(x[0])
+                rho_ = x[1]
+                ll = 0.0
+                for m in matches:
+                    hi, ai = idx[m["home_team_id"]], idx[m["away_team_id"]]
+                    lam = attacks_fixed[hi] * defenses_fixed[ai] * home_adv
+                    mu = attacks_fixed[ai] * defenses_fixed[hi]
+                    hg, ag = m["home_goals"], m["away_goals"]
+                    t = _tau(hg, ag, lam, mu, rho_)
+                    if t <= 0 or lam <= 0 or mu <= 0:
+                        return 1e10
+                    ll += (
+                        math.log(t)
+                        + math.log(_poisson_pmf(hg, lam) + 1e-10)
+                        + math.log(_poisson_pmf(ag, mu) + 1e-10)
+                    )
+                return -ll
+
+            shared_result = minimize(
+                neg_log_likelihood_shared,
+                np.array([math.log(self.home_advantage), self.rho]),
+                method="L-BFGS-B",
+                bounds=[(math.log(0.7), math.log(1.7)), (-0.20, 0.05)],
+                options={"maxiter": 200, "ftol": 1e-8},
+            )
+            if (not shared_result.success or not np.isfinite(shared_result.fun)
+                    or not np.all(np.isfinite(shared_result.x))):
+                raise RuntimeError(f"Poisson-DC shared-parameter fit failed: {shared_result.message}")
+
+            self.home_advantage = float(math.exp(shared_result.x[0]))
+            self.rho = float(shared_result.x[1])
+            for team_id, i in idx.items():
+                self.team_params[team_id] = TeamParams(
+                    attack=float(attacks_fixed[i]),
+                    defense=float(defenses_fixed[i]),
+                )
+            self._fitted = True
+            return self
+
         x0 = np.zeros(2 * n + 2)
+        x0[:n] = log_attack
+        x0[n:2*n] = log_defense
         x0[2*n] = math.log(self.home_advantage)
         x0[2*n + 1] = self.rho
 
@@ -199,6 +298,10 @@ class PoissonDixonColes:
             bounds=bounds,
             options={"maxiter": 1000, "ftol": 1e-8},
         )
+
+        if (not result.success or not np.isfinite(result.fun)
+                or not np.all(np.isfinite(result.x))):
+            raise RuntimeError(f"Poisson-DC fit failed: {result.message}")
 
         attacks, defenses, home_adv, rho_ = params_to_vectors(result.x)
         self.home_advantage = float(home_adv)

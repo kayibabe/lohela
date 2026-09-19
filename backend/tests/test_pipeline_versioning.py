@@ -9,7 +9,7 @@ from app.tasks.pipeline import _daily_pipeline_canvas, generate_tickets, run_mod
 
 
 def test_current_model_version_is_used_by_all_automatic_defaults():
-    assert CURRENT_MODEL_VERSION == "0.2.1"
+    assert CURRENT_MODEL_VERSION == "0.3.0"
     assert inspect.signature(ModelRunner).parameters["model_version"].default == CURRENT_MODEL_VERSION
     assert inspect.signature(run_models.run).parameters["model_version"].default == CURRENT_MODEL_VERSION
     assert BacktestRequest(
