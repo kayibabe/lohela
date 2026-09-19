@@ -15,6 +15,7 @@ from app.services.accumulator_builder import (
     _relax_spec,
     selection_rejection_reasons,
     shared_match_count,
+    _within_ticket_overlap_limit,
 )
 from app.services.backtesting import _fractional_kelly
 from app.services.calibration import _pearson
@@ -94,6 +95,23 @@ def test_optimizer_limits_overlap_with_prior_public_ticket():
     )
     assert candidate is None
     assert shared_match_count(prior, prior) == 3
+
+
+def test_optimizer_caps_repeated_match_market_exposure_across_public_tickets():
+    spec = TicketSpec(TicketType.BALANCED, "Balanced", 2, 2, 1, 20, 80, 0, 1, 0, 1.0)
+    prior = _evaluate_combo(
+        (_leg(1, 1, "under_3.5"), _leg(2, 2, "home_win")),
+        spec,
+        {},
+    )
+    candidate = _evaluate_combo(
+        (_leg(3, 1, "under_3.5"), _leg(4, 3, "away_win")),
+        spec,
+        {},
+    )
+    assert prior is not None and candidate is not None
+    assert not _within_ticket_overlap_limit(candidate, [prior], 10, 1)
+    assert _within_ticket_overlap_limit(candidate, [prior], 10, 2)
 
 
 def test_pairwise_correlation_is_explicit_and_bounded():
@@ -182,10 +200,13 @@ def test_relax_spec_loosens_cumulatively_and_floors():
     assert level1.min_high_grade_ratio == pytest.approx(base.min_high_grade_ratio - 0.30)
     assert level1.min_legs == base.min_legs  # relaxation never touches leg counts
     assert level1.max_pair_correlation == base.max_pair_correlation  # or correlation tolerance
+    safe_base = next(spec for spec in TICKET_SPECS if spec.ticket_type == TicketType.SAFE)
+    assert _relax_spec(safe_base, 1).max_combined_odds > safe_base.max_combined_odds
     # Cumulative through all three steps still respects the floors.
     assert level3.min_high_grade_ratio == 0.0
     assert level3.min_q_score >= 60.0
     assert level3.min_market_types >= 1
+    assert level3.max_combined_odds <= 10.0
 
 
 def test_thin_slate_relaxation_recovers_a_balanced_ticket():

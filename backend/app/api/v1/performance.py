@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
 from app.api.security import require_pro_access
 from app.config import CURRENT_MODEL_VERSION
-from app.services.performance import performance_summary, individual_selection_summary, market_reliability_matrix, all_market_research_summary, clv_summary
+from app.services.performance import performance_summary, individual_selection_summary, market_reliability_matrix, all_market_research_summary, clv_summary, totals_calibration_review
 from app.services.recommendation_ledger import recommendation_pick_ledger
 
 router = APIRouter(
@@ -29,6 +29,11 @@ async def individual_selections(stake: float = Query(1.0, gt=0, le=100000), date
 @router.get("/market-reliability")
 async def market_reliability(date_from: date | None = None, date_to: date | None = None, model_version: str | None = CURRENT_MODEL_VERSION, db: AsyncSession = Depends(get_db)):
     return await market_reliability_matrix(db, date_from, date_to, None if model_version == "all" else model_version)
+
+@router.get("/totals-calibration")
+async def totals_calibration(date_from: date | None = None, date_to: date | None = None, model_version: str | None = None, db: AsyncSession = Depends(get_db)):
+    return await totals_calibration_review(db, date_from, date_to, model_version)
+
 
 @router.get("/all-markets")
 async def all_markets(stake: float = Query(1.0, gt=0, le=100000), date_from: date | None = None, date_to: date | None = None, model_version: str | None = None, db: AsyncSession = Depends(get_db)):

@@ -128,9 +128,12 @@ class ModelRunner:
         self._sparse_predictions = 0
         self._learning_profiles: dict[str, object] = {}
         self._learning_config = None
+        self._bayesian_posteriors: dict[int, dict[str, float]] = {}
 
     async def run(self, target_date: date | None = None) -> dict:
         td = target_date or cat_today()
+        if td < cat_today():
+            raise ValueError("Past-date scoring is not supported; use the isolated historical replay research path")
         from app.services.model_learning import resolve_active_learning_config
 
         self._learning_config = await resolve_active_learning_config(
@@ -198,6 +201,13 @@ class ModelRunner:
         # Fit Poisson-DC on historical data — CPU-bound, run in thread pool.
         # The pooled global fit doubles as the fallback for thin competitions.
         historical = await self._load_historical_matches()
+        # Fit the current representation from pre-run results rather than
+        # consuming unversioned legacy team parameters from the database.
+        from app.services.models.bayesian import _run_analytical, run_mcmc_update
+        if settings.bayesian_estimation_method == "advi":
+            _, self._bayesian_posteriors = await asyncio.to_thread(run_mcmc_update, historical)
+        else:
+            self._bayesian_posteriors = await asyncio.to_thread(_run_analytical, historical)
         if len(historical) >= 100:
             self._poisson_model = PoissonDixonColes()
             await asyncio.to_thread(self._poisson_model.fit, historical)
@@ -284,6 +294,7 @@ class ModelRunner:
             select(Match)
             .where(
                 Match.status == MatchStatus.FINISHED,
+                Match.kickoff_at < datetime.now(timezone.utc),
                 Match.home_goals != None,
                 Match.away_goals != None,
             )
@@ -317,15 +328,13 @@ class ModelRunner:
         away_form = await self._team_form(match.id, match.away_team_id)
         xg_source: str | None = None
         expected_goals: tuple[float, float] | None = None
-        if match.home_xg is not None and match.away_xg is not None:
-            expected_goals = (match.home_xg, match.away_xg)
-            xg_source = "provider_match_xg"
-        else:
-            from app.services.model_preparation import expected_goals_proxy
+        # Match xG describes the match's observed shots, not a pre-match
+        # forecast. Never consume it as a feature for that same fixture.
+        from app.services.model_preparation import expected_goals_proxy
 
-            expected_goals = expected_goals_proxy(home_team, away_team)
-            if expected_goals is not None:
-                xg_source = "rolling_goal_derived_expected_goals_proxy"
+        expected_goals = expected_goals_proxy(home_team, away_team)
+        if expected_goals is not None:
+            xg_source = "rolling_goal_derived_expected_goals_proxy"
 
         count = 0
         for market_key, market_label in TARGET_MARKETS:
@@ -360,25 +369,20 @@ class ModelRunner:
                 )
                 prob_inputs.elo_prob = elo_probs.get(market_key)
 
-            # Bayesian: gate on the DB default std, so this fires once
-            # ModelPreparationService has run for these teams at all. That
-            # prep step estimates posteriors analytically by default and
-            # optionally via real PyMC ADVI (Settings.bayesian_estimation_method,
-            # see app/services/models/bayesian.py) — this gate cannot tell
-            # which one produced the stored values, only that some estimate
-            # has replaced the untrained default.
-            _BAYES_DEFAULT_STD = 0.2
-            if (home_team.bayes_attack_std != _BAYES_DEFAULT_STD
-                    and away_team.bayes_attack_std != _BAYES_DEFAULT_STD):
+            # Bayesian parameters belong to this run's pre-match fit; legacy
+            # mutable team estimates do not identify their representation.
+            home_posterior = self._bayesian_posteriors.get(match.home_team_id)
+            away_posterior = self._bayesian_posteriors.get(match.away_team_id)
+            if home_posterior is not None and away_posterior is not None:
                 from app.services.models.bayesian import predict_market_from_posteriors
                 try:
                     # home_advantage is a multiplicative factor ~1.1–1.3 in Poisson space
                     home_adv_factor = 1.0 + (competition.home_advantage_elo / 1500.0)
                     prob_inputs.bayes_prob = predict_market_from_posteriors(
-                        home_team.bayes_attack_mean,
-                        home_team.bayes_defense_mean,
-                        away_team.bayes_attack_mean,
-                        away_team.bayes_defense_mean,
+                        home_posterior["attack_mean"],
+                        home_posterior["defense_mean"],
+                        away_posterior["attack_mean"],
+                        away_posterior["defense_mean"],
                         home_adv_factor,
                         market_key,
                     )

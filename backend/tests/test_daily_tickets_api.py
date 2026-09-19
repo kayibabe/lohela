@@ -72,3 +72,52 @@ async def test_daily_tickets_keeps_candidate_count_when_generation_publishes_not
     assert response.conservative is None
     assert response.balanced is None
     assert response.aggressive is None
+
+
+@pytest.mark.asyncio
+async def test_daily_tickets_exposes_valid_partial_generation_rows(monkeypatch):
+    generation = SimpleNamespace(
+        id=20,
+        input_count=143,
+        output_count=3,
+        status=RunStatus.PARTIAL,
+        config_snapshot={
+            "publication_summary": {
+                "published_ticket_types": ["safe", "balanced", "best_value"],
+                "missing_public_ticket_types": ["aggressive"],
+            }
+        },
+    )
+    safe_ticket = SimpleNamespace(id=1, ticket_type="safe", generation=SimpleNamespace(input_count=143))
+    balanced_ticket = SimpleNamespace(id=2, ticket_type="balanced", generation=SimpleNamespace(input_count=143))
+    db = SimpleNamespace(
+        execute=AsyncMock(
+            side_effect=[
+                _Result(scalar=generation),
+                _Result(rows=[]),
+                _Result(rows=[safe_ticket, balanced_ticket]),
+            ]
+        )
+    )
+    monkeypatch.setattr(
+        tickets_api,
+        "get_latest_published_tickets",
+        AsyncMock(return_value=[safe_ticket, balanced_ticket]),
+    )
+    monkeypatch.setattr(
+        tickets_api,
+        "_ticket",
+        lambda ticket, reveal: SimpleNamespace(ticket_id=ticket.id),
+    )
+    monkeypatch.setattr(
+        tickets_api,
+        "DailyTicketsOut",
+        lambda **kwargs: SimpleNamespace(**kwargs),
+    )
+
+    response = await tickets_api.get_daily_tickets(date(2026, 9, 17), db)
+
+    assert response.generated_ticket_count == 3
+    assert response.conservative.ticket_id == 1
+    assert response.balanced.ticket_id == 2
+    assert response.aggressive is None

@@ -9,7 +9,7 @@ from datetime import date, datetime, timezone
 import numpy as np
 from scipy.optimize import minimize
 from sklearn.linear_model import LogisticRegression
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -167,7 +167,7 @@ def _metric_bundle(
     profits: list[float] = []
     edges: list[float] = []
     for example, probability in zip(examples, clipped):
-        if not example.decimal_odds or example.decimal_odds <= 1.0:
+        if not example.decimal_odds or not math.isfinite(example.decimal_odds) or example.decimal_odds <= 1.0:
             continue
         edge = probability - 1.0 / example.decimal_odds
         if edge < minimum_edge:
@@ -186,6 +186,32 @@ def _metric_bundle(
         "roi_confidence_interval_95": _roi_confidence_interval(profits),
         "average_edge": round(float(sum(edges) / len(edges)), 6) if edges else None,
     }
+
+
+def _positive_profit_evidence(metrics: dict) -> bool:
+    """Fail closed on missing, non-finite, or non-positive validation evidence."""
+    roi = metrics.get("roi")
+    interval = metrics.get("roi_confidence_interval_95")
+    return bool(
+        isinstance(roi, (int, float)) and math.isfinite(roi) and roi > 0
+        and isinstance(interval, (list, tuple)) and len(interval) == 2
+        and all(isinstance(value, (int, float)) and math.isfinite(value) for value in interval)
+        and 0 < interval[0] <= interval[1]
+    )
+
+
+def _eligible_learning_quote(prediction: Prediction, match: Match) -> bool:
+    def utc(value: datetime) -> datetime:
+        return value.replace(tzinfo=timezone.utc) if value.tzinfo is None else value.astimezone(timezone.utc)
+
+    information_at = prediction.as_of_at or prediction.created_at
+    odds = prediction.source_decimal_odds
+    return bool(
+        information_at is not None and prediction.source_odds_at is not None
+        and match.kickoff_at is not None
+        and odds is not None and math.isfinite(odds) and odds > 1.0
+        and utc(prediction.source_odds_at) <= utc(information_at) < utc(match.kickoff_at)
+    )
 
 
 def fit_market_challenger(
@@ -225,6 +251,7 @@ def fit_market_challenger(
         "brier_improved": challenger["brier_score"] <= incumbent["brier_score"] - min_brier_improvement,
         "calibration_not_worse": challenger["calibration_error"] <= incumbent["calibration_error"] + max_calibration_regression,
         "enough_priced_bets": challenger["eligible_bets"] >= min_validation_bets,
+        "positive_roi_evidence": _positive_profit_evidence(challenger),
         "roi_not_worse": (
             challenger["roi"] is not None
             and incumbent["roi"] is not None
@@ -251,7 +278,7 @@ async def _load_learning_examples(
         .join(Match, Prediction.match_id == Match.id)
         .where(
             Prediction.model_version == model_version,
-            Prediction.created_at < Match.kickoff_at,
+            func.coalesce(Prediction.as_of_at, Prediction.created_at) < Match.kickoff_at,
             Match.status == MatchStatus.FINISHED,
             Match.kickoff_at >= start_at,
             Match.kickoff_at < end_at,
@@ -272,12 +299,7 @@ async def _load_learning_examples(
         if outcome == SelectionResult.VOID:
             continue
         odds = prediction.source_decimal_odds
-        if (
-            prediction.source_odds_at is None
-            or prediction.source_odds_at >= match.kickoff_at
-            or odds is None
-            or odds <= 1.0
-        ):
+        if not _eligible_learning_quote(prediction, match):
             odds = None
         probabilities = {
             "poisson": prediction.poisson_prob,
@@ -459,6 +481,8 @@ async def promote_learning_run(
     ready = [profile for profile in learning_run.profiles if profile.status == "shadow_ready"]
     if not ready:
         raise ValueError("No market profile passed all promotion checks")
+    if any(not _positive_profit_evidence((profile.validation_metrics or {}).get("challenger", {})) for profile in ready):
+        raise ValueError("Promotion requires positive validation ROI and a positive 95% ROI lower bound for every ready profile")
     existing = await db.execute(
         select(ModelLearningPromotion).where(
             ModelLearningPromotion.learning_run_id == learning_run.id

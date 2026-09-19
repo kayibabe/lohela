@@ -104,6 +104,13 @@ class Prediction(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), index=True
     )
+    # For immutable historical research replays, this is the reconstructed
+    # information-set timestamp. Live predictions leave it null and use
+    # created_at. It must always be strictly before kickoff when used for
+    # learning; insertion time remains auditable in created_at.
+    as_of_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True, index=True
+    )
 
     match: Mapped["Match"] = relationship("Match", back_populates="predictions")
     model_run: Mapped["ModelRun | None"] = relationship("ModelRun", back_populates="predictions")

@@ -275,7 +275,8 @@ def generate_tickets(
     async def _run():
         async with AsyncSessionLocal() as db:
             generation = await TicketPublisher(db).generate_and_publish(
-                date.fromisoformat(target_date), model_run_id=model_run_id
+                date.fromisoformat(target_date), model_run_id=model_run_id,
+                pipeline_run_id=pipeline_run_id,
             )
             publication_summary = generation.config_snapshot.get("publication_summary", {})
             missing_public_types = publication_summary.get("missing_public_ticket_types", [])

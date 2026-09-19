@@ -22,6 +22,7 @@ from app.models import (
     TicketSelection,
     TicketStatus,
     TicketType,
+    RunStatus,
 )
 from app.services.ticket_publisher import get_latest_published_tickets, get_ticket_by_id
 from app.services.pipeline_tracker import infer_pipeline_run_type
@@ -120,6 +121,7 @@ class DailyTicketsOut(BaseModel):
     generation_status: Optional[str] = None
     generated_ticket_count: int = 0
     missing_public_ticket_types: list[str] = Field(default_factory=list)
+    selection_diagnostics: dict[str, dict] = Field(default_factory=dict)
     pipeline_run_id: Optional[int] = None
     pipeline_status: Optional[str] = None
     pipeline_current_stage: Optional[str] = None
@@ -225,6 +227,27 @@ async def get_daily_tickets(
         ),
         None,
     )
+    published_types = set(publication_summary.get("published_ticket_types", []))
+    public_published = len(published_types.intersection(
+        {ticket_type.value for ticket_type in PUBLIC_TICKET_TYPES}
+    ))
+    metadata_inconsistent = bool(
+        latest_generation
+        and (
+            latest_generation.status == RunStatus.FAILED
+            or public_published == 0
+        )
+    )
+    pipeline_blocked = bool(
+        latest_daily_pipeline
+        and latest_daily_pipeline.status == RunStatus.FAILED
+    )
+    publication_blocked = metadata_inconsistent or pipeline_blocked
+    if publication_blocked:
+        # Never fall back to an older ticket when the current daily attempt is
+        # below the configured publication minimum or failed. Historical rows
+        # remain available through the history endpoint for audit.
+        mapped = {}
     history_result = await db.execute(
         select(AccumulatorTicket)
         .where(
@@ -235,7 +258,11 @@ async def get_daily_tickets(
         .order_by(AccumulatorTicket.ticket_type, AccumulatorTicket.version.desc())
     )
     latest_ids = {ticket.ticket_id for ticket in mapped.values() if ticket}
-    superseded = [_history_ticket(ticket, reveal=reveal) for ticket in history_result.scalars().all() if ticket.id not in latest_ids]
+    superseded = [] if publication_blocked else [
+        _history_ticket(ticket, reveal=reveal)
+        for ticket in history_result.scalars().all()
+        if ticket.id not in latest_ids
+    ]
     return DailyTicketsOut(
         target_date=target.isoformat(),
         qualified_pool=qualified_pool,
@@ -243,11 +270,16 @@ async def get_daily_tickets(
         generation_status=(
             latest_generation.status.value if latest_generation else None
         ),
-        generated_ticket_count=(
-            latest_generation.output_count if latest_generation else len(rows)
-        ),
+        generated_ticket_count=(0 if publication_blocked else latest_generation.output_count)
+        if latest_generation
+        else (0 if publication_blocked else len(rows)),
         missing_public_ticket_types=list(
             publication_summary.get("missing_public_ticket_types", [])
+        ),
+        selection_diagnostics=(
+            (latest_generation.config_snapshot or {}).get("selection_diagnostics", {})
+            if latest_generation
+            else {}
         ),
         pipeline_run_id=latest_daily_pipeline.id if latest_daily_pipeline else None,
         pipeline_status=(

@@ -1,0 +1,452 @@
+{
+  "status": "research_only",
+  "ready_for_promotion": false,
+  "evidence_class": "retrospective_policy_replay_of_prospective_predictions",
+  "policy": {
+    "version": "singles-v1-research",
+    "min_probability": 0.7,
+    "min_odds": 1.5,
+    "price_haircut": 0.02,
+    "min_ev": 0.0,
+    "max_quote_age_hours": 6.0
+  },
+  "policy_fingerprint": "6171afcd10c127168c4fc84cbefb8bd14cc2e7cbb2996ff06e60d9e7bb858929",
+  "source_identity_note": "source_revision identifies the supplied model version, not necessarily source code",
+  "start_date": "2026-09-14",
+  "end_date": "2026-09-19",
+  "timezone": "Africa/Blantyre",
+  "selected": 21,
+  "wins": 7,
+  "losses": 14,
+  "voids": 0,
+  "pending": 0,
+  "resolved_stakes": 21,
+  "profit_units": -8.94,
+  "roi": -0.4257142857142857,
+  "conservative_profit_units": -9.0412,
+  "conservative_roi": -0.4305333333333333,
+  "hit_rate": 0.3333333333333333,
+  "hit_rate_wilson_95": [
+    0.17194752605083477,
+    0.5462654802574476
+  ],
+  "brier_score": 0.43118590274474056,
+  "max_drawdown_units": 9.51,
+  "drawdown_order": "kickoff_order_of_resolved_picks_not_settlement_time",
+  "daily_bootstrap_roi_95": [
+    -0.6155555555555555,
+    -0.21499999999999997
+  ],
+  "bootstrap_seed": 1729,
+  "bootstrap_samples": 2000,
+  "bootstrap_valid_samples": 1971,
+  "no_bet_days": 3,
+  "loss_free_resolved_bet_days": 0,
+  "daily": [
+    {
+      "date": "2026-09-14",
+      "bets": 4,
+      "wins": 2,
+      "losses": 2,
+      "voids": 0,
+      "pending": 0,
+      "resolved_stakes": 4,
+      "profit": -0.8599999999999999
+    },
+    {
+      "date": "2026-09-15",
+      "bets": 8,
+      "wins": 3,
+      "losses": 5,
+      "voids": 0,
+      "pending": 0,
+      "resolved_stakes": 8,
+      "profit": -2.54
+    },
+    {
+      "date": "2026-09-16",
+      "bets": 0,
+      "wins": 0,
+      "losses": 0,
+      "voids": 0,
+      "pending": 0,
+      "resolved_stakes": 0,
+      "profit": 0.0
+    },
+    {
+      "date": "2026-09-17",
+      "bets": 9,
+      "wins": 2,
+      "losses": 7,
+      "voids": 0,
+      "pending": 0,
+      "resolved_stakes": 9,
+      "profit": -5.54
+    },
+    {
+      "date": "2026-09-18",
+      "bets": 0,
+      "wins": 0,
+      "losses": 0,
+      "voids": 0,
+      "pending": 0,
+      "resolved_stakes": 0,
+      "profit": 0.0
+    },
+    {
+      "date": "2026-09-19",
+      "bets": 0,
+      "wins": 0,
+      "losses": 0,
+      "voids": 0,
+      "pending": 0,
+      "resolved_stakes": 0,
+      "profit": 0.0
+    }
+  ],
+  "loss_details": [
+    {
+      "id": "293",
+      "match_id": "8085",
+      "market": "under_3.5",
+      "odds": 1.77,
+      "probability": 0.7450642637054566,
+      "date": "2026-09-14"
+    },
+    {
+      "id": "355",
+      "match_id": "8096",
+      "market": "under_2.5",
+      "odds": 1.93,
+      "probability": 0.772880945098963,
+      "date": "2026-09-14"
+    },
+    {
+      "id": "519",
+      "match_id": "8103",
+      "market": "under_4.5",
+      "odds": 1.67,
+      "probability": 0.7198139443883078,
+      "date": "2026-09-15"
+    },
+    {
+      "id": "645",
+      "match_id": "8105",
+      "market": "under_3.5",
+      "odds": 1.58,
+      "probability": 0.7981600668698902,
+      "date": "2026-09-15"
+    },
+    {
+      "id": "621",
+      "match_id": "8116",
+      "market": "double_chance_1x",
+      "odds": 1.63,
+      "probability": 0.7598851956870312,
+      "date": "2026-09-15"
+    },
+    {
+      "id": "677",
+      "match_id": "8117",
+      "market": "under_3.5",
+      "odds": 1.73,
+      "probability": 0.7736094677141224,
+      "date": "2026-09-15"
+    },
+    {
+      "id": "709",
+      "match_id": "8119",
+      "market": "under_3.5",
+      "odds": 1.58,
+      "probability": 0.7977485177998132,
+      "date": "2026-09-15"
+    },
+    {
+      "id": "759",
+      "match_id": "8137",
+      "market": "under_4.5",
+      "odds": 1.7,
+      "probability": 0.8220900541866949,
+      "date": "2026-09-17"
+    },
+    {
+      "id": "782",
+      "match_id": "8127",
+      "market": "double_chance_x2",
+      "odds": 3.3,
+      "probability": 0.822494073187874,
+      "date": "2026-09-17"
+    },
+    {
+      "id": "789",
+      "match_id": "8128",
+      "market": "under_3.5",
+      "odds": 1.64,
+      "probability": 0.7309960223205936,
+      "date": "2026-09-17"
+    },
+    {
+      "id": "803",
+      "match_id": "8129",
+      "market": "under_2.5",
+      "odds": 2.3,
+      "probability": 0.8607552434198009,
+      "date": "2026-09-17"
+    },
+    {
+      "id": "821",
+      "match_id": "8130",
+      "market": "under_3.5",
+      "odds": 1.86,
+      "probability": 0.7289739003816378,
+      "date": "2026-09-17"
+    },
+    {
+      "id": "853",
+      "match_id": "8132",
+      "market": "under_3.5",
+      "odds": 1.63,
+      "probability": 0.836206168689442,
+      "date": "2026-09-17"
+    },
+    {
+      "id": "885",
+      "match_id": "8135",
+      "market": "under_3.5",
+      "odds": 1.55,
+      "probability": 0.7827003655292639,
+      "date": "2026-09-17"
+    }
+  ],
+  "rejections": {
+    "odds_below_or_equal_floor": 168,
+    "other_market_same_match": 2,
+    "probability_below_floor": 397
+  },
+  "limitations": [
+    "This policy was chosen after these historical results existed; this is not forward strategy validation.",
+    "Quote provenance does not prove bookmaker availability or bet execution.",
+    "Model version is not a source-code hash; legacy feature and parameter lineage is incomplete.",
+    "Profit is quoted-price flat-stake paper simulation; conservative_roi separately stresses winnings by the policy haircut.",
+    "Intervals do not account for policy search or model selection; sparse samples are unreliable."
+  ],
+  "evidence_type": "retrospective_policy_replay_of_prospective_predictions",
+  "model_version": "0.2.1",
+  "generated_at": "2026-09-19T17:46:43.118983+00:00",
+  "candidate_database_rows": 896,
+  "adapter_rejections": {
+    "UNVERIFIED_EXECUTABLE_QUOTE": 308
+  },
+  "selected_picks": [
+    {
+      "prediction_id": "261",
+      "match_id": "8084",
+      "market": "under_3.5",
+      "probability": 0.8065189128895542,
+      "odds": 1.57,
+      "kickoff_at": "2026-09-14T16:30:00+00:00",
+      "decision_at": "2026-09-14T12:30:12.099118+00:00",
+      "outcome": "win"
+    },
+    {
+      "prediction_id": "293",
+      "match_id": "8085",
+      "market": "under_3.5",
+      "probability": 0.7450642637054566,
+      "odds": 1.77,
+      "kickoff_at": "2026-09-14T18:45:00+00:00",
+      "decision_at": "2026-09-14T12:30:12.099118+00:00",
+      "outcome": "loss"
+    },
+    {
+      "prediction_id": "445",
+      "match_id": "8095",
+      "market": "double_chance_1x",
+      "probability": 0.750929000342184,
+      "odds": 1.57,
+      "kickoff_at": "2026-09-14T18:45:00+00:00",
+      "decision_at": "2026-09-14T12:30:12.099118+00:00",
+      "outcome": "win"
+    },
+    {
+      "prediction_id": "355",
+      "match_id": "8096",
+      "market": "under_2.5",
+      "probability": 0.772880945098963,
+      "odds": 1.93,
+      "kickoff_at": "2026-09-14T18:45:00+00:00",
+      "decision_at": "2026-09-14T12:30:12.099118+00:00",
+      "outcome": "loss"
+    },
+    {
+      "prediction_id": "519",
+      "match_id": "8103",
+      "market": "under_4.5",
+      "probability": 0.7198139443883078,
+      "odds": 1.67,
+      "kickoff_at": "2026-09-15T18:00:00+00:00",
+      "decision_at": "2026-09-15T12:43:03.142125+00:00",
+      "outcome": "loss"
+    },
+    {
+      "prediction_id": "531",
+      "match_id": "8114",
+      "market": "under_2.5",
+      "probability": 0.7060946485598625,
+      "odds": 1.98,
+      "kickoff_at": "2026-09-15T18:30:00+00:00",
+      "decision_at": "2026-09-15T12:43:03.142125+00:00",
+      "outcome": "win"
+    },
+    {
+      "prediction_id": "645",
+      "match_id": "8105",
+      "market": "under_3.5",
+      "probability": 0.7981600668698902,
+      "odds": 1.58,
+      "kickoff_at": "2026-09-15T18:45:00+00:00",
+      "decision_at": "2026-09-15T12:43:03.142125+00:00",
+      "outcome": "loss"
+    },
+    {
+      "prediction_id": "621",
+      "match_id": "8116",
+      "market": "double_chance_1x",
+      "probability": 0.7598851956870312,
+      "odds": 1.63,
+      "kickoff_at": "2026-09-15T18:45:00+00:00",
+      "decision_at": "2026-09-15T12:43:03.142125+00:00",
+      "outcome": "loss"
+    },
+    {
+      "prediction_id": "677",
+      "match_id": "8117",
+      "market": "under_3.5",
+      "probability": 0.7736094677141224,
+      "odds": 1.73,
+      "kickoff_at": "2026-09-15T19:00:00+00:00",
+      "decision_at": "2026-09-15T12:43:03.142125+00:00",
+      "outcome": "loss"
+    },
+    {
+      "prediction_id": "693",
+      "match_id": "8118",
+      "market": "under_3.5",
+      "probability": 0.7353912447355673,
+      "odds": 1.92,
+      "kickoff_at": "2026-09-15T19:00:00+00:00",
+      "decision_at": "2026-09-15T12:43:03.142125+00:00",
+      "outcome": "win"
+    },
+    {
+      "prediction_id": "709",
+      "match_id": "8119",
+      "market": "under_3.5",
+      "probability": 0.7977485177998132,
+      "odds": 1.58,
+      "kickoff_at": "2026-09-15T19:00:00+00:00",
+      "decision_at": "2026-09-15T12:43:03.142125+00:00",
+      "outcome": "loss"
+    },
+    {
+      "prediction_id": "661",
+      "match_id": "8121",
+      "market": "under_3.5",
+      "probability": 0.7223684468658779,
+      "odds": 1.56,
+      "kickoff_at": "2026-09-15T19:00:00+00:00",
+      "decision_at": "2026-09-15T12:43:03.142125+00:00",
+      "outcome": "win"
+    },
+    {
+      "prediction_id": "739",
+      "match_id": "8134",
+      "market": "under_2.5",
+      "probability": 0.7064715384500384,
+      "odds": 1.89,
+      "kickoff_at": "2026-09-17T17:00:00+00:00",
+      "decision_at": "2026-09-17T16:45:14.731550+00:00",
+      "outcome": "win"
+    },
+    {
+      "prediction_id": "759",
+      "match_id": "8137",
+      "market": "under_4.5",
+      "probability": 0.8220900541866949,
+      "odds": 1.7,
+      "kickoff_at": "2026-09-17T18:30:00+00:00",
+      "decision_at": "2026-09-17T16:45:14.731550+00:00",
+      "outcome": "loss"
+    },
+    {
+      "prediction_id": "782",
+      "match_id": "8127",
+      "market": "double_chance_x2",
+      "probability": 0.822494073187874,
+      "odds": 3.3,
+      "kickoff_at": "2026-09-17T19:00:00+00:00",
+      "decision_at": "2026-09-17T16:45:14.731550+00:00",
+      "outcome": "loss"
+    },
+    {
+      "prediction_id": "789",
+      "match_id": "8128",
+      "market": "under_3.5",
+      "probability": 0.7309960223205936,
+      "odds": 1.64,
+      "kickoff_at": "2026-09-17T19:00:00+00:00",
+      "decision_at": "2026-09-17T16:45:14.731550+00:00",
+      "outcome": "loss"
+    },
+    {
+      "prediction_id": "803",
+      "match_id": "8129",
+      "market": "under_2.5",
+      "probability": 0.8607552434198009,
+      "odds": 2.3,
+      "kickoff_at": "2026-09-17T19:00:00+00:00",
+      "decision_at": "2026-09-17T16:45:14.731550+00:00",
+      "outcome": "loss"
+    },
+    {
+      "prediction_id": "821",
+      "match_id": "8130",
+      "market": "under_3.5",
+      "probability": 0.7289739003816378,
+      "odds": 1.86,
+      "kickoff_at": "2026-09-17T19:00:00+00:00",
+      "decision_at": "2026-09-17T16:45:14.731550+00:00",
+      "outcome": "loss"
+    },
+    {
+      "prediction_id": "853",
+      "match_id": "8132",
+      "market": "under_3.5",
+      "probability": 0.836206168689442,
+      "odds": 1.63,
+      "kickoff_at": "2026-09-17T19:00:00+00:00",
+      "decision_at": "2026-09-17T16:45:14.731550+00:00",
+      "outcome": "loss"
+    },
+    {
+      "prediction_id": "878",
+      "match_id": "8133",
+      "market": "double_chance_x2",
+      "probability": 0.7878862472233508,
+      "odds": 1.57,
+      "kickoff_at": "2026-09-17T19:00:00+00:00",
+      "decision_at": "2026-09-17T16:45:14.731550+00:00",
+      "outcome": "win"
+    },
+    {
+      "prediction_id": "885",
+      "match_id": "8135",
+      "market": "under_3.5",
+      "probability": 0.7827003655292639,
+      "odds": 1.55,
+      "kickoff_at": "2026-09-17T19:30:00+00:00",
+      "decision_at": "2026-09-17T16:45:14.731550+00:00",
+      "outcome": "loss"
+    }
+  ]
+}

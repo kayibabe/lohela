@@ -36,7 +36,9 @@ All endpoints use the existing research-access control.
 ## Safety boundaries
 
 - Training and validation windows must be ordered and non-overlapping.
-- Only predictions created before kickoff are eligible.
+- Only predictions whose information-set timestamp is before kickoff are
+  eligible. Live rows use `created_at`; immutable historical research replays
+  use `as_of_at` while retaining their later insertion time for audit.
 - Odds are used for ROI only when captured before kickoff.
 - Current-day results never affect current-day ticket generation.
 - Calibration gates are scoped deterministically to the exact model version,

@@ -13,13 +13,30 @@ from app.models import User, UserSession
 from app.services.auth import session_token_hash
 
 
+def _normalize_research_key(value: str | None) -> str:
+    """Remove transport-added markers without weakening the secret comparison."""
+    if not value:
+        return ""
+    # Railway/PowerShell environments can preserve a UTF-8 BOM or its common
+    # mojibake representation at the beginning of a copied secret. Secrets
+    # themselves are expected to be ASCII; interior non-ASCII characters are
+    # left intact and will fail closed below.
+    return value.strip().lstrip("\ufeff").lstrip("ï»¿").strip()
+
+
 async def require_research_access(
     request: Request,
     x_research_key: str | None = Header(default=None),
 ) -> None:
-    configured = settings.research_api_key
-    if configured and x_research_key and hmac.compare_digest(configured, x_research_key):
-        return
+    configured = _normalize_research_key(settings.research_api_key)
+    supplied = _normalize_research_key(x_research_key)
+    if configured and supplied:
+        try:
+            if configured.isascii() and supplied.isascii() and hmac.compare_digest(configured, supplied):
+                return
+        except TypeError:
+            # Never turn malformed secret material into a 500 response.
+            pass
     if settings.app_env == "development" and not configured:
         return
     raise HTTPException(

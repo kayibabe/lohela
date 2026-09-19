@@ -18,6 +18,9 @@ default. Whichever path actually ran is reported back by run_mcmc_update
 rather than assumed, since ADVI failure is a silent fallback.
 
 Posterior means are stored in teams.bayes_attack_mean / bayes_defense_mean.
+Attack carries a goal-rate scale; defense is a concession multiplier (lower
+is stronger). Existing stored estimates must be recomputed when upgrading
+from the legacy relative-attack / positive-ADVI-defense representation.
 At prediction time, stored posterior means are used directly (fast path).
 """
 
@@ -123,22 +126,29 @@ def _run_advi(historical_matches: list[dict]) -> dict[int, dict[str, float]]:
     for team_id, i in idx.items():
         attack_s = samples.posterior["attack"].values[:, :, i].flatten()
         defense_s = samples.posterior["defense"].values[:, :, i].flatten()
-        results[team_id] = {
-            "attack_mean": float(np.mean(np.exp(attack_s))),
-            "attack_std": float(np.std(np.exp(attack_s))),
-            "defense_mean": float(np.mean(np.exp(defense_s))),
-            "defense_std": float(np.std(np.exp(defense_s))),
-        }
+        results[team_id] = _export_advi_posterior(attack_s, defense_s)
 
     logger.info("ADVI update complete for %d teams", len(results))
     return results
+
+
+def _export_advi_posterior(attack_s: np.ndarray, defense_s: np.ndarray) -> dict[str, float]:
+    """Export multiplicative parameters consistent with exp(attack - defense)."""
+    attack_rates = np.exp(attack_s)
+    concession_multipliers = np.exp(-defense_s)
+    return {
+        "attack_mean": float(np.mean(attack_rates)),
+        "attack_std": float(np.std(attack_rates)),
+        "defense_mean": float(np.mean(concession_multipliers)),
+        "defense_std": float(np.std(concession_multipliers)),
+    }
 
 
 def _run_analytical(historical_matches: list[dict]) -> dict[int, dict[str, float]]:
     """
     Analytical fallback: compute attack/defense indices from goal tallies.
 
-    attack  = goals_scored / league_avg_goals   (relative to average)
+    attack  = goals_scored (absolute mean goals per match)
     defense = goals_conceded / league_avg_goals  (lower = better defence)
     std is approximated as 0.15 (tight) for teams with many matches.
     """
@@ -156,13 +166,16 @@ def _run_analytical(historical_matches: list[dict]) -> dict[int, dict[str, float
         conceded.setdefault(a, []).append(hg)
 
     all_goals = [m["home_goals"] + m["away_goals"] for m in historical_matches]
-    league_avg = np.mean(all_goals) / 2 if all_goals else 1.3
+    league_avg = float(np.mean(all_goals) / 2) if all_goals else 1.3
 
     results: dict[int, dict[str, float]] = {}
     for team_id in scored:
         n_matches = len(scored[team_id])
-        atk_mean = np.mean(scored[team_id]) / league_avg
-        def_mean = np.mean(conceded[team_id]) / league_avg
+        # Keep the goal baseline exactly once: rate * relative concession
+        # multiplier. Dividing both components by the baseline forces average
+        # teams to one goal each regardless of the observed scoring environment.
+        atk_mean = np.mean(scored[team_id])
+        def_mean = np.mean(conceded[team_id]) / league_avg if league_avg > 0 else 1.0
         # More matches → tighter std
         std = max(0.05, 0.15 - 0.002 * n_matches)
         results[team_id] = {

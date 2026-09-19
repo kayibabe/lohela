@@ -20,6 +20,8 @@ from app.models import (
     TicketStatus,
     TicketType,
     Match,
+    PipelineRun,
+    PipelineStageRun,
 )
 from app.services.accumulator_builder import AccumulatorBuilder, DailyTickets, TICKET_SPECS, Ticket
 
@@ -33,6 +35,7 @@ class TicketPublisher:
         target_date: date,
         model_run_id: int | None = None,
         research_min_qscore: float | None = None,
+        pipeline_run_id: int | None = None,
     ) -> TicketGeneration:
         built = await AccumulatorBuilder(self.db).build(
             target_date,
@@ -41,7 +44,17 @@ class TicketPublisher:
         )
         if built.model_run_id is None:
             raise ValueError("No completed model run exists for the requested date")
+        await self._validate_pipeline_context(pipeline_run_id, target_date, built.model_run_id)
 
+        public_tickets = [built.conservative, built.balanced, built.aggressive]
+        missing_public_types = [
+            ticket_type.value
+            for ticket_type, candidate in zip(
+                (TicketType.SAFE, TicketType.BALANCED, TicketType.AGGRESSIVE),
+                public_tickets,
+            )
+            if candidate is None
+        ]
         existing_result = await self.db.execute(
             select(TicketGeneration)
             .where(
@@ -63,6 +76,7 @@ class TicketPublisher:
                 "ticket_specs": [_spec_snapshot(spec) for spec in TICKET_SPECS],
                 "research_min_qscore": research_min_qscore,
                 "publication_mode": "immutable_paper_trading",
+                "selection_diagnostics": built.selection_diagnostics,
             },
             input_count=built.qualified_pool,
         )
@@ -70,7 +84,6 @@ class TicketPublisher:
         await self.db.flush()
 
         model_run = await self.db.get(ModelRun, built.model_run_id)
-        public_tickets = [built.conservative, built.balanced, built.aggressive]
         tickets = [*public_tickets, built.best_value]
         published = 0
         published_types = []
@@ -83,16 +96,12 @@ class TicketPublisher:
 
         generation.output_count = published
         public_published = sum(candidate is not None for candidate in public_tickets)
-        generation.status = RunStatus.COMPLETED if public_published == len(public_tickets) else RunStatus.PARTIAL
+        generation.status = (
+            RunStatus.COMPLETED
+            if public_published == len(public_tickets)
+            else RunStatus.PARTIAL
+        )
         generation.completed_at = datetime.now(timezone.utc)
-        missing_public_types = [
-            ticket_type.value
-            for ticket_type, candidate in zip(
-                (TicketType.SAFE, TicketType.BALANCED, TicketType.AGGRESSIVE),
-                public_tickets,
-            )
-            if candidate is None
-        ]
         relaxed_ticket_types = {
             candidate.ticket_type.value: candidate.relaxation_level
             for candidate in tickets
@@ -125,6 +134,35 @@ class TicketPublisher:
         )
         await self.db.flush()
         return generation
+
+    async def _validate_pipeline_context(
+        self, pipeline_run_id: int | None, target_date: date, model_run_id: int
+    ) -> None:
+        """Refuse publication when the upstream run is partial or mis-linked."""
+        if pipeline_run_id is None:
+            return
+        run = await self.db.get(PipelineRun, pipeline_run_id)
+        if run is None or run.target_date != target_date:
+            raise ValueError("Refusing publication: pipeline run is missing or targets another date")
+        if run.status in {RunStatus.PARTIAL, RunStatus.FAILED}:
+            raise ValueError(f"Refusing publication: pipeline run is {run.status.value}")
+        stage_result = await self.db.execute(
+            select(PipelineStageRun).where(PipelineStageRun.pipeline_run_id == pipeline_run_id)
+        )
+        stages = {stage.stage_name: stage for stage in stage_result.scalars().all()}
+        required = (
+            "fixture_and_odds_ingestion",
+            "data_enrichment",
+            "model_execution",
+            "ensemble",
+            "market_comparison",
+            "q_score",
+        )
+        incomplete = [name for name in required if stages.get(name) is None or stages[name].status != RunStatus.COMPLETED]
+        if incomplete:
+            raise ValueError(f"Refusing publication: incomplete upstream stages={incomplete}")
+        if stages["model_execution"].stage_details.get("model_run_id") not in (None, model_run_id):
+            raise ValueError("Refusing publication: model run does not match pipeline metadata")
 
     async def _publish_candidate(
         self, generation: TicketGeneration, candidate: Ticket, model_version: str

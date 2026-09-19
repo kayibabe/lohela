@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import math
-from datetime import date
+from datetime import date, datetime, timezone
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -12,6 +12,34 @@ from sqlalchemy.orm import selectinload
 from app.models import AccumulatorTicket, SelectionResult, TicketSelection, TicketStatus, TicketType, Match, Prediction
 from app.services.settlement import evaluate_selection
 from app.config import CURRENT_MODEL_VERSION
+
+
+def _as_utc(value: datetime) -> datetime:
+    """Normalize database timestamps before point-in-time comparisons."""
+    return value.replace(tzinfo=timezone.utc) if value.tzinfo is None else value.astimezone(timezone.utc)
+
+
+def _has_pre_kickoff_information(prediction: Prediction) -> bool:
+    """Return whether the prediction itself was available before kickoff."""
+    match = prediction.match
+    information_at = prediction.as_of_at or prediction.created_at
+    return bool(
+        match is not None
+        and match.kickoff_at is not None
+        and information_at is not None
+        and _as_utc(information_at) < _as_utc(match.kickoff_at)
+    )
+
+
+def _has_pre_kickoff_quote(prediction: Prediction) -> bool:
+    """Return whether the entry quote was captured before kickoff."""
+    match = prediction.match
+    return bool(
+        match is not None
+        and match.kickoff_at is not None
+        and prediction.source_odds_at is not None
+        and _as_utc(prediction.source_odds_at) <= _as_utc(match.kickoff_at)
+    )
 
 
 async def performance_summary(db: AsyncSession, date_from: date | None = None, date_to: date | None = None, model_version: str | None = None) -> dict:
@@ -233,12 +261,20 @@ async def all_market_research_summary(db: AsyncSession, stake: float = 1.0, date
     ).order_by(Prediction.created_at.desc()))
     latest: dict[tuple[int, str, str], Prediction] = {}
     excluded_missing_odds = 0
+    excluded_post_kickoff_information = 0
+    excluded_post_kickoff_odds = 0
     for prediction in result.scalars().all():
         if model_version and prediction.model_version != model_version: continue
         match_date = prediction.match.kickoff_at.date()
         if date_from and match_date < date_from or date_to and match_date > date_to: continue
         key = (prediction.match_id, prediction.market, prediction.selection)
         if key in latest: continue
+        if not _has_pre_kickoff_information(prediction):
+            excluded_post_kickoff_information += 1
+            continue
+        if not _has_pre_kickoff_quote(prediction):
+            excluded_post_kickoff_odds += 1
+            continue
         if prediction.source_decimal_odds is None or prediction.source_decimal_odds <= 1:
             excluded_missing_odds += 1; continue
         latest[key] = prediction
@@ -271,8 +307,102 @@ async def all_market_research_summary(db: AsyncSession, stake: float = 1.0, date
         for key, value in (("by_date", d), ("by_month", d[:7]), ("by_year", d[:4]), ("by_market", prediction.market), ("by_competition", comp)):
             groups[key].setdefault(value, []).append((prediction, outcome))
     return {"stake": stake, "eligible_predictions": len(latest), "settled_predictions": len(rows),
-            "excluded_missing_odds": excluded_missing_odds, "unsupported_markets": unsupported,
+            "excluded_missing_odds": excluded_missing_odds,
+            "excluded_post_kickoff_information": excluded_post_kickoff_information,
+            "excluded_post_kickoff_odds": excluded_post_kickoff_odds,
+            "unsupported_markets": unsupported,
             "overall": aggregate(rows), **{key: [{"label": label, **aggregate(items)} for label, items in sorted(value.items(), reverse=True)] for key, value in groups.items()}}
+
+
+async def totals_calibration_review(
+    db: AsyncSession,
+    date_from: date | None = None,
+    date_to: date | None = None,
+    model_version: str | None = None,
+) -> dict:
+    """Review settled published totals by line, competition, probability band, and type.
+
+    Only the latest unique published match/market/selection is counted. Rows
+    without a settled outcome or probability are excluded from calibration
+    metrics rather than being guessed or regenerated.
+    """
+    result = await db.execute(
+        select(AccumulatorTicket)
+        .where(AccumulatorTicket.status.in_([TicketStatus.PUBLISHED, TicketStatus.SETTLED, TicketStatus.VOID]))
+        .options(
+            selectinload(AccumulatorTicket.selections)
+            .selectinload(TicketSelection.match)
+            .selectinload(Match.competition),
+        )
+        .order_by(AccumulatorTicket.target_date.desc(), AccumulatorTicket.version.desc(), AccumulatorTicket.id.desc())
+    )
+    unique: dict[tuple[date, int, str, str], TicketSelection] = {}
+    for ticket in result.scalars().all():
+        if model_version and ticket.model_version != model_version:
+            continue
+        for selection in ticket.selections:
+            match = selection.match
+            if not match or not selection.market.startswith(("under_", "over_")):
+                continue
+            match_date = match.kickoff_at.date()
+            if date_from and match_date < date_from or date_to and match_date > date_to:
+                continue
+            unique.setdefault((ticket.target_date, selection.match_id, selection.market, selection.selection), selection)
+
+    def competition_type(name: str) -> str:
+        lowered = name.lower()
+        cup_terms = ("cup", "copa", "coppa", "dfb", "fa cup", "super cup", "trophy")
+        return "cup" if any(term in lowered for term in cup_terms) else "league_or_other"
+
+    def probability_band(probability: float) -> str:
+        lower = int(probability * 10) * 10
+        return f"{lower / 100:.2f}-{min(1.0, (lower + 10) / 100):.2f}"
+
+    groups: dict[tuple[str, str, str, str], list[TicketSelection]] = {}
+    excluded = {"unsettled": 0, "missing_probability": 0}
+    for selection in unique.values():
+        if selection.result not in (SelectionResult.WON, SelectionResult.LOST):
+            excluded["unsettled"] += 1
+            continue
+        if selection.probability_snapshot is None:
+            excluded["missing_probability"] += 1
+            continue
+        match = selection.match
+        competition = match.competition.name if match.competition else str(match.competition_id)
+        line = selection.market.removeprefix("under_").removeprefix("over_")
+        side = "under" if selection.market.startswith("under_") else "over"
+        key = (competition, f"{side} {line}", probability_band(selection.probability_snapshot), competition_type(competition))
+        groups.setdefault(key, []).append(selection)
+
+    def aggregate(items: list[TicketSelection]) -> dict:
+        wins = sum(item.result == SelectionResult.WON for item in items)
+        outcomes = [(item.probability_snapshot, 1.0 if item.result == SelectionResult.WON else 0.0) for item in items]
+        return {
+            "selections": len(items),
+            "wins": wins,
+            "losses": len(items) - wins,
+            "hit_rate": round(wins / len(items), 4) if items else None,
+            "avg_probability": round(sum(p for p, _ in outcomes) / len(outcomes), 4) if outcomes else None,
+            "brier_score": round(sum((p - y) ** 2 for p, y in outcomes) / len(outcomes), 4) if outcomes else None,
+            "calibration_error": round(_calibration_error(outcomes) or 0.0, 4) if outcomes else None,
+            "confidence": "strong" if len(items) >= 30 else "moderate" if len(items) >= 10 else "directional",
+        }
+
+    grouped = [{
+        "competition": competition,
+        "line": line,
+        "probability_band": band,
+        "competition_type": kind,
+        **aggregate(items),
+    } for (competition, line, band, kind), items in sorted(groups.items())]
+    return {
+        "model_version": model_version or CURRENT_MODEL_VERSION,
+        "unique_totals_selections": len(unique),
+        "settled_with_probability": sum(len(items) for items in groups.values()),
+        "excluded": excluded,
+        "rows": grouped,
+        "note": "Small groups are directional evidence; no model promotion or automatic weight change is justified by this report alone.",
+    }
 
 async def market_reliability_matrix(db: AsyncSession, date_from: date | None = None, date_to: date | None = None, model_version: str | None = CURRENT_MODEL_VERSION) -> list[dict]:
     result = await db.execute(select(AccumulatorTicket).where(AccumulatorTicket.status.in_([TicketStatus.PUBLISHED, TicketStatus.SETTLED, TicketStatus.VOID])).options(selectinload(AccumulatorTicket.selections).selectinload(TicketSelection.prediction), selectinload(AccumulatorTicket.selections).selectinload(TicketSelection.match)))

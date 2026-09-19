@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import math
+from collections import Counter
 from dataclasses import dataclass, field
 from datetime import date, datetime, timezone
 from typing import Optional
@@ -60,18 +61,19 @@ TICKET_SPECS: tuple[TicketSpec, ...] = (
 
 # Bounded relaxation ladder for the minimum-daily-tickets fallback (see
 # AccumulatorBuilder.build). Each step loosens the constraints that a thin
-# weekday slate hits first — the high-grade-leg ratio and market-family
-# diversity requirement — while leaving odds range, min/max legs, and
-# correlation tolerance untouched, so a relaxed ticket is still a coherent,
-# odds-appropriate accumulator rather than an arbitrary leg dump. Applied
+# weekday slate hits first — the high-grade-leg ratio, market-family diversity,
+# and (for the conservative tier) combined-odds ceiling — while leaving
+# min/max legs and correlation tolerance untouched. A relaxed ticket remains a
+# coherent, auditable accumulator rather than an arbitrary leg dump. Applied
 # cumulatively (step 2 includes step 1's loosening) and only ever to public
 # tiers that produced no ticket at full strength.
 _RELAXATION_STEPS: tuple[dict, ...] = (
-    {"min_high_grade_ratio": -0.30, "min_market_types": -1},
-    {"min_high_grade_ratio": -0.60, "min_q_score": -5.0},
-    {"min_high_grade_ratio": -1.00, "min_q_score": -10.0},
+    {"min_high_grade_ratio": -0.30, "min_market_types": -1, "max_combined_odds": 1.0},
+    {"min_high_grade_ratio": -0.60, "min_q_score": -5.0, "max_combined_odds": 2.0},
+    {"min_high_grade_ratio": -1.00, "min_q_score": -10.0, "max_combined_odds": 2.0},
 )
 _RELAXATION_FLOOR_Q_SCORE = 60.0
+_RELAXATION_MAX_COMBINED_ODDS = 10.0
 
 
 @dataclass
@@ -137,6 +139,7 @@ class DailyTickets:
     aggressive: Optional[Ticket]
     best_value: Optional[Ticket]
     qualified_pool: int
+    selection_diagnostics: dict[str, dict] = field(default_factory=dict)
 
 
 class AccumulatorBuilder:
@@ -152,7 +155,7 @@ class AccumulatorBuilder:
         td = target_date or cat_today()
         run = await self._resolve_model_run(td, model_run_id)
         if run is None:
-            return DailyTickets(td, None, None, None, None, None, 0)
+            return DailyTickets(td, None, None, None, None, None, 0, {})
 
         pool = await self._load_qualified_legs(td, run.id)
         learning = (run.config_snapshot or {}).get("learning", {})
@@ -163,13 +166,39 @@ class AccumulatorBuilder:
         )
         coefficients = await self._load_correlation_coefficients()
         output: dict[TicketType, Ticket | None] = {}
+        diagnostics: dict[str, dict] = {}
         for spec in TICKET_SPECS:
             effective_spec = spec
             if research_min_qscore is not None:
                 effective_spec = TicketSpec(
                     **{**spec.__dict__, "min_q_score": float(research_min_qscore)}
                 )
-            eligible = [leg for leg in pool if not selection_rejection_reasons(leg, effective_spec, calibration)]
+            eligible = [
+                leg
+                for leg in pool
+                if not _research_market_rejection_reasons(leg)
+                and not selection_rejection_reasons(leg, effective_spec, calibration)
+            ]
+            rejection_counts: Counter[str] = Counter()
+            for leg in pool:
+                rejection_counts.update(_research_market_rejection_reasons(leg))
+                rejection_counts.update(selection_rejection_reasons(leg, effective_spec, calibration))
+            diagnostics[spec.ticket_type.value] = {
+                "pool_count": len(pool),
+                "eligible_leg_count": len(eligible),
+                "distinct_eligible_match_count": len({leg.match_id for leg in eligible}),
+                "rejection_counts": dict(sorted(rejection_counts.items())),
+                "min_legs": effective_spec.min_legs,
+                "min_combined_odds": effective_spec.min_combined_odds,
+                "max_combined_odds": (
+                    None
+                    if math.isinf(effective_spec.max_combined_odds)
+                    else effective_spec.max_combined_odds
+                ),
+                "min_q_score": effective_spec.min_q_score,
+                "min_high_grade_ratio": effective_spec.min_high_grade_ratio,
+                "min_market_types": effective_spec.min_market_types,
+            }
             prior_public = [
                 ticket for ticket_type, ticket in output.items()
                 if ticket is not None and ticket_type in (TicketType.SAFE, TicketType.BALANCED, TicketType.AGGRESSIVE)
@@ -180,6 +209,7 @@ class AccumulatorBuilder:
                 coefficients,
                 prior_tickets=prior_public if not spec.internal_only else [],
                 max_shared_matches=settings.max_shared_matches_between_tickets,
+                max_match_market_exposure=settings.max_public_ticket_exposure_per_match_market,
             )
 
         if research_min_qscore is None and settings.ticket_relaxation_enabled:
@@ -193,6 +223,7 @@ class AccumulatorBuilder:
             output[TicketType.AGGRESSIVE],
             output[TicketType.BEST_VALUE],
             len(pool),
+            diagnostics,
         )
 
     def _apply_minimum_ticket_relaxation(
@@ -239,6 +270,7 @@ class AccumulatorBuilder:
                     coefficients,
                     prior_tickets=prior_public,
                     max_shared_matches=settings.max_shared_matches_between_tickets,
+                    max_match_market_exposure=settings.max_public_ticket_exposure_per_match_market,
                 )
                 if ticket is not None:
                     ticket.relaxed = True
@@ -266,7 +298,7 @@ class AccumulatorBuilder:
             learning.get("base_model_version") or learning.get("requested_model_version"),
         )
         for leg in await self._load_all_legs(target_date, run.id):
-            reasons = selection_rejection_reasons(leg, spec, calibration)
+            reasons = _research_market_rejection_reasons(leg) + selection_rejection_reasons(leg, spec, calibration)
             if reasons:
                 rejected.append({"leg": leg, "reason_codes": reasons})
         return rejected
@@ -422,18 +454,31 @@ def selection_rejection_reasons(leg: Leg, spec: TicketSpec, calibration: dict | 
     return reasons
 
 
+def _research_market_rejection_reasons(leg: Leg) -> list[str]:
+    """Exclude restricted markets from generated paper tickets only."""
+    if leg.market in settings.research_restricted_markets:
+        return ["MARKET_RESTRICTED_FOR_RESEARCH"]
+    return []
+
+
 def _relax_spec(spec: TicketSpec, level: int) -> TicketSpec:
     """Apply relaxation steps 1..level cumulatively to `spec`, clamped to sane floors."""
     ratio_delta = sum(step.get("min_high_grade_ratio", 0.0) for step in _RELAXATION_STEPS[:level])
     market_delta = sum(step.get("min_market_types", 0) for step in _RELAXATION_STEPS[:level])
     q_delta = sum(step.get("min_q_score", 0.0) for step in _RELAXATION_STEPS[:level])
+    odds_delta = sum(step.get("max_combined_odds", 0.0) for step in _RELAXATION_STEPS[:level])
+    relaxed_max_odds = (
+        spec.max_combined_odds
+        if math.isinf(spec.max_combined_odds)
+        else min(_RELAXATION_MAX_COMBINED_ODDS, spec.max_combined_odds + odds_delta)
+    )
     return TicketSpec(
         ticket_type=spec.ticket_type,
         display_name=spec.display_name,
         min_legs=spec.min_legs,
         max_legs=spec.max_legs,
         min_combined_odds=spec.min_combined_odds,
-        max_combined_odds=spec.max_combined_odds,
+        max_combined_odds=relaxed_max_odds,
         min_q_score=max(_RELAXATION_FLOOR_Q_SCORE, spec.min_q_score + q_delta),
         min_high_grade_ratio=max(0.0, spec.min_high_grade_ratio + ratio_delta),
         min_market_types=max(1, spec.min_market_types + market_delta),
@@ -582,6 +627,7 @@ def _find_best_ticket(
     *,
     prior_tickets: list[Ticket] | None = None,
     max_shared_matches: int | None = None,
+    max_match_market_exposure: int | None = None,
 ) -> Optional[Ticket]:
     candidates = sorted(
         pool,
@@ -617,6 +663,7 @@ def _find_best_ticket(
                 ticket,
                 prior_tickets or [],
                 max_shared_matches,
+                max_match_market_exposure,
             ) and _objective(ticket) > best_score:
                 best, best_score = ticket, _objective(ticket)
     return best
@@ -631,7 +678,18 @@ def _within_ticket_overlap_limit(
     ticket: Ticket,
     prior_tickets: list[Ticket],
     limit: int | None,
+    max_match_market_exposure: int | None = None,
 ) -> bool:
-    if limit is None:
+    if limit is not None and not all(shared_match_count(ticket, prior) <= limit for prior in prior_tickets):
+        return False
+    if max_match_market_exposure is None:
         return True
-    return all(shared_match_count(ticket, prior) <= limit for prior in prior_tickets)
+    prior_exposure: dict[tuple[int, str], int] = {}
+    for prior in prior_tickets:
+        for leg in prior.legs:
+            key = (leg.match_id, leg.market)
+            prior_exposure[key] = prior_exposure.get(key, 0) + 1
+    for leg in ticket.legs:
+        if prior_exposure.get((leg.match_id, leg.market), 0) >= max_match_market_exposure:
+            return False
+    return True

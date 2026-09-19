@@ -7,7 +7,7 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from app.database import get_db
 from app.config import CURRENT_MODEL_VERSION
@@ -50,6 +50,19 @@ class LearningPromotionRequest(BaseModel):
     reason: str = Field(min_length=10, max_length=2000)
 
 
+class HistoricalBackfillRequest(BaseModel):
+    start: date
+    end: date
+    model_version: str = CURRENT_MODEL_VERSION
+    min_history: int = Field(100, ge=30, le=10000)
+
+    @model_validator(mode="after")
+    def valid_period(self):
+        if self.end < self.start:
+            raise ValueError("end must be on or after start")
+        return self
+
+
 @router.post("/run", response_model=ModelRunResponse)
 async def run_models(
     target_date: Optional[date] = None,
@@ -58,7 +71,10 @@ async def run_models(
 ):
     """Run all prediction models for a given date — spec §26 Stages 3–6."""
     runner = ModelRunner(db, model_version=model_version)
-    result = await runner.run(target_date)
+    try:
+        result = await runner.run(target_date)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     return ModelRunResponse(status="ok", result=result)
 
 
@@ -85,6 +101,20 @@ async def train_learning_model(
             "promotion_required": True,
         },
     )
+
+
+@router.post("/learning/backfill-totals", response_model=ModelRunResponse)
+async def backfill_historical_totals(
+    payload: HistoricalBackfillRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    """Create detached, point-in-time totals research predictions only."""
+    from app.services.historical_backfill import HistoricalTotalsBackfill
+
+    result = await HistoricalTotalsBackfill(db, payload.model_version).run(
+        payload.start, payload.end, min_history=payload.min_history
+    )
+    return ModelRunResponse(status="ok", result=result)
 
 
 @router.post("/learning/promote", response_model=ModelRunResponse)

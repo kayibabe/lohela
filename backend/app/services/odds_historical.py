@@ -92,7 +92,7 @@ class HistoricalOddsImporter:
         url = f"{settings.football_data_base_url}/{season_code}/{league_code}.csv"
         logger.info("Downloading odds CSV: %s", url)
 
-        async with httpx.AsyncClient(timeout=30.0) as client:
+        async with httpx.AsyncClient(timeout=30.0, follow_redirects=True) as client:
             resp = await client.get(url)
             resp.raise_for_status()
             csv_content = resp.text

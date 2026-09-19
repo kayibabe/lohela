@@ -15,6 +15,7 @@ from app.api.v1 import (
     pipeline,
     backtests,
     custom_accumulators,
+    singles,
 )
 from app.api import auth
 
@@ -35,3 +36,4 @@ router.include_router(loss_review.router)
 router.include_router(pipeline.router)
 router.include_router(backtests.router)
 router.include_router(custom_accumulators.router)
+router.include_router(singles.router)

@@ -4,10 +4,11 @@ FastAPI application entry point — spec §32, §35.
 """
 
 import logging
+from uuid import UUID, uuid4
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException, Response, status
+from fastapi import FastAPI, HTTPException, Request, Response, status
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
@@ -265,6 +266,30 @@ app = FastAPI(
     docs_url="/docs",
     redoc_url="/redoc",
 )
+
+
+@app.middleware("http")
+async def operational_response_headers(request: Request, call_next):
+    """Attach safe baseline headers and a correlation id to every response.
+
+    The correlation id is intentionally transport-level only: it is not used
+    as an authentication or authorization value.  Existing caller-supplied
+    UUIDs are preserved so reverse proxies and logs can be joined; malformed
+    or oversized values are replaced with a fresh id.
+    """
+    supplied = request.headers.get("x-request-id", "")
+    try:
+        request_id = str(UUID(supplied)) if len(supplied) <= 64 else str(uuid4())
+    except ValueError:
+        request_id = str(uuid4())
+
+    response = await call_next(request)
+    response.headers["X-Request-ID"] = request_id
+    response.headers.setdefault("X-Content-Type-Options", "nosniff")
+    response.headers.setdefault("X-Frame-Options", "DENY")
+    response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
+    response.headers.setdefault("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
+    return response
 
 app.include_router(api_v1_router)
 

@@ -10,7 +10,7 @@ CAT = ZoneInfo("Africa/Blantyre")
 # Single source of truth for the prediction model release used by automated
 # runs and API defaults. Historical rows retain the version they were created
 # with, so changing this value starts a new auditable model lineage.
-CURRENT_MODEL_VERSION = "0.2.1"
+CURRENT_MODEL_VERSION = "0.3.0"
 
 
 def cat_today():
@@ -111,9 +111,25 @@ class Settings(BaseSettings):
     warn_data_quality_score: int = 60    # below this: flagged
     max_selection_odds_age_hours: float = 2.0
     min_selection_edge: float = 0.03
+    # Single-game research focus. Restricted markets remain available for
+    # diagnostics but are excluded from generated paper tickets.
+    research_focus_markets: list[str] = ["over_1.5", "over_2.5"]
+    research_restricted_markets: list[str] = [
+        "draw",
+        "under_2.5",
+        "under_3.5",
+        "home_win",
+        "double_chance_1x",
+    ]
+    research_target_hit_rate: float = 0.80
+    research_minimum_market_sample: int = 100
     # Published public tiers are alternatives, not duplicate exposure. A
     # later tier may share at most this many matches with an earlier tier.
     max_shared_matches_between_tickets: int = 2
+    # A public portfolio may expose one match/market once across its tiers.
+    # This is stricter than pairwise ticket overlap and prevents repeated
+    # failures such as the same totals line appearing in every accumulator.
+    max_public_ticket_exposure_per_match_market: int = 1
 
     # On thin weekday slates the full-strength tier gates (esp. high-grade-leg
     # ratio) can legitimately admit zero combinations even with a healthy
@@ -121,7 +137,9 @@ class Settings(BaseSettings):
     # public tiers, in bounded steps, until this floor is met or the relaxation
     # ladder is exhausted — see accumulator_builder._RELAXATION_STEPS.
     ticket_relaxation_enabled: bool = True
-    min_daily_public_tickets: int = 2
+    # The public daily portfolio targets all three tiers. Missing tiers remain
+    # visible as PARTIAL rather than being fabricated or replaced by history.
+    min_daily_public_tickets: int = 3
 
     # Tier 1 league IDs on API-Football (spec Appendix B)
     tier1_league_ids: list[int] = [2, 3, 39, 61, 78, 135, 140]

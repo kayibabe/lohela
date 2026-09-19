@@ -6,7 +6,7 @@ import pytest
 from fastapi import HTTPException
 from starlette.requests import Request
 
-from app.api.security import get_optional_current_user, require_pro_access
+from app.api.security import get_optional_current_user, require_pro_access, require_research_access
 from app.services.auth import hash_password, session_token_hash, verify_password
 
 
@@ -53,6 +53,22 @@ async def test_pro_and_admin_users_can_use_pro_endpoints():
     admin = SimpleNamespace(role="admin", plan="free")
     assert await require_pro_access(pro) is pro
     assert await require_pro_access(admin) is admin
+
+
+@pytest.mark.asyncio
+async def test_research_key_normalizes_bom_and_rejects_non_ascii_without_500(monkeypatch):
+    from app.api import security
+
+    monkeypatch.setattr(
+        security,
+        "settings",
+        SimpleNamespace(research_api_key="\ufeffresearch-secret", app_env="production"),
+    )
+    request = _request_with_cookie("token")
+    await require_research_access(request, "research-secret")
+    with pytest.raises(HTTPException) as error:
+        await require_research_access(request, "research‑secret")
+    assert error.value.status_code == 401
 
 
 @pytest.mark.asyncio
