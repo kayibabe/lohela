@@ -629,9 +629,16 @@ def _find_best_ticket(
     max_shared_matches: int | None = None,
     max_match_market_exposure: int | None = None,
 ) -> Optional[Ticket]:
+    # Deterministic tie-break on prediction_id rather than model_probability,
+    # for exact (q_score, expected_value) ties only. Not a calibration fix:
+    # selection may concentrate observed forecast errors, but a causal
+    # amplification mechanism and its magnitude remain unproven, and both
+    # primary sort keys (q_score, expected_value) already embed
+    # model_probability regardless of this tie-break. See
+    # docs/SELECTION_CALIBRATION_REVIEW_2026-09-20.md.
     candidates = sorted(
         pool,
-        key=lambda leg: (leg.q_score, leg.expected_value or -1.0, leg.model_probability),
+        key=lambda leg: (leg.q_score, leg.expected_value or -1.0, leg.prediction_id),
         reverse=True,
     )[:_CANDIDATE_LIMIT]
     if len(candidates) < spec.min_legs:

@@ -1,5 +1,6 @@
 """Pure acceptance tests for optimiser, settlement, and Kelly constraints."""
 
+import math
 from datetime import datetime, timezone
 
 import pytest
@@ -231,6 +232,58 @@ def test_thin_slate_relaxation_recovers_a_balanced_ticket():
     ticket = _find_best_ticket(eligible_relaxed, relaxed, {})
     assert ticket is not None
     assert len(ticket.legs) == 4
+
+
+def test_candidate_pool_tiebreak_uses_prediction_id_not_probability():
+    """When (q_score, expected_value) are exactly tied, the candidate pool
+    truncation must not prefer the higher-probability leg. Regression for the
+    accumulator_builder.py:632 tiebreak change: construct a pool where an
+    outlier leg has by far the highest model_probability (and thus, under the
+    old model_probability tiebreak, would be admitted to the top-30 candidate
+    slice and would win on risk/objective), but a low prediction_id. Every
+    other leg ties on (q_score, expected_value) with the outlier and has a
+    higher prediction_id. If the outlier is excluded from the winning ticket,
+    the tiebreak is no longer probability-driven."""
+    spec = TicketSpec(
+        TicketType.BALANCED, "Balanced", 1, 1, 0.0, math.inf, 80.0, 0.0, 1, 0.0, 1.0,
+    )
+    tied_q_score = 88.0
+    tied_expected_value = 0.15  # p * odds - 1, held constant via odds = 1.15 / p
+
+    def _tied_leg(prediction_id: int, probability: float) -> Leg:
+        leg = _leg(
+            prediction_id,
+            prediction_id,
+            "home_win",
+            q_score=tied_q_score,
+            probability=probability,
+            odds=1.15 / probability,
+        )
+        # Force an exact tie: floating-point rounding of probability * odds
+        # would otherwise perturb expected_value by float epsilon and decide
+        # the ordering itself, defeating the point of this test.
+        leg.expected_value = tied_expected_value
+        return leg
+
+    # 30 legs (== _CANDIDATE_LIMIT) with modest, distinct probabilities and
+    # prediction_ids 71..100.
+    pool = [_tied_leg(71 + i, 0.50 + 0.001 * i) for i in range(30)]
+
+    # Outlier: far higher probability (would dominate on risk/objective if
+    # admitted) but a prediction_id below every other leg in the pool.
+    outlier = _tied_leg(50, 0.999)
+    pool.append(outlier)
+
+    for leg in pool:
+        assert leg.q_score == tied_q_score
+        assert leg.expected_value == tied_expected_value
+
+    ticket = _find_best_ticket(pool, spec, {})
+    assert ticket is not None
+    assert ticket.legs[0].prediction_id != outlier.prediction_id, (
+        "outlier with the highest probability but lowest prediction_id was "
+        "selected — the candidate pool is still tie-breaking on probability"
+    )
 
 
 def test_market_settlement_rules():
