@@ -1,7 +1,12 @@
 """Read-only evidence export; run in the application's configured environment."""
 import asyncio
 import json
+import os
+import sys
 from datetime import datetime, timezone
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
+
 from sqlalchemy import text
 from app.database import AsyncSessionLocal
 
