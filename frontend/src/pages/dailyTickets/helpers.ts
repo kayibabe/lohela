@@ -92,6 +92,7 @@ const HARD_ACCUMULATOR_BLOCKERS = new Set([
   "STALE_ODDS",
   "LEAGUE_CALIBRATION_BELOW_THRESHOLD",
   "MARKET_CALIBRATION_UNRELIABLE",
+  "EDGE_BAND_CALIBRATION_UNRELIABLE",
 ]);
 
 export const reasonLabel = (code: string) => code.replace(/_/g, " ").toLowerCase();

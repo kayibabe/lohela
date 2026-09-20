@@ -130,6 +130,14 @@ class Settings(BaseSettings):
     warn_data_quality_score: int = 60    # below this: flagged
     max_selection_odds_age_hours: float = 2.0
     min_selection_edge: float = 0.03
+    # Edge-band x market-family calibration gate (tighter than the raw-market
+    # MARKET_CALIBRATION_UNRELIABLE gate below, since probability_calibration_analysis
+    # showed whole-system calibration errors clustering well under 0.25 while
+    # still coinciding with the weakest ROI/hit-rate bands). 0.20 was chosen
+    # over an initial 0.10 after a dry run showed 0.10 would flag every
+    # sample>=20 totals band for the live model version (0.3.0).
+    min_edge_band_calibration_sample: int = 20
+    max_edge_band_calibration_error: float = 0.20
     # Single-game research focus. Restricted markets remain available for
     # diagnostics but are excluded from generated paper tickets.
     research_focus_markets: list[str] = ["over_1.5", "over_2.5"]

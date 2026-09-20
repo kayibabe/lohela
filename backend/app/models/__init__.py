@@ -24,6 +24,7 @@ from app.models.research import (
     AuditEvent,
     ModelPerformance,
     LeaguePerformance,
+    EdgeBandCalibration,
     CorrelationCoefficient,
     PipelineRun,
     PipelineStageRun,
@@ -43,7 +44,7 @@ __all__ = [
     "User", "UserSession", "AuthEvent",
     "RunStatus", "TicketType", "TicketStatus", "SelectionResult",
     "ModelRun", "ModelLearningRun", "MarketLearningProfile", "ModelLearningPromotion", "StrongestSelectionSnapshot", "TicketGeneration", "AccumulatorTicket", "TicketSelection", "TicketResult",
-    "AuditEvent", "ModelPerformance", "LeaguePerformance", "CorrelationCoefficient",
+    "AuditEvent", "ModelPerformance", "LeaguePerformance", "EdgeBandCalibration", "CorrelationCoefficient",
     "PipelineRun", "PipelineStageRun", "BacktestRun",
     "SinglesLedgerSnapshot",
 ]

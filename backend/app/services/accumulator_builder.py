@@ -16,6 +16,7 @@ from app.config import cat_day_bounds_utc, cat_today, settings
 from app.models import (
     Competition,
     CorrelationCoefficient,
+    EdgeBandCalibration,
     Match,
     ModelRun,
     Odds,
@@ -25,6 +26,7 @@ from app.models import (
     Team,
     TicketType,
 )
+from app.services.performance import _edge_band, _market_family
 
 logger = logging.getLogger(__name__)
 
@@ -359,7 +361,25 @@ class AccumulatorBuilder:
         for row in market_result.scalars().all():
             if row.market not in markets:
                 markets[row.market] = row
-        return {"leagues": leagues, "markets": markets}
+        edge_version_priority = case(
+            (EdgeBandCalibration.model_version == model_version, 0), else_=1
+        )
+        edge_band_result = await self.db.execute(
+            select(EdgeBandCalibration).where(
+                EdgeBandCalibration.model_version.in_(versions),
+                EdgeBandCalibration.period_end < target_date,
+            ).order_by(
+                edge_version_priority,
+                EdgeBandCalibration.period_end.desc(),
+                EdgeBandCalibration.id.desc(),
+            )
+        )
+        edge_bands = {}
+        for row in edge_band_result.scalars().all():
+            key = (row.market_family, row.edge_band)
+            if key not in edge_bands:
+                edge_bands[key] = row
+        return {"leagues": leagues, "markets": markets, "edge_bands": edge_bands}
 
     async def _load_all_legs(self, target_date: date, model_run_id: int) -> list[Leg]:
         result = await self.db.execute(
@@ -451,6 +471,15 @@ def selection_rejection_reasons(leg: Leg, spec: TicketSpec, calibration: dict | 
         market = calibration.get("markets", {}).get(leg.market)
         if market and market.sample_size >= 20 and (market.calibration_error or 0.0) > 0.25:
             reasons.append("MARKET_CALIBRATION_UNRELIABLE")
+        if leg.edge is not None:
+            edge_key = (_market_family(leg.market), _edge_band(leg.edge))
+            edge_row = calibration.get("edge_bands", {}).get(edge_key)
+            if (
+                edge_row
+                and edge_row.sample_size >= settings.min_edge_band_calibration_sample
+                and (edge_row.calibration_error or 0.0) > settings.max_edge_band_calibration_error
+            ):
+                reasons.append("EDGE_BAND_CALIBRATION_UNRELIABLE")
     return reasons
 
 

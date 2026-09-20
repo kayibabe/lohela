@@ -356,6 +356,35 @@ class LeaguePerformance(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
+class EdgeBandCalibration(Base):
+    """Lohela calibration by market-family x edge-band, feeding the selection gate.
+
+    Coarser than the per-band diagnostics in probability_calibration_analysis
+    (which stays whole-history and read-only), but finer than ModelPerformance
+    (per raw market string, no edge dimension) — see
+    accumulator_builder._load_calibration_gates.
+    """
+
+    __tablename__ = "edge_band_calibration"
+    __table_args__ = (
+        UniqueConstraint(
+            "model_version", "market_family", "edge_band", "period_start", "period_end",
+            name="uq_edge_band_calibration_period",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    model_version: Mapped[str] = mapped_column(String(40), nullable=False)
+    market_family: Mapped[str] = mapped_column(String(40), nullable=False)
+    edge_band: Mapped[str] = mapped_column(String(20), nullable=False)
+    period_start: Mapped[date] = mapped_column(Date, nullable=False)
+    period_end: Mapped[date] = mapped_column(Date, nullable=False)
+    sample_size: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    calibration_error: Mapped[float | None] = mapped_column(Float, nullable=True)
+    hit_rate: Mapped[float | None] = mapped_column(Float, nullable=True)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
 class CorrelationCoefficient(Base):
     __tablename__ = "correlation_coefficients"
     __table_args__ = (

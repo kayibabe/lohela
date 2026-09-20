@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import (
     CorrelationCoefficient,
+    EdgeBandCalibration,
     LeaguePerformance,
     Match,
     MatchStatus,
@@ -18,7 +19,7 @@ from app.models import (
     Prediction,
     SelectionResult,
 )
-from app.services.performance import _calibration_error
+from app.services.performance import _calibration_error, _edge_band, _market_family
 from app.services.settlement import evaluate_selection
 
 
@@ -58,6 +59,7 @@ async def aggregate_calibration_snapshots(
 
     model_groups: dict[tuple[str, str, str], list[tuple[float, float]]] = defaultdict(list)
     league_groups: dict[int, list[tuple[float, float]]] = defaultdict(list)
+    edge_band_groups: dict[tuple[str, str, str], list[tuple[float, float]]] = defaultdict(list)
     match_outcomes: dict[tuple[int, int], dict[str, float]] = defaultdict(dict)
     for prediction, match, outcome in latest.values():
         probabilities = {
@@ -73,6 +75,9 @@ async def aggregate_calibration_snapshots(
                 model_groups[(prediction.model_version, model_name, prediction.market)].append((probability, outcome))
         league_groups[match.competition_id].append((prediction.model_probability, outcome))
         match_outcomes[(match.competition_id, match.id)][_market_family(prediction.market)] = outcome
+        if prediction.edge is not None:
+            key = (prediction.model_version, _market_family(prediction.market), _edge_band(prediction.edge))
+            edge_band_groups[key].append((prediction.model_probability, outcome))
 
     model_rows = 0
     for (version, model_name, market), values in model_groups.items():
@@ -84,6 +89,16 @@ async def aggregate_calibration_snapshots(
         row.calibration_error = _calibration_error(values)
         row.hit_rate = sum((p >= 0.5) == bool(y) for p, y in values) / len(values)
         model_rows += 1
+
+    edge_band_rows = 0
+    for (version, market_family, edge_band), values in edge_band_groups.items():
+        row = await _get_or_create_edge_band_row(
+            db, version, market_family, edge_band, period_start, period_end
+        )
+        row.sample_size = len(values)
+        row.calibration_error = _calibration_error(values)
+        row.hit_rate = sum((p >= 0.5) == bool(y) for p, y in values) / len(values)
+        edge_band_rows += 1
 
     league_rows = 0
     for competition_id, values in league_groups.items():
@@ -133,6 +148,7 @@ async def aggregate_calibration_snapshots(
         "prediction_sample_size": len(latest),
         "model_performance_rows": model_rows,
         "league_performance_rows": league_rows,
+        "edge_band_calibration_rows": edge_band_rows,
         "correlation_rows": correlation_rows,
     }
 
@@ -179,16 +195,27 @@ async def _get_or_create_league_row(db, competition_id, start, end):
     return row
 
 
-def _market_family(market: str) -> str:
-    if market.startswith(("over_", "under_")):
-        return "totals"
-    if market.startswith("btts"):
-        return "btts"
-    if market.startswith("double_chance"):
-        return "double_chance"
-    if market.startswith("dnb"):
-        return "draw_no_bet"
-    return "match_result" if market in {"home_win", "draw", "away_win"} else market
+async def _get_or_create_edge_band_row(db, version, market_family, edge_band, start, end):
+    result = await db.execute(
+        select(EdgeBandCalibration).where(
+            EdgeBandCalibration.model_version == version,
+            EdgeBandCalibration.market_family == market_family,
+            EdgeBandCalibration.edge_band == edge_band,
+            EdgeBandCalibration.period_start == start,
+            EdgeBandCalibration.period_end == end,
+        )
+    )
+    row = result.scalar_one_or_none()
+    if row is None:
+        row = EdgeBandCalibration(
+            model_version=version,
+            market_family=market_family,
+            edge_band=edge_band,
+            period_start=start,
+            period_end=end,
+        )
+        db.add(row)
+    return row
 
 
 def _pearson(values: list[tuple[float, float]]) -> float:
