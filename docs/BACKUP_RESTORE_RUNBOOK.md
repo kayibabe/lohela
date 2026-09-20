@@ -36,19 +36,36 @@ what was asked.
   `postgresql-client-18` (via PGDG's apt repo, since Debian trixie's own
   repos top out at 17), so both scripts run inside the deployed `web`/
   `worker` containers once that image ships.
+- **Automated daily backups**: a Railway Volume (`backups`, declared in
+  [`.railway/railway.ts`](../.railway/railway.ts)) mounted on the `worker`
+  service at `/data/backups`. `app/main.py`'s APScheduler queues a new Celery
+  task, `pipeline.backup_database` ([`app/tasks/pipeline.py`](../backend/app/tasks/pipeline.py)),
+  daily at 01:00 UTC (configurable via `db_backup_cron_hour`/`_minute` in
+  `app/config.py`) — clear of the pipeline windows (22:15/03:00 UTC) and the
+  shadow-learning/singles-ledger jobs (04:10-04:30 UTC). The task shells out
+  to `scripts/backup_db.py` (the same tool used for manual/rehearsed
+  backups) and prunes to the most recent `db_backup_retention_count` dumps
+  (default 14 — one day = one dump, so ~2 weeks). Gated by
+  `db_backup_enabled` (default on) and follows the same scheduler-leadership
+  lock as every other periodic job, so only one `web` replica queues it.
+  Failures surface through the existing `automation_alerts` mechanism
+  (`_record_final_retry_alert`), same as every other `pipeline.*` task.
 
 ## What does NOT exist yet (open decisions, not done)
 
-- **No automated/scheduled backups.** This is manual tooling for now. Wiring
-  a Celery Beat task to run `backup_db.py` on a schedule needs a durable
-  off-box destination decided first (Railway volume vs. S3-compatible object
-  storage vs. Railway's own managed-Postgres backup feature) — that's a
-  storage/cost decision, not made here.
+- **Off-provider storage.** The `backups` volume lives on Railway itself —
+  durable against a container restart/redeploy, but *not* protection against
+  a Railway-account-level incident (the volume goes down with the database
+  it's backing up). Chosen deliberately for now: simplicity, no new vendor.
+  Moving to S3-compatible storage (Cloudflare R2 / Backblaze B2 / AWS S3) is
+  a follow-up if true off-provider redundancy becomes a requirement.
 - **Railway's built-in Postgres backups** (if enabled on the plan) have not
-  been checked in the dashboard. Worth checking before building a redundant
-  system — this repo previously had *zero* backup mechanism, in-house or
-  managed.
+  been checked in the dashboard. Worth checking — this repo previously had
+  *zero* backup mechanism, in-house or managed, before this session.
 - **Dev/prod Postgres version parity** (15 vs 18) — not addressed here.
+- **No alerting beyond the existing `automation_alerts` table** — a failed
+  scheduled backup surfaces the same way any other failed pipeline task
+  does (DB row + Admin UI), not a push notification.
 
 ## Local rehearsal (safe — no production contact)
 

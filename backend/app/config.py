@@ -105,6 +105,16 @@ class Settings(BaseSettings):
     learning_train_days: int = 180
     learning_validation_days: int = 30
 
+    # Daily pg_dump to a Railway Volume (see .railway/railway.ts, mounted on
+    # the worker service) — see docs/BACKUP_RESTORE_RUNBOOK.md. 01:00 UTC is
+    # clear of both pipeline windows (22:15 UTC / 03:00 UTC) and the shadow
+    # learning / singles ledger jobs (04:10-04:30 UTC).
+    db_backup_enabled: bool = True
+    db_backup_cron_hour: int = 1
+    db_backup_cron_minute: int = 0
+    db_backup_dir: str = "/data/backups"
+    db_backup_retention_count: int = 14
+
     # The automated twice-daily pipeline updates the "Bayesian" leg's team
     # posteriors via ModelPreparationService. "analytical" is a closed-form
     # MAP estimate (goals scored/conceded relative to league average) — fast

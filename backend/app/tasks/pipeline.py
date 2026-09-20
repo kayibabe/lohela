@@ -644,6 +644,47 @@ def capture_singles_ledger(self):
         raise self.retry(exc=exc, countdown=300)
 
 
+@celery_app.task(name="pipeline.backup_database", bind=True, max_retries=2)
+def backup_database(self):
+    """Daily pg_dump to the Railway Volume mounted on this service (see
+    .railway/railway.ts and docs/BACKUP_RESTORE_RUNBOOK.md), pruned to the
+    most recent `db_backup_retention_count` dumps. Shells out to the same
+    scripts/backup_db.py used for manual/rehearsed backups rather than
+    duplicating its pg_dump + pg_restore-validate logic.
+    """
+    import json
+    import subprocess
+    from pathlib import Path
+
+    if not settings.db_backup_enabled:
+        return {"status": "disabled"}
+
+    output_dir = Path(settings.db_backup_dir)
+    try:
+        proc = subprocess.run(
+            ["python", "scripts/backup_db.py", "--output-dir", str(output_dir), "--label", "scheduled"],
+            capture_output=True,
+            text=True,
+            timeout=300,
+        )
+        if proc.returncode != 0:
+            raise RuntimeError(f"backup_db.py failed (exit {proc.returncode}): {proc.stderr.strip()[-2000:]}")
+        summary = json.loads(proc.stdout)
+
+        dumps = sorted(output_dir.glob("lohela_scheduled_*.dump"), key=lambda p: p.stat().st_mtime, reverse=True)
+        stale = dumps[settings.db_backup_retention_count:]
+        for path in stale:
+            path.unlink(missing_ok=True)
+
+        summary["retained"] = len(dumps) - len(stale)
+        summary["pruned"] = [p.name for p in stale]
+        logger.info("Scheduled database backup complete: %s", summary)
+        return summary
+    except Exception as exc:
+        logger.exception("Scheduled database backup failed")
+        raise self.retry(exc=exc, countdown=300)
+
+
 def _daily_pipeline_canvas(today: str, pipeline_run_id: int):
     """Build the deterministic task graph separately so its wiring is testable."""
     from celery import chain

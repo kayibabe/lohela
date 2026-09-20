@@ -105,6 +105,15 @@ async def lifespan(app: FastAPI):
             coalesce=True,
             max_instances=1,
         )
+    if settings.db_backup_enabled:
+        scheduler.add_job(
+            _trigger_db_backup,
+            CronTrigger(hour=settings.db_backup_cron_hour, minute=settings.db_backup_cron_minute),
+            id="daily_db_backup",
+            replace_existing=True,
+            coalesce=True,
+            max_instances=1,
+        )
     scheduler.start()
     logger.info(
         "Pipeline scheduled at %02d:%02d UTC and %02d:%02d UTC (00:15 and 05:00 CAT)",
@@ -284,6 +293,22 @@ async def _queue_singles_ledger_capture():
 
     capture_singles_ledger.delay()
     logger.info("Daily singles ledger capture task queued")
+
+
+async def _trigger_db_backup():
+    """Queue the daily database backup (see docs/BACKUP_RESTORE_RUNBOOK.md)."""
+    async with _scheduler_leadership("db_backup") as leader:
+        if not leader:
+            return
+        await _queue_db_backup()
+
+
+async def _queue_db_backup():
+    """Queue the backup after scheduler leadership has been acquired."""
+    from app.tasks.pipeline import backup_database
+
+    backup_database.delay()
+    logger.info("Scheduled database backup task queued")
 
 
 app = FastAPI(

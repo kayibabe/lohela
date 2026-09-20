@@ -1,8 +1,13 @@
-import { defineRailway, postgres, preserve, project, redis, service } from "railway/iac";
+import { defineRailway, postgres, preserve, project, redis, service, volume } from "railway/iac";
 
 export default defineRailway(() => {
   const pg = postgres("Postgres");
   const rd = redis("Redis");
+  // Daily pg_dump backups (see docs/BACKUP_RESTORE_RUNBOOK.md) land here.
+  // Durable on Railway's own storage, but not a separate provider — a
+  // Railway-account-level incident would take this down with the database
+  // itself. Off-provider (S3-compatible) storage is a follow-up decision.
+  const backups = volume("backups");
 
   const sharedVars = {
     APP_ENV: preserve(),
@@ -48,9 +53,12 @@ export default defineRailway(() => {
       REDIS_URL: preserve(),
       CELERY_WORKER: preserve(),
     },
+    volumeMounts: {
+      "/data/backups": backups,
+    },
   });
 
   return project("lohela", {
-    resources: [pg, rd, web, worker],
+    resources: [pg, rd, web, worker, backups],
   });
 });
