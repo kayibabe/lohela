@@ -159,32 +159,37 @@ def fetch_odds(self, target_date: str | None = None, pipeline_run_id: int | None
 def refresh_live_status(self):
     """Poll API-Football's live feed and persist score/phase transitions."""
     from app.database import AsyncSessionLocal
+    from app.services import cache
     from app.services.fixture_ingestor import FixtureIngestor
 
     async def _run():
-        async with AsyncSessionLocal() as db:
-            refreshed = await FixtureIngestor(db).refresh_live_status()
+        # refresh_live_status and settle_results both UPDATE `matches` rows,
+        # in different orders (API-feed order here vs. kickoff_at order
+        # there) — running concurrently deadlocks Postgres. Serialize them.
+        async with cache.lock("matches-write", timeout=90, blocking_timeout=180):
+            async with AsyncSessionLocal() as db:
+                refreshed = await FixtureIngestor(db).refresh_live_status()
 
-            from app.services.clv import capture_closing_odds
-            clv = await capture_closing_odds(db)
+                from app.services.clv import capture_closing_odds
+                clv = await capture_closing_odds(db)
 
-            settlement = {
-                "selections_settled": 0,
-                "tickets_settled": 0,
-                "individual_bets_settled": 0,
-                "custom_accumulators_settled": 0,
-            }
-            if refreshed.get("finished", 0) > 0:
-                from app.config import cat_today
-                from app.services.settlement import SettlementService
+                settlement = {
+                    "selections_settled": 0,
+                    "tickets_settled": 0,
+                    "individual_bets_settled": 0,
+                    "custom_accumulators_settled": 0,
+                }
+                if refreshed.get("finished", 0) > 0:
+                    from app.config import cat_today
+                    from app.services.settlement import SettlementService
 
-                # Live fixtures that just finished kicked off today, or
-                # yesterday for matches running past midnight CAT.
-                settlement = await SettlementService(db).settle_finished_matches(
-                    source="live_status", since=cat_today() - timedelta(days=1)
-                )
-                await db.commit()
-            return {**refreshed, "settlement": settlement, "clv": clv}
+                    # Live fixtures that just finished kicked off today, or
+                    # yesterday for matches running past midnight CAT.
+                    settlement = await SettlementService(db).settle_finished_matches(
+                        source="live_status", since=cat_today() - timedelta(days=1)
+                    )
+                    await db.commit()
+                return {**refreshed, "settlement": settlement, "clv": clv}
 
     try:
         return _run_async(_run())
@@ -341,41 +346,45 @@ def settle_results(
 ):
     from app.database import AsyncSessionLocal
     from app.models import RunStatus
+    from app.services import cache
     from app.services.settlement import SettlementService
 
     stages = ["result_ingestion_and_settlement"]
 
     async def _run():
-        async with AsyncSessionLocal() as db:
-            # Refresh the recent fixture window before settlement. API-Football
-            # is the source of truth for scores; local rows can still be
-            # SCHEDULED after a match has finished.
-            from app.config import cat_today
-            from app.services.fixture_ingestor import FixtureIngestor
+        # See refresh_live_status: both tasks write `matches` rows and can
+        # deadlock if they overlap, so they share this lock.
+        async with cache.lock("matches-write", timeout=90, blocking_timeout=180):
+            async with AsyncSessionLocal() as db:
+                # Refresh the recent fixture window before settlement. API-Football
+                # is the source of truth for scores; local rows can still be
+                # SCHEDULED after a match has finished.
+                from app.config import cat_today
+                from app.services.fixture_ingestor import FixtureIngestor
 
-            today = cat_today()
-            lookback_days = (
-                settings.settlement_startup_lookback_days
-                if trigger_source == "startup"
-                else settings.settlement_lookback_days
-            )
-            period_start = today - timedelta(days=lookback_days)
-            refreshed = await FixtureIngestor(db).refresh_tracked_results(
-                period_start, today
-            )
-            result = await SettlementService(db).settle_finished_matches(
-                source=f"automatic_{trigger_source}", since=period_start
-            )
-            await db.commit()
-            report = {
-                **result,
-                "fixtures_refreshed": refreshed,
-                "period_start": period_start.isoformat(),
-                "period_end": today.isoformat(),
-                "trigger_source": trigger_source,
-            }
-            logger.info("Automatic result sync and settlement complete: %s", report)
-            return report
+                today = cat_today()
+                lookback_days = (
+                    settings.settlement_startup_lookback_days
+                    if trigger_source == "startup"
+                    else settings.settlement_lookback_days
+                )
+                period_start = today - timedelta(days=lookback_days)
+                refreshed = await FixtureIngestor(db).refresh_tracked_results(
+                    period_start, today
+                )
+                result = await SettlementService(db).settle_finished_matches(
+                    source=f"automatic_{trigger_source}", since=period_start
+                )
+                await db.commit()
+                report = {
+                    **result,
+                    "fixtures_refreshed": refreshed,
+                    "period_start": period_start.isoformat(),
+                    "period_end": today.isoformat(),
+                    "trigger_source": trigger_source,
+                }
+                logger.info("Automatic result sync and settlement complete: %s", report)
+                return report
 
     try:
         _run_async(_track(pipeline_run_id, stages, RunStatus.RUNNING, retry_count=self.request.retries))
@@ -391,51 +400,55 @@ def settle_results(
 def sync_historical_results(self, period_start: str, period_end: str):
     """Ingest finished fixtures for a selected range and settle paper tickets."""
     from app.database import AsyncSessionLocal
+    from app.services import cache
     from app.services.fixture_ingestor import FixtureIngestor
     from app.services.settlement import SettlementService
 
     async def _run():
-        async with AsyncSessionLocal() as db:
-            start = date.fromisoformat(period_start)
-            end = date.fromisoformat(period_end)
-            from app.models import RunStatus
-            from app.services.pipeline_tracker import create_pipeline_run, update_stages
+        # See refresh_live_status: shares the matches-write lock with the
+        # other tasks that update `matches`/settle tickets, to avoid deadlocks.
+        async with cache.lock("matches-write", timeout=180, blocking_timeout=240):
+            async with AsyncSessionLocal() as db:
+                start = date.fromisoformat(period_start)
+                end = date.fromisoformat(period_end)
+                from app.models import RunStatus
+                from app.services.pipeline_tracker import create_pipeline_run, update_stages
 
-            historical_stages = (
-                "fixture_and_odds_ingestion",
-                "result_ingestion_and_settlement",
-                "performance_aggregation_and_calibration",
-            )
-            run = await create_pipeline_run(
-                db,
-                end,
-                run_details={
-                    "run_type": "historical_sync",
-                    "trigger_source": "manual",
-                    "period_start": period_start,
-                    "period_end": period_end,
-                },
-                stage_names=historical_stages,
-            )
-            await update_stages(db, run.id, ["fixture_and_odds_ingestion"], RunStatus.RUNNING,
-                                 details={"period_start": period_start, "period_end": period_end})
-            ingested = await FixtureIngestor(db).ingest(start, end, skip_enrichment=True)
-            await update_stages(db, run.id, ["fixture_and_odds_ingestion"], RunStatus.COMPLETED,
-                                 details=ingested, output_count=ingested.get("ingested", 0) + ingested.get("updated", 0))
-            await update_stages(db, run.id, ["result_ingestion_and_settlement"], RunStatus.RUNNING)
-            settled = await SettlementService(db).settle_finished_matches(source="historical_sync")
-            await update_stages(db, run.id, ["result_ingestion_and_settlement"], RunStatus.COMPLETED,
-                                 details=settled, output_count=settled["tickets_settled"])
-            # Historical sync ingests and settles but never recalibrates, so
-            # this stage is reported PARTIAL rather than claiming a completed
-            # calibration that did not run.
-            await update_stages(db, run.id, ["performance_aggregation_and_calibration"], RunStatus.PARTIAL,
-                                 details={
-                                     "historical_sync": True,
-                                     "calibration_skipped": "historical sync does not recalibrate models",
-                                 })
-            await db.commit()
-            return {"pipeline_run_id": run.id, "ingested": ingested, "settled": settled}
+                historical_stages = (
+                    "fixture_and_odds_ingestion",
+                    "result_ingestion_and_settlement",
+                    "performance_aggregation_and_calibration",
+                )
+                run = await create_pipeline_run(
+                    db,
+                    end,
+                    run_details={
+                        "run_type": "historical_sync",
+                        "trigger_source": "manual",
+                        "period_start": period_start,
+                        "period_end": period_end,
+                    },
+                    stage_names=historical_stages,
+                )
+                await update_stages(db, run.id, ["fixture_and_odds_ingestion"], RunStatus.RUNNING,
+                                     details={"period_start": period_start, "period_end": period_end})
+                ingested = await FixtureIngestor(db).ingest(start, end, skip_enrichment=True)
+                await update_stages(db, run.id, ["fixture_and_odds_ingestion"], RunStatus.COMPLETED,
+                                     details=ingested, output_count=ingested.get("ingested", 0) + ingested.get("updated", 0))
+                await update_stages(db, run.id, ["result_ingestion_and_settlement"], RunStatus.RUNNING)
+                settled = await SettlementService(db).settle_finished_matches(source="historical_sync")
+                await update_stages(db, run.id, ["result_ingestion_and_settlement"], RunStatus.COMPLETED,
+                                     details=settled, output_count=settled["tickets_settled"])
+                # Historical sync ingests and settles but never recalibrates, so
+                # this stage is reported PARTIAL rather than claiming a completed
+                # calibration that did not run.
+                await update_stages(db, run.id, ["performance_aggregation_and_calibration"], RunStatus.PARTIAL,
+                                     details={
+                                         "historical_sync": True,
+                                         "calibration_skipped": "historical sync does not recalibrate models",
+                                     })
+                await db.commit()
+                return {"pipeline_run_id": run.id, "ingested": ingested, "settled": settled}
 
     try:
         return _run_async(_run())

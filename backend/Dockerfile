@@ -21,9 +21,21 @@ ENV PYTHONIOENCODING=utf-8 \
     PYTHONUNBUFFERED=1 \
     LANG=C.UTF-8
 
+# postgresql-client-18 matches production's Postgres 18 server exactly (pg_dump
+# is not guaranteed to work correctly against a server newer than itself, and
+# Debian trixie's own repos only ship client 17 — so add PGDG's apt repo for 18).
 RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
     libpq-dev \
+    wget \
+    gnupg \
+    ca-certificates \
+    && wget -q -O /etc/apt/trusted.gpg.d/apt.postgresql.org.asc https://www.postgresql.org/media/keys/ACCC4CF8.asc \
+    && . /etc/os-release \
+    && echo "deb [signed-by=/etc/apt/trusted.gpg.d/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt ${VERSION_CODENAME}-pgdg main" > /etc/apt/sources.list.d/pgdg.list \
+    && apt-get update && apt-get install -y --no-install-recommends postgresql-client-18 \
+    && apt-get purge -y wget gnupg \
+    && apt-get autoremove -y \
     && rm -rf /var/lib/apt/lists/*
 
 COPY backend/requirements.txt .

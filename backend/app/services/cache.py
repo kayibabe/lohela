@@ -17,7 +17,8 @@ import hashlib
 import json
 import logging
 import asyncio
-from typing import Any
+from contextlib import asynccontextmanager
+from typing import Any, AsyncIterator
 
 import redis.asyncio as aioredis
 
@@ -108,6 +109,22 @@ async def flush_all() -> int:
     except Exception as exc:
         logger.warning("Cache flush error: %s", exc)
     return 0
+
+
+@asynccontextmanager
+async def lock(name: str, timeout: int = 60, blocking_timeout: int = 90) -> AsyncIterator[None]:
+    """Distributed mutual-exclusion lock so overlapping Celery tasks can't
+    both write the same `matches` rows in different orders, which is what
+    produced recurring Postgres deadlocks between refresh_live_status and
+    settle_results. `timeout` bounds how long a holder can keep it (in case
+    a worker dies mid-task); `blocking_timeout` bounds how long a waiter
+    retries before giving up, which then surfaces as a normal Celery retry.
+    """
+    client = await _get_client()
+    async with client.lock(
+        f"lohela:lock:{name}", timeout=timeout, blocking_timeout=blocking_timeout
+    ):
+        yield
 
 
 async def stats() -> dict:
