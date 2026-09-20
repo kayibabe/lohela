@@ -1,9 +1,11 @@
 # Backup / restore runbook
 
 Status: tooling built and rehearsed locally on 2026-09-20 with a full
-backup→restore→row-count-verification round trip. **Not yet rehearsed
-against the production Railway database** — see "Running against
-production" below for why and what's needed.
+backup→restore→row-count-verification round trip, **then rehearsed against
+production itself on 2026-09-20** (after the deadlock/backup-tooling
+deploy) — a real backup was taken, pulled off-box, and restored into a
+disposable container with row counts matching production exactly. See the
+evidence log for details. No dump files were retained afterward.
 
 ## Important: dev/prod Postgres version drift
 
@@ -94,9 +96,8 @@ locally). Two ways to actually run this against prod:
    `postgresql-client-18` toolchain. **Never paste that URL into chat, a
    commit, or a log** — it contains the database password.
 
-This has not been run yet — it needs the Dockerfile change deployed (a
-production deploy, done with your sign-off) or the dashboard check for
-public networking, neither of which happened in this session.
+This has now been run once (2026-09-20), via option 1, after the Dockerfile
+change was deployed. See the evidence log.
 
 ## Migration safety procedure (ties to the "pending migrations" requirement)
 
@@ -123,4 +124,8 @@ is the plan for the *next* one, not a fix for an outstanding backlog.
 | 2026-09-20 | `backup_db.py` against local dev DB (v15 client) | Verified — 1,273,253 bytes, 32 tables with data, validated via `pg_restore --list` |
 | 2026-09-20 | `restore_db.py` into disposable throwaway container (v15 client) | Verified — restore completed clean, row counts matched source exactly (predictions 2496/2496, matches 8280/8280) |
 | 2026-09-20 | Same rehearsal with mismatched v17 client against v15 target | Failed as expected (`unrecognized configuration parameter "transaction_timeout"`) — confirms why the Dockerfile pins the exact server-matching client version |
-| — | Production backup/restore rehearsal | **Not yet done** — needs the Dockerfile change deployed, or the public connection string from the Railway dashboard (not fetched in this session, to avoid materializing credentials in chat) |
+| 2026-09-20 | Deployed deadlock fix + `postgresql-client-18` to production (`web` 14:08:46, `worker` 14:11:02 SAST) | Verified — `pg_dump --version` on the worker container reports 18.6, matching the server exactly |
+| 2026-09-20 | `backup_db.py` against **production** via `railway ssh --service worker` | Verified — 3,031,922 bytes, 32 tables with data, validated via `pg_restore --list` inside the container |
+| 2026-09-20 | Pulled the production dump off-box (base64 over `railway ssh`) and byte-verified locally | Verified — 3,031,922 bytes both ends, identical |
+| 2026-09-20 | Restored the production dump into a disposable `postgres:18-alpine` container (matching client/server versions) and compared row counts to the live figures confirmed earlier this session | Verified exactly — predictions 11,444, matches 1,521, odds 43,931, users 3 |
+| 2026-09-20 | Cleanup after the production rehearsal | Done — disposable container removed, local decoded dump + base64 transfer file deleted, remote copy removed from the worker container's `/tmp/backups`. No production data retained anywhere outside Postgres itself. |
