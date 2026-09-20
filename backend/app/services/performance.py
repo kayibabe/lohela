@@ -485,6 +485,237 @@ async def clv_summary(db: AsyncSession, date_from: date | None = None, date_to: 
     }
 
 
+def _probability_band(probability: float) -> str:
+    """Bucket a 0-1 probability into a 5-point band from 50% up (e.g. '55-60')."""
+    pct_value = probability * 100
+    if pct_value < 50:
+        return "<50"
+    lower = min(95, int(pct_value // 5) * 5)
+    return f"{lower}-{lower + 5}"
+
+
+def _edge_band(edge: float) -> str:
+    """Bucket a model-vs-market edge (model_prob - implied_prob) into pp ranges."""
+    pct_edge = edge * 100
+    if pct_edge < -10:
+        return "< -10pp"
+    if pct_edge < -5:
+        return "-10 to -5pp"
+    if pct_edge < 0:
+        return "-5 to 0pp"
+    if pct_edge < 5:
+        return "0 to 5pp"
+    if pct_edge < 10:
+        return "5 to 10pp"
+    if pct_edge < 15:
+        return "10 to 15pp"
+    return ">= 15pp"
+
+
+_PROBABILITY_BAND_ORDER = ["<50"] + [f"{lower}-{lower + 5}" for lower in range(50, 100, 5)]
+_EDGE_BAND_ORDER = ["< -10pp", "-10 to -5pp", "-5 to 0pp", "0 to 5pp", "5 to 10pp", "10 to 15pp", ">= 15pp"]
+
+
+def _market_family(market: str) -> str:
+    """Group granular market strings (e.g. 'over_1.5') into families for reporting."""
+    lowered = market.lower()
+    if lowered.startswith(("over_", "under_")):
+        return "totals"
+    if lowered.startswith("btts"):
+        return "btts"
+    if lowered.startswith("double_chance"):
+        return "double_chance"
+    if lowered.startswith("dnb"):
+        return "draw_no_bet"
+    if lowered in {"home_win", "draw", "away_win"}:
+        return "match_result"
+    return lowered
+
+
+async def probability_calibration_analysis(
+    db: AsyncSession,
+    date_from: date | None = None,
+    date_to: date | None = None,
+    model_version: str | None = None,
+) -> dict:
+    """Compare Lohela model probability vs. market-implied probability across the whole system.
+
+    Uses the same whole-system population as all_market_research_summary: every
+    latest prediction (accepted into a ticket or rejected) with a pre-kickoff
+    information timestamp, a pre-kickoff price, and a settled outcome. This
+    answers where each probability source is well-calibrated (bucketed by 5pp
+    bands) and which model/market combinations perform best together.
+    """
+    result = await db.execute(select(Prediction).join(Match).options(
+        selectinload(Prediction.match)
+    ).order_by(Prediction.created_at.desc()))
+    latest: dict[tuple[int, str, str], Prediction] = {}
+    for prediction in result.scalars().all():
+        if model_version and prediction.model_version != model_version:
+            continue
+        match_date = prediction.match.kickoff_at.date()
+        if date_from and match_date < date_from or date_to and match_date > date_to:
+            continue
+        key = (prediction.match_id, prediction.market, prediction.selection)
+        if key in latest:
+            continue
+        if not _has_pre_kickoff_information(prediction):
+            continue
+        if not _has_pre_kickoff_quote(prediction):
+            continue
+        if prediction.source_decimal_odds is None or prediction.source_decimal_odds <= 1:
+            continue
+        if prediction.source_implied_probability is None:
+            continue
+        latest[key] = prediction
+
+    rows: list[tuple[Prediction, SelectionResult]] = []
+    unsupported = 0
+    for prediction in latest.values():
+        match = prediction.match
+        if match.home_goals is None or match.away_goals is None:
+            continue
+        try:
+            outcome = evaluate_selection(prediction.selection, match.home_goals, match.away_goals)
+        except ValueError:
+            try:
+                outcome = evaluate_selection(prediction.market, match.home_goals, match.away_goals)
+            except ValueError:
+                unsupported += 1
+                continue
+        rows.append((prediction, outcome))
+
+    effective = [(p, o) for p, o in rows if o != SelectionResult.VOID]
+
+    def outcomes_aggregate(items: list[tuple[Prediction, SelectionResult]]) -> dict:
+        wins = sum(o == SelectionResult.WON for _, o in items)
+        losses = len(items) - wins
+        staked = len(items)
+        returned = sum(p.source_decimal_odds for p, o in items if o == SelectionResult.WON)
+        pnl = returned - staked
+        return {
+            "sample_size": len(items),
+            "wins": wins,
+            "losses": losses,
+            "hit_rate": round(wins / len(items), 4) if items else None,
+            "roi": round(pnl / staked, 4) if staked else None,
+        }
+
+    def bucket_breakdown(prob_of) -> list[dict]:
+        groups: dict[str, list[tuple[Prediction, SelectionResult]]] = {}
+        for p, o in effective:
+            groups.setdefault(_probability_band(prob_of(p)), []).append((p, o))
+        rows_out = []
+        for band in _PROBABILITY_BAND_ORDER:
+            items = groups.get(band)
+            if not items:
+                continue
+            avg_probability = sum(prob_of(p) for p, _ in items) / len(items)
+            agg = outcomes_aggregate(items)
+            rows_out.append({
+                "band": band,
+                **agg,
+                "avg_probability": round(avg_probability, 4),
+                "calibration_gap": round((agg["hit_rate"] or 0.0) - avg_probability, 4),
+            })
+        return rows_out
+
+    lohela_buckets = bucket_breakdown(lambda p: p.model_probability)
+    market_buckets = bucket_breakdown(lambda p: p.source_implied_probability)
+
+    combined_groups: dict[tuple[str, str], list[tuple[Prediction, SelectionResult]]] = {}
+    for p, o in effective:
+        key = (_probability_band(p.model_probability), _probability_band(p.source_implied_probability))
+        combined_groups.setdefault(key, []).append((p, o))
+    combined_matrix = []
+    for (lohela_band, market_band), items in combined_groups.items():
+        avg_lohela = sum(p.model_probability for p, _ in items) / len(items)
+        avg_market = sum(p.source_implied_probability for p, _ in items) / len(items)
+        combined_matrix.append({
+            "lohela_band": lohela_band,
+            "market_band": market_band,
+            **outcomes_aggregate(items),
+            "avg_lohela_probability": round(avg_lohela, 4),
+            "avg_market_probability": round(avg_market, 4),
+        })
+    combined_matrix.sort(key=lambda row: (
+        _PROBABILITY_BAND_ORDER.index(row["lohela_band"]),
+        _PROBABILITY_BAND_ORDER.index(row["market_band"]),
+    ))
+    best_combinations = sorted(
+        (row for row in combined_matrix if row["sample_size"] >= 8 and row["roi"] is not None),
+        key=lambda row: row["roi"],
+        reverse=True,
+    )[:15]
+
+    edge_groups: dict[str, list[tuple[Prediction, SelectionResult]]] = {}
+    for p, o in effective:
+        edge_value = p.edge if p.edge is not None else p.model_probability - p.source_implied_probability
+        edge_groups.setdefault(_edge_band(edge_value), []).append((p, o))
+    edge_buckets = []
+    for band in _EDGE_BAND_ORDER:
+        items = edge_groups.get(band)
+        if not items:
+            continue
+        edge_buckets.append({"edge_band": band, **outcomes_aggregate(items)})
+
+    def brier(outcomes: list[tuple[float, float]]) -> float | None:
+        return round(sum((p - y) ** 2 for p, y in outcomes) / len(outcomes), 4) if outcomes else None
+
+    def calibration_summary(items: list[tuple[Prediction, SelectionResult]]) -> dict:
+        lohela_o = [(p.model_probability, 1.0 if o == SelectionResult.WON else 0.0) for p, o in items]
+        market_o = [(p.source_implied_probability, 1.0 if o == SelectionResult.WON else 0.0) for p, o in items]
+        return {
+            **outcomes_aggregate(items),
+            "lohela_brier_score": brier(lohela_o),
+            "market_brier_score": brier(market_o),
+            "lohela_calibration_error": round(_calibration_error(lohela_o) or 0.0, 4) if lohela_o else None,
+            "market_calibration_error": round(_calibration_error(market_o) or 0.0, 4) if market_o else None,
+        }
+
+    def edge_bucket_breakdown(items: list[tuple[Prediction, SelectionResult]]) -> list[dict]:
+        groups: dict[str, list[tuple[Prediction, SelectionResult]]] = {}
+        for p, o in items:
+            edge_value = p.edge if p.edge is not None else p.model_probability - p.source_implied_probability
+            groups.setdefault(_edge_band(edge_value), []).append((p, o))
+        return [{"edge_band": band, **outcomes_aggregate(groups[band])} for band in _EDGE_BAND_ORDER if band in groups]
+
+    by_market_family: dict[str, list[tuple[Prediction, SelectionResult]]] = {}
+    for p, o in effective:
+        by_market_family.setdefault(_market_family(p.market), []).append((p, o))
+    market_breakdown = [
+        {
+            "market_family": family,
+            **calibration_summary(items),
+            "edge_buckets": edge_bucket_breakdown(items),
+        }
+        for family, items in sorted(by_market_family.items(), key=lambda kv: len(kv[1]), reverse=True)
+    ]
+
+    lohela_outcomes = [(p.model_probability, 1.0 if o == SelectionResult.WON else 0.0) for p, o in effective]
+    market_outcomes = [(p.source_implied_probability, 1.0 if o == SelectionResult.WON else 0.0) for p, o in effective]
+
+    return {
+        "model_version": model_version or "all",
+        "summary": {
+            "sample_size": len(effective),
+            "voids_excluded": len(rows) - len(effective),
+            "unsupported_markets_excluded": unsupported,
+            "lohela_brier_score": brier(lohela_outcomes),
+            "market_brier_score": brier(market_outcomes),
+            "lohela_calibration_error": round(_calibration_error(lohela_outcomes) or 0.0, 4) if lohela_outcomes else None,
+            "market_calibration_error": round(_calibration_error(market_outcomes) or 0.0, 4) if market_outcomes else None,
+        },
+        "lohela_buckets": lohela_buckets,
+        "market_buckets": market_buckets,
+        "combined_matrix": combined_matrix,
+        "best_combinations": best_combinations,
+        "edge_buckets": edge_buckets,
+        "by_market": market_breakdown,
+        "note": "Whole-system evidence: every latest prediction (accepted or rejected) with a pre-kickoff price and settled outcome. Bands with sample_size < 10 are directional, not conclusive.",
+    }
+
+
 def _wilson_interval(wins: int, total: int) -> tuple[float, float]:
     if total == 0:
         return 0.0, 0.0

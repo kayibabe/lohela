@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { Fragment, useEffect, useState } from 'react'
 import { fmt, fmtPnl } from '../utils/currency'
 import { formatMarket, formatSelection, formatTicketType } from '../lib/api'
 import GradeBadge from '../components/GradeBadge'
@@ -46,7 +46,23 @@ interface BacktestMetrics {
 }
 interface BacktestResult { backtest_run_id: number; status: string; leakage_checks_passed: boolean; error_details: string | null; metrics: BacktestMetrics }
 interface PipelineRun { id: number; target_date: string; status: string; current_stage: string | null; completed_at: string | null; started_at: string | null }
-type View = 'research' | 'individual' | 'auto' | 'backtest' | 'journal'
+type View = 'research' | 'individual' | 'auto' | 'calibration' | 'backtest' | 'journal'
+
+interface ProbabilityBucketRow { band: string; sample_size: number; wins: number; losses: number; hit_rate: number | null; roi: number | null; avg_probability: number; calibration_gap: number }
+interface CombinedMatrixRow { lohela_band: string; market_band: string; sample_size: number; wins: number; losses: number; hit_rate: number | null; roi: number | null; avg_lohela_probability: number; avg_market_probability: number }
+interface EdgeBucketRow { edge_band: string; sample_size: number; wins: number; losses: number; hit_rate: number | null; roi: number | null }
+interface MarketBreakdownRow { market_family: string; sample_size: number; wins: number; losses: number; hit_rate: number | null; roi: number | null; lohela_brier_score: number | null; market_brier_score: number | null; lohela_calibration_error: number | null; market_calibration_error: number | null; edge_buckets: EdgeBucketRow[] }
+interface ProbabilityCalibrationData {
+  model_version: string
+  summary: { sample_size: number; voids_excluded: number; unsupported_markets_excluded: number; lohela_brier_score: number | null; market_brier_score: number | null; lohela_calibration_error: number | null; market_calibration_error: number | null }
+  lohela_buckets: ProbabilityBucketRow[]
+  market_buckets: ProbabilityBucketRow[]
+  combined_matrix: CombinedMatrixRow[]
+  best_combinations: CombinedMatrixRow[]
+  edge_buckets: EdgeBucketRow[]
+  by_market: MarketBreakdownRow[]
+  note: string
+}
 
 const pct = (value: number | null | undefined, digits = 1) => value == null ? '—' : `${(value * 100).toFixed(digits)}%`
 const score = (value: number | null | undefined) => value == null ? '—' : value.toFixed(3)
@@ -86,7 +102,7 @@ export default function AnalyticsPage() {
         <span className="ledger-chip"><span /> Immutable research ledger</span>
       </div>
       <div className="analytics-tabs" role="tablist" aria-label="Analytics views">
-        {([['research', 'Published performance'], ['individual', 'Pick ledger'], ['auto', 'All-market research'], ['backtest', 'Backtest lab'], ['journal', 'Personal journal']] as [View, string][]).map(([id, label]) => <button key={id} role="tab" aria-selected={view === id} className={view === id ? 'active' : ''} onClick={() => setView(id)}>{label}</button>)}
+        {([['research', 'Published performance'], ['individual', 'Pick ledger'], ['auto', 'All-market research'], ['calibration', 'Probability calibration'], ['backtest', 'Backtest lab'], ['journal', 'Personal journal']] as [View, string][]).map(([id, label]) => <button key={id} role="tab" aria-selected={view === id} className={view === id ? 'active' : ''} onClick={() => setView(id)}>{label}</button>)}
       </div>
       <DataFreshness run={latestRun} />
       {view === 'research' && <div className="analytics-filters shared-analytics-filters" aria-label="Analytics scope filters"><span className="filter-scope-label">Scope</span><label>From<input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} /></label><label>To<input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} /></label><label>Model<input placeholder="All models" value={modelVersion} onChange={e => setModelVersion(e.target.value)} /></label>{(dateFrom || dateTo || modelVersion) && <button className="btn-ghost btn-sm" onClick={() => { setDateFrom(''); setDateTo(''); setModelVersion('') }}>Reset scope</button>}<span className="filter-summary">Applies to immutable published-ticket performance.</span></div>}
@@ -95,6 +111,7 @@ export default function AnalyticsPage() {
       {!loading && view === 'research' && <ResearchPerformance data={research} />}
       {!loading && view === 'individual' && <PickLedger />}
       {!loading && view === 'auto' && <AutoMarketResearch data={autoResearch} setData={setAutoResearch} />}
+      {!loading && view === 'calibration' && <ProbabilityCalibration />}
       {!loading && view === 'backtest' && <BacktestPanel currentModelVersion={research?.current_model_version ?? ''} />}
       {!loading && view === 'journal' && <ManualJournal summary={summary} byType={byType} byMonth={byMonth} />}
     </div>
@@ -133,6 +150,129 @@ function ClvPanel() {
 function ClvTable({ title, rows, labelKey }: { title: string; rows: ClvBreakdown[]; labelKey: 'q_grade' | 'market' | 'month' }) {
   if (rows.length === 0) return null
   return <div className="analytics-table-wrap"><table className="analytics-table"><thead><tr><th>{title}</th><th>Legs</th><th>Avg CLV</th><th>Beat close</th></tr></thead><tbody>{rows.map(row => <tr key={String(row[labelKey])}><td><strong>{labelKey === 'market' ? formatMarket(String(row[labelKey])) : row[labelKey]}</strong></td><td>{row.legs}</td><td className={row.avg_clv_pct != null && row.avg_clv_pct >= 0 ? 'positive' : 'negative'}>{row.avg_clv_pct == null ? '—' : pct(row.avg_clv_pct)}</td><td>{pct(row.beat_close_rate)}</td></tr>)}</tbody></table></div>
+}
+
+function ProbabilityCalibration() {
+  const [data, setData] = useState<ProbabilityCalibrationData | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [failed, setFailed] = useState(false)
+  const [from, setFrom] = useState('')
+  const [to, setTo] = useState('')
+  const [modelVersion, setModelVersion] = useState('')
+  const [exporting, setExporting] = useState(false)
+  const [exportError, setExportError] = useState(false)
+
+  const exportToExcel = () => {
+    setExporting(true)
+    setExportError(false)
+    const params = new URLSearchParams()
+    if (from) params.set('date_from', from)
+    if (to) params.set('date_to', to)
+    if (modelVersion) params.set('model_version', modelVersion)
+    fetch(`/api/v1/performance/probability-calibration/export?${params}`)
+      .then(response => response.ok ? response.blob() : Promise.reject(new Error(`API ${response.status}`)))
+      .then(blob => {
+        const url = URL.createObjectURL(blob)
+        const link = document.createElement('a')
+        link.href = url
+        link.download = `probability-calibration-${new Date().toISOString().slice(0, 10)}.xlsx`
+        document.body.appendChild(link)
+        link.click()
+        link.remove()
+        URL.revokeObjectURL(url)
+      })
+      .catch(() => setExportError(true))
+      .finally(() => setExporting(false))
+  }
+
+  useEffect(() => {
+    let active = true
+    setLoading(true)
+    const params = new URLSearchParams()
+    if (from) params.set('date_from', from)
+    if (to) params.set('date_to', to)
+    if (modelVersion) params.set('model_version', modelVersion)
+    fetch(`/api/v1/performance/probability-calibration?${params}`)
+      .then(response => response.ok ? response.json() : Promise.reject(new Error(`API ${response.status}`)))
+      .then(value => { if (active) { setData(value); setFailed(false) } })
+      .catch(() => { if (active) setFailed(true) })
+      .finally(() => { if (active) setLoading(false) })
+    return () => { active = false }
+  }, [from, to, modelVersion])
+
+  if (loading && !data) return <AnalyticsSkeleton />
+  if (failed && !data) return <AnalyticsEmpty title="Probability calibration unavailable" body="The probability-calibration endpoint did not return data." />
+  if (!data) return <AnalyticsEmpty title="No calibration data" body="Calibration bands appear once predictions have pre-kickoff prices and settled outcomes." />
+
+  const s = data.summary
+  const betterModel = (s.lohela_brier_score ?? 1) <= (s.market_brier_score ?? 1) ? 'Lohela' : 'Market'
+
+  return <>
+    <div className="journal-note"><strong>Whole-system probability calibration</strong><span>Every latest prediction — accepted or rejected — with a pre-kickoff price and a settled outcome. Voids are excluded from hit rate and ROI.</span></div>
+    <div className="analytics-filters shared-analytics-filters" aria-label="Calibration scope filters">
+      <span className="filter-scope-label">Scope</span>
+      <label>From<input type="date" value={from} onChange={e => setFrom(e.target.value)} /></label>
+      <label>To<input type="date" value={to} onChange={e => setTo(e.target.value)} /></label>
+      <label>Model<input placeholder="All models" value={modelVersion} onChange={e => setModelVersion(e.target.value)} /></label>
+      {(from || to || modelVersion) && <button className="btn-ghost btn-sm" onClick={() => { setFrom(''); setTo(''); setModelVersion('') }}>Reset scope</button>}
+      <button className="btn-ghost btn-sm" onClick={exportToExcel} disabled={exporting}>{exporting ? 'Exporting…' : 'Export to Excel'}</button>
+    </div>
+    {exportError && <div className="sample-warning">Export failed. Check the API connection and try again.</div>}
+    <div className="research-kpis">
+      <MetricCard label="Sample size" value={s.sample_size.toString()} note={`${s.voids_excluded} void · ${s.unsupported_markets_excluded} unsupported excluded`} />
+      <MetricCard label="Lohela Brier score" value={score(s.lohela_brier_score)} note="Lower is better" />
+      <MetricCard label="Market Brier score" value={score(s.market_brier_score)} note="Lower is better" />
+      <MetricCard label="Better calibrated" value={betterModel} note={`Lohela ${score(s.lohela_calibration_error)} vs Market ${score(s.market_calibration_error)} calibration error`} tone={betterModel === 'Lohela' ? 'positive' : 'warning'} />
+    </div>
+    {s.sample_size < 30 && <div className="sample-warning">Small sample: only {s.sample_size} settled predictions in this scope. Treat bucket results as directional.</div>}
+    <div className="analytics-insight-grid">
+      <ProbabilityBucketTable title="Lohela model probability" subtitle="Bucketed by predicted win probability, 5pp bands" rows={data.lohela_buckets} />
+      <ProbabilityBucketTable title="Market implied probability" subtitle="Bucketed by 1/odds at pick time, 5pp bands" rows={data.market_buckets} />
+    </div>
+    <section className="analytics-card">
+      <div className="section-header"><div><span className="eyebrow">Where the two views agree or diverge</span><h2 className="section-title">Lohela × Market combined matrix</h2></div><span className="section-subtitle">Every observed band pairing, sorted by probability band</span></div>
+      <CombinedMatrixTable rows={data.combined_matrix} />
+    </section>
+    <section className="analytics-card">
+      <div className="section-header"><div><span className="eyebrow">Best-performing mixes</span><h2 className="section-title">Top combined bands by ROI</h2></div><span className="section-subtitle">Sample size ≥ 8, sorted by ROI</span></div>
+      {data.best_combinations.length === 0 ? <AnalyticsEmpty title="No qualifying combinations yet" body="Combinations need at least 8 settled predictions to appear here." compact /> : <CombinedMatrixTable rows={data.best_combinations} />}
+    </section>
+    <section className="analytics-card">
+      <div className="section-header"><div><span className="eyebrow">Value-betting signal</span><h2 className="section-title">Performance by edge (Lohela minus market)</h2></div><span className="section-subtitle">Positive edge should correlate with positive ROI if the model has real edge</span></div>
+      <EdgeBucketTable rows={data.edge_buckets} />
+    </section>
+    <section className="analytics-card">
+      <div className="section-header"><div><span className="eyebrow">Is the pattern uniform or concentrated?</span><h2 className="section-title">By market type</h2></div><span className="section-subtitle">Same calibration and edge signal, split by market family</span></div>
+      <MarketBreakdownTable rows={data.by_market} />
+    </section>
+    <p className="matrix-note">{data.note}</p>
+  </>
+}
+
+function ProbabilityBucketTable({ title, subtitle, rows }: { title: string; subtitle: string; rows: ProbabilityBucketRow[] }) {
+  return <section className="analytics-card">
+    <div className="section-header"><h2 className="section-title">{title}</h2><span className="section-subtitle">{subtitle}</span></div>
+    {rows.length === 0 ? <AnalyticsEmpty title="No settled bands" body="No settled predictions fall into a probability band yet." compact /> : <div className="analytics-table-wrap"><table className="analytics-table"><thead><tr><th>Band</th><th>N</th><th>Won / lost</th><th>Hit rate</th><th>Avg probability</th><th>Calibration gap</th><th>ROI</th></tr></thead><tbody>{rows.map(row => <tr key={row.band}><td><strong>{row.band}%</strong></td><td>{row.sample_size}</td><td>{row.wins} / {row.losses}</td><td>{pct(row.hit_rate)}</td><td>{pct(row.avg_probability)}</td><td className={Math.abs(row.calibration_gap) <= 0.03 ? 'positive' : 'negative'}>{row.calibration_gap >= 0 ? '+' : ''}{(row.calibration_gap * 100).toFixed(1)}pp</td><td className={row.roi != null && row.roi >= 0 ? 'positive' : 'negative'}>{row.roi == null ? '—' : pct(row.roi)}</td></tr>)}</tbody></table></div>}
+  </section>
+}
+
+function CombinedMatrixTable({ rows }: { rows: CombinedMatrixRow[] }) {
+  if (rows.length === 0) return <AnalyticsEmpty title="No combined bands yet" body="Combinations appear once both probability sources have settled outcomes." compact />
+  return <div className="analytics-table-wrap"><table className="analytics-table"><thead><tr><th>Lohela band</th><th>Market band</th><th>N</th><th>Won / lost</th><th>Hit rate</th><th>ROI</th></tr></thead><tbody>{rows.map((row, index) => <tr key={`${row.lohela_band}-${row.market_band}-${index}`}><td><strong>{row.lohela_band}%</strong></td><td>{row.market_band}%</td><td>{row.sample_size}</td><td>{row.wins} / {row.losses}</td><td>{pct(row.hit_rate)}</td><td className={row.roi != null && row.roi >= 0 ? 'positive' : 'negative'}>{row.roi == null ? '—' : pct(row.roi)}</td></tr>)}</tbody></table></div>
+}
+
+function MarketBreakdownTable({ rows }: { rows: MarketBreakdownRow[] }) {
+  const [expanded, setExpanded] = useState<string | null>(null)
+  if (rows.length === 0) return <AnalyticsEmpty title="No market breakdown yet" body="Market families appear once predictions have settled outcomes." compact />
+  return <div className="analytics-table-wrap"><table className="analytics-table"><thead><tr><th>Market family</th><th>N</th><th>Won / lost</th><th>Hit rate</th><th>ROI</th><th>Lohela Brier</th><th>Market Brier</th><th>Lohela calib. error</th><th>Market calib. error</th><th></th></tr></thead><tbody>{rows.map(row => <Fragment key={row.market_family}>
+    <tr><td><strong>{formatMarket(row.market_family)}</strong></td><td>{row.sample_size}</td><td>{row.wins} / {row.losses}</td><td>{pct(row.hit_rate)}</td><td className={row.roi != null && row.roi >= 0 ? 'positive' : 'negative'}>{row.roi == null ? '—' : pct(row.roi)}</td><td>{score(row.lohela_brier_score)}</td><td>{score(row.market_brier_score)}</td><td>{score(row.lohela_calibration_error)}</td><td>{score(row.market_calibration_error)}</td><td><button type="button" className="btn-ghost btn-sm" onClick={() => setExpanded(current => current === row.market_family ? null : row.market_family)}>{expanded === row.market_family ? 'Hide edge' : 'Edge bands'}</button></td></tr>
+    {expanded === row.market_family && <tr><td colSpan={10}><EdgeBucketTable rows={row.edge_buckets} /></td></tr>}
+  </Fragment>)}</tbody></table></div>
+}
+
+function EdgeBucketTable({ rows }: { rows: EdgeBucketRow[] }) {
+  if (rows.length === 0) return <AnalyticsEmpty title="No edge data yet" body="Edge bands appear once predictions have both a model and market probability." compact />
+  return <div className="analytics-table-wrap"><table className="analytics-table"><thead><tr><th>Edge band</th><th>N</th><th>Won / lost</th><th>Hit rate</th><th>ROI</th></tr></thead><tbody>{rows.map(row => <tr key={row.edge_band}><td><strong>{row.edge_band}</strong></td><td>{row.sample_size}</td><td>{row.wins} / {row.losses}</td><td>{pct(row.hit_rate)}</td><td className={row.roi != null && row.roi >= 0 ? 'positive' : 'negative'}>{row.roi == null ? '—' : pct(row.roi)}</td></tr>)}</tbody></table></div>
 }
 
 function DataFreshness({ run }: { run: PipelineRun | null }) {

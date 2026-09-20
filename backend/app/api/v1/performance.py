@@ -1,13 +1,15 @@
 """System-generated paper-ticket performance API."""
 
-from datetime import date
+from datetime import date, datetime, timezone
 from fastapi import APIRouter, Depends, Query
+from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.api.security import require_pro_access
 from app.config import CURRENT_MODEL_VERSION
-from app.services.performance import performance_summary, individual_selection_summary, market_reliability_matrix, all_market_research_summary, clv_summary, totals_calibration_review
+from app.services.performance import performance_summary, individual_selection_summary, market_reliability_matrix, all_market_research_summary, clv_summary, totals_calibration_review, probability_calibration_analysis
+from app.services.performance_export import probability_calibration_workbook
 from app.services.recommendation_ledger import recommendation_pick_ledger
 
 router = APIRouter(
@@ -33,6 +35,26 @@ async def market_reliability(date_from: date | None = None, date_to: date | None
 @router.get("/totals-calibration")
 async def totals_calibration(date_from: date | None = None, date_to: date | None = None, model_version: str | None = None, db: AsyncSession = Depends(get_db)):
     return await totals_calibration_review(db, date_from, date_to, model_version)
+
+
+@router.get("/probability-calibration")
+async def probability_calibration(date_from: date | None = None, date_to: date | None = None, model_version: str | None = None, db: AsyncSession = Depends(get_db)):
+    """Bucket Lohela model probability vs. market-implied probability by 5pp band, whole-system."""
+    return await probability_calibration_analysis(db, date_from, date_to, model_version)
+
+
+@router.get("/probability-calibration/export")
+async def probability_calibration_export(date_from: date | None = None, date_to: date | None = None, model_version: str | None = None, db: AsyncSession = Depends(get_db)):
+    """Download the probability-calibration analytics view as an .xlsx workbook."""
+    data = await probability_calibration_analysis(db, date_from, date_to, model_version)
+    workbook = probability_calibration_workbook(data)
+    stamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
+    filename = f"probability-calibration-{stamp}.xlsx"
+    return StreamingResponse(
+        workbook,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 @router.get("/all-markets")
