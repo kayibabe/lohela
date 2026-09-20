@@ -59,9 +59,15 @@ what was asked.
   it's backing up). Chosen deliberately for now: simplicity, no new vendor.
   Moving to S3-compatible storage (Cloudflare R2 / Backblaze B2 / AWS S3) is
   a follow-up if true off-provider redundancy becomes a requirement.
-- **Railway's built-in Postgres backups** (if enabled on the plan) have not
-  been checked in the dashboard. Worth checking — this repo previously had
-  *zero* backup mechanism, in-house or managed, before this session.
+- **Railway's built-in Postgres backups — checked, not available.** Confirmed
+  in the dashboard (Postgres service → Backups tab) on 2026-09-20:
+  "Backups and point-in-time recovery (PITR) are only available for
+  customers on the Pro plan," and the Postgres volume shows "No Backups."
+  The account is not currently on a plan that includes this. Before this
+  session there was genuinely zero backup mechanism, in-house or managed —
+  `pipeline.backup_database` (above) is the only backup coverage that
+  exists today. Upgrading to Pro for native PITR is a cost decision, not
+  made here.
 - **Dev/prod Postgres version parity** (15 vs 18) — not addressed here.
 - **No alerting beyond the existing `automation_alerts` table** — a failed
   scheduled backup surfaces the same way any other failed pipeline task
