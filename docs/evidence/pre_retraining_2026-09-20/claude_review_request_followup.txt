@@ -1,0 +1,109 @@
+Follow-up on a user-authorized Codex/Claude reconciliation. You are a fresh tools-disabled reviewer with the previous Claude answer supplied below, not the original user-pasted session. We seek evidence-based consensus, not forced agreement. Reply within 300 words.
+
+Your previous answer accepted A-G but concluded '(3) Selection-on-P mechanically contributes [to miscalibration]'. Codex objects that this remains unproven and contradicts acceptance of the calibrated-threshold counterexample. Selection demonstrably changes cohort composition/preference for high model-derived scores, but neither sorting code nor unmatched cohort gaps establishes a nonzero causal contribution to miscalibration. Will you replace that clause with 'selection concentrates observed forecast errors in this sample; a causal amplification mechanism and magnitude remain unproven'?
+
+You requested actual gate code for C; exact CURRENT LOCAL excerpts follow. We agree that historical/deployed gate activation is still unverified, so this code proves gates exist locally, not that they operated for these records. For D, 'timing barely explains the gap' refers only to the exact 61-record descriptive comparison: p mean changes by +0.10535pp, same outcomes. It is not a general causal or population claim and needs no claim about a CI beyond this frozen sample. This matches the same fixture/market/model version, not different sets.
+
+Proposed shared conclusion: The archive shows substantial published-cohort overconfidence and underlying market/high-probability miscalibration. Current local selection favors probability-derived scores and includes calibration/quality gates. Published probabilities match linked predictions; later forecasts for the same picks retain the ~29pp gap. Selection causation and the best remedy remain unresolved. Do not immediately remove Q weights, switch to EV-only, fit calibration on these same outcomes, or retrain for deployment. Reconstruct historical pools/settings, freeze fair offline ablations and validate a frozen policy on later untouched fixtures. Metadata availability is not input validity; the two outcome-based analyses are not independent and singles/ticket P&L must stay separate.
+
+State agreement or the specific remaining objection. Do not claim direct inspection outside supplied excerpts. Previous answer:
+**A — Accept.** The math is correct: threshold-on-P selection preserves E[Y−P|S]=0 only under exact conditional calibration on P; original claim that sorting-code alone "confirms" winner's curse as *the* mechanism overstates what code facts establish. Causal magnitude is unproven.
+
+**B — Accept, retract original "near-perfect calibration."** Pooled signed gap of −0.6pp masking +13pp/+9pp/+12pp opposite-signed market gaps is a textbook cancellation artifact. ECE 6pp and 70–90% bin overconfidence contradict "almost perfectly calibrated." I retract that characterization.
+
+**C — Accept as an open verification gap, not a refutation.** If local selector has undisclosed gates (sample-size, freshness, EV-based final ranking) beyond raw Q-sort, the original report's selector model may be stale or partial. This needs code-diff confirmation before the report's selection story is trusted as literally what's deployed. Flag as unresolved, not resolved in Codex's favor by assertion alone — Codex also hasn't shown the current gate code, just described it.
+
+**D — Accept, and this is the most important new evidence.** If frozen-snapshot vs. latest-forecast comparison genuinely shows gap 0.2908→0.2918 with 0 discrepancies, that's strong evidence the ~29pp gap is not primarily a publication-timing artifact — it's baked into the underlying forecast at prediction time, concentrated among selected picks. This *narrows* the causal question to "why does the model produce miscalibrated P for this selected subgroup," not "did publication/logging corrupt it." Worth flagging: n=61 is small; CIs not given, so "barely explains" is plausible but not statistically quantified here.
+
+**E — Accept qualification.** "All components marked available" is metadata, not validity. The xG-proxy caveat is legitimate and was underweighted in the original report.
+
+**F — Accept.** EV/edge reusing p is a real objection; isotonic recalibration needs a genuine holdout-fit, not just a formula swap. Immediate Q-weight surgery is premature without an offline reconstructed ablation.
+
+**G — Accept.** The two diagnostics are not independent; ticket P&L and 61-pick home-win figures are different samples and shouldn't be conflated as corroborating angles.
+
+**What's actually established:** (1) published picks are meaningfully overconfident, gap not fully explained by cancellation, timing, or logging error (per D). (2) Market-level miscalibration is real and heterogeneous (per B), so "underlying forecasts are calibrated" is false. (3) Selection-on-P mechanically contributes but magnitude is unquantified without matched counterfactual ablation. (4) Whether Q-component weighting is the dominant lever vs. genuine subgroup (market/probability-band) miscalibration is unresolved.
+
+**Verdict:** No immediate Q-weight change is justified. Next action: freeze current selector code/gates, reconstruct historical candidate pools per date, run offline ablation (Q-with-p vs Q-without-p vs EV-only vs isotonic-shrunk) against actual outcomes before touching production ranking. Confirm deployed selector SHA against the one Codex described.
+SOURCE backend/app/services/accumulator_builder.py
+332:         from app.models import LeaguePerformance, ModelPerformance
+333:         league_result = await self.db.execute(
+334:             select(LeaguePerformance).where(LeaguePerformance.period_end < target_date)
+335:             .order_by(LeaguePerformance.period_end.desc())
+336:         )
+337:         leagues = {}
+338:         for row in league_result.scalars().all():
+339:             if row.competition_id not in leagues:
+340:                 leagues[row.competition_id] = row
+341:         versions = [model_version]
+342:         if fallback_model_version and fallback_model_version not in versions:
+343:             versions.append(fallback_model_version)
+344:         version_priority = case(
+345:             (ModelPerformance.model_version == model_version, 0), else_=1
+346:         )
+347:         market_result = await self.db.execute(
+348:             select(ModelPerformance).where(
+349:                 ModelPerformance.model_name == "ensemble",
+350:                 ModelPerformance.model_version.in_(versions),
+351:                 ModelPerformance.period_end < target_date,
+352:             ).order_by(
+353:                 version_priority,
+354:                 ModelPerformance.period_end.desc(),
+355:                 ModelPerformance.id.desc(),
+356:             )
+357:         )
+358:         markets = {}
+359:         for row in market_result.scalars().all():
+360:             if row.market not in markets:
+361:                 markets[row.market] = row
+362:         return {"leagues": leagues, "markets": markets}
+363: 
+364:     async def _load_all_legs(self, target_date: date, model_run_id: int) -> list[Leg]:
+365:         result = await self.db.execute(
+366:             select(Prediction, Match, Competition, Odds)
+SOURCE backend/app/services/accumulator_builder.py
+426: 
+427: def selection_rejection_reasons(leg: Leg, spec: TicketSpec, calibration: dict | None = None) -> list[str]:
+428:     reasons: list[str] = []
+429:     if leg.best_odds <= 0:
+430:         reasons.append("MISSING_ODDS")
+431:     elif not (_MIN_LEG_ODDS <= leg.best_odds <= _MAX_LEG_ODDS):
+432:         reasons.append("LEG_ODDS_OUT_OF_RANGE")
+433:     if leg.edge is None:
+434:         reasons.append("MISSING_EDGE")
+435:     elif leg.edge < settings.min_selection_edge:
+436:         reasons.append("EDGE_BELOW_NO_BET_THRESHOLD")
+437:     if leg.q_score < spec.min_q_score:
+438:         reasons.append("Q_SCORE_BELOW_TIER")
+439:     if len(leg.active_models) < _MIN_ACTIVE_MODELS:
+440:         reasons.append("INSUFFICIENT_MODEL_SET")
+441:     if leg.data_quality_score < settings.min_data_quality_score:
+442:         reasons.append("DATA_QUALITY_BELOW_THRESHOLD")
+443:     if leg.source_odds_at is None:
+444:         reasons.append("MISSING_ODDS_TIMESTAMP")
+445:     elif _odds_age_hours(leg.source_odds_at) > settings.max_selection_odds_age_hours:
+446:         reasons.append("STALE_ODDS")
+447:     if calibration:
+448:         league = calibration.get("leagues", {}).get(leg.competition_id)
+449:         if league and league.sample_size >= 20 and (league.reliability_score or 0.0) < 0.40:
+450:             reasons.append("LEAGUE_CALIBRATION_BELOW_THRESHOLD")
+451:         market = calibration.get("markets", {}).get(leg.market)
+452:         if market and market.sample_size >= 20 and (market.calibration_error or 0.0) > 0.25:
+453:             reasons.append("MARKET_CALIBRATION_UNRELIABLE")
+SOURCE backend/app/services/accumulator_builder.py
+610: 
+611: def _objective(ticket: Ticket) -> float:
+612:     if ticket.ticket_type == TicketType.SAFE:
+613:         return ticket.adjusted_probability + max(0.0, ticket.expected_value) * 0.05
+614:     return ticket.expected_value / (1.0 + ticket.risk_score / 100.0)
+615: 
+616: 
+617: def _partial_score(legs: tuple[Leg, ...]) -> float:
+618:     average_q = sum(leg.q_score for leg in legs) / len(legs)
+619:     positive_ev = sum(max(-0.2, leg.expected_value or -0.2) for leg in legs)
+620:     return average_q + positive_ev * 20.0 + len({_market_family(leg.market) for leg in legs})
+SOURCE backend/app/services/accumulator_builder.py
+632:     candidates = sorted(
+633:         pool,
+634:         key=lambda leg: (leg.q_score, leg.expected_value or -1.0, leg.model_probability),
+635:         reverse=True,
+636:     )[:_CANDIDATE_LIMIT]

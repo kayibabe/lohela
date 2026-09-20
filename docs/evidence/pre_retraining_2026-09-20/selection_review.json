@@ -1,0 +1,811 @@
+{
+  "source_sha256": "388db18a93acc3c46760318ac863c884b7112c7618862d5bf13b1785a978a5dd",
+  "published_first": {
+    "n": 61,
+    "fixtures": 39,
+    "days": 5,
+    "wins": 31,
+    "losses": 30,
+    "mean_p": 0.7989658936287583,
+    "hit_rate": 0.5081967213114754,
+    "gap": 0.29076917231728283,
+    "brier": 0.3163433438751644,
+    "log_loss": 0.8618830323684699,
+    "ece": 0.29076917231728283,
+    "constant_half_brier": 0.25,
+    "same_sample_base_rate_brier": 0.249932813759742,
+    "priced_n": 16,
+    "paper_profit": 0.5200000000000005,
+    "paper_roi": 0.03250000000000003,
+    "quoted_implied_brier": 0.22712992055340228,
+    "model_brier_on_priced": 0.33071722904573897,
+    "snapshot_priced_n": 61,
+    "snapshot_paper_profit": 2.719999999999999,
+    "snapshot_paper_roi": 0.04459016393442621
+  },
+  "matched_latest_same_version": {
+    "n": 61,
+    "fixtures": 39,
+    "days": 5,
+    "wins": 31,
+    "losses": 30,
+    "mean_p": 0.8000193726897942,
+    "hit_rate": 0.5081967213114754,
+    "gap": 0.29182265137831875,
+    "brier": 0.3168206177173895,
+    "log_loss": 0.8636670026194164,
+    "ece": 0.29182265137831875,
+    "constant_half_brier": 0.25,
+    "same_sample_base_rate_brier": 0.249932813759742,
+    "priced_n": 61,
+    "paper_profit": 2.3599999999999994,
+    "paper_roi": 0.03868852459016393,
+    "quoted_implied_brier": 0.22982560177926326,
+    "model_brier_on_priced": 0.3168206177173895,
+    "snapshot_priced_n": 61,
+    "snapshot_paper_profit": 2.3599999999999994,
+    "snapshot_paper_roi": 0.03868852459016393
+  },
+  "matched_n": 61,
+  "missing": [],
+  "snapshot_probability_discrepancies": [],
+  "identical_prediction_ids": 16,
+  "probability_revisions": 30,
+  "mean_probability_revision": 0.0010534790610359332,
+  "all_latest_p_ge_70": {
+    "n": 466,
+    "fixtures": 140,
+    "days": 5,
+    "wins": 344,
+    "losses": 122,
+    "mean_p": 0.8258277517826668,
+    "hit_rate": 0.7381974248927039,
+    "gap": 0.08763032688996288,
+    "brier": 0.1952088054945719,
+    "log_loss": 0.5888320392298905,
+    "ece": 0.08763032688996286,
+    "constant_half_brier": 0.25,
+    "same_sample_base_rate_brier": 0.1932619867744847,
+    "priced_n": 466,
+    "paper_profit": -7.900000000000002,
+    "paper_roi": -0.01695278969957082,
+    "quoted_implied_brier": 0.16539297135898756,
+    "model_brier_on_priced": 0.1952088054945719,
+    "snapshot_priced_n": 466,
+    "snapshot_paper_profit": -7.900000000000002,
+    "snapshot_paper_roi": -0.01695278969957082
+  },
+  "same_run_sensitivity": {
+    "n": 5060,
+    "fixtures": 141,
+    "days": 5,
+    "wins": 2567,
+    "losses": 2493,
+    "mean_p": 0.497559088624295,
+    "hit_rate": 0.5073122529644268,
+    "gap": -0.009753164340131924,
+    "brier": 0.22139597162956362,
+    "log_loss": 0.6370241659840038,
+    "ece": 0.0585028673654777,
+    "constant_half_brier": 0.25,
+    "same_sample_base_rate_brier": 0.24994653095658423,
+    "priced_n": 0,
+    "paper_profit": 0,
+    "paper_roi": null,
+    "quoted_implied_brier": null,
+    "model_brier_on_priced": null,
+    "snapshot_priced_n": 5060,
+    "snapshot_paper_profit": -218.20000000000002,
+    "snapshot_paper_roi": -0.04312252964426878
+  },
+  "same_run_count": 11,
+  "published_learning_profile_count": 0,
+  "published_component_point_ranges": {
+    "q_model_probability": [
+      11.718030963941592,
+      24.086064055139094
+    ],
+    "q_value_edge": [
+      9.741899560556943,
+      20
+    ],
+    "q_recent_form": [
+      1.625,
+      9.124999999999998
+    ],
+    "q_market_consensus": [
+      10,
+      10
+    ],
+    "q_odds_stability": [
+      4.767083333333334,
+      5
+    ],
+    "q_team_news": [
+      1.5,
+      5
+    ],
+    "q_league_reliability": [
+      5,
+      5
+    ],
+    "q_data_quality": [
+      3.25,
+      4.75
+    ]
+  },
+  "published_q_component_status_counts": {
+    "model_probability=available": 61,
+    "value_edge=available": 61,
+    "xg_model=available": 61,
+    "recent_form=available": 61,
+    "market_consensus=available": 61,
+    "odds_stability=available": 61,
+    "team_news=available": 61,
+    "league_reliability=available": 61,
+    "data_quality=available": 61,
+    "xg_input=rolling_goal_derived_expected_goals_proxy": 61,
+    "model_set=available": 61,
+    "source_odds=fresh": 61
+  },
+  "pairs": [
+    {
+      "match_id": 1072,
+      "market": "double_chance_1x",
+      "version": "0.2.1",
+      "first_prediction_id": 237,
+      "latest_prediction_id": 237,
+      "first_p": 0.9277705841160228,
+      "latest_p": 0.9277705841160228,
+      "y": 1
+    },
+    {
+      "match_id": 108,
+      "market": "under_3.5",
+      "version": "0.2.1",
+      "first_prediction_id": 85,
+      "latest_prediction_id": 85,
+      "first_p": 0.9182050739561815,
+      "latest_p": 0.9182050739561815,
+      "y": 1
+    },
+    {
+      "match_id": 110,
+      "market": "double_chance_x2",
+      "version": "0.2.1",
+      "first_prediction_id": 126,
+      "latest_prediction_id": 126,
+      "first_p": 0.9277160297451214,
+      "latest_p": 0.9277160297451214,
+      "y": 1
+    },
+    {
+      "match_id": 1073,
+      "market": "double_chance_x2",
+      "version": "0.2.1",
+      "first_prediction_id": 254,
+      "latest_prediction_id": 254,
+      "first_p": 0.6813234749296669,
+      "latest_p": 0.6813234749296669,
+      "y": 1
+    },
+    {
+      "match_id": 1072,
+      "market": "home_win",
+      "version": "0.2.1",
+      "first_prediction_id": 234,
+      "latest_prediction_id": 234,
+      "first_p": 0.6434493468481174,
+      "latest_p": 0.6434493468481174,
+      "y": 1
+    },
+    {
+      "match_id": 104,
+      "market": "double_chance_1x",
+      "version": "0.2.1",
+      "first_prediction_id": 45,
+      "latest_prediction_id": 45,
+      "first_p": 0.7739160489418057,
+      "latest_p": 0.7739160489418057,
+      "y": 0
+    },
+    {
+      "match_id": 107,
+      "market": "double_chance_x2",
+      "version": "0.2.1",
+      "first_prediction_id": 78,
+      "latest_prediction_id": 78,
+      "first_p": 0.8281228173126454,
+      "latest_p": 0.8281228173126454,
+      "y": 0
+    },
+    {
+      "match_id": 1344,
+      "market": "double_chance_1x",
+      "version": "0.2.1",
+      "first_prediction_id": 365,
+      "latest_prediction_id": 1075,
+      "first_p": 0.9035018791347954,
+      "latest_p": 0.9035018791347954,
+      "y": 1
+    },
+    {
+      "match_id": 1355,
+      "market": "under_4.5",
+      "version": "0.2.1",
+      "first_prediction_id": 311,
+      "latest_prediction_id": 1053,
+      "first_p": 0.8546932831554128,
+      "latest_p": 0.8546932831554128,
+      "y": 0
+    },
+    {
+      "match_id": 1346,
+      "market": "under_4.5",
+      "version": "0.2.1",
+      "first_prediction_id": 391,
+      "latest_prediction_id": 1101,
+      "first_p": 0.9456938400361978,
+      "latest_p": 0.9456938400361978,
+      "y": 1
+    },
+    {
+      "match_id": 1354,
+      "market": "under_3.5",
+      "version": "0.2.1",
+      "first_prediction_id": 325,
+      "latest_prediction_id": 325,
+      "first_p": 0.8866820058493486,
+      "latest_p": 0.8866820058493486,
+      "y": 0
+    },
+    {
+      "match_id": 1355,
+      "market": "under_3.5",
+      "version": "0.2.1",
+      "first_prediction_id": 309,
+      "latest_prediction_id": 1051,
+      "first_p": 0.7100269825718681,
+      "latest_p": 0.7100269825718681,
+      "y": 0
+    },
+    {
+      "match_id": 1345,
+      "market": "double_chance_x2",
+      "version": "0.2.1",
+      "first_prediction_id": 382,
+      "latest_prediction_id": 1092,
+      "first_p": 0.8703120981905746,
+      "latest_p": 0.8703120981905746,
+      "y": 0
+    },
+    {
+      "match_id": 1344,
+      "market": "home_win",
+      "version": "0.2.1",
+      "first_prediction_id": 362,
+      "latest_prediction_id": 1072,
+      "first_p": 0.6844885385679362,
+      "latest_p": 0.6844885385679362,
+      "y": 1
+    },
+    {
+      "match_id": 1354,
+      "market": "under_2.5",
+      "version": "0.2.1",
+      "first_prediction_id": 323,
+      "latest_prediction_id": 323,
+      "first_p": 0.7351002899569166,
+      "latest_p": 0.7351002899569166,
+      "y": 0
+    },
+    {
+      "match_id": 1353,
+      "market": "under_3.5",
+      "version": "0.2.1",
+      "first_prediction_id": 293,
+      "latest_prediction_id": 1035,
+      "first_p": 0.80819757545733,
+      "latest_p": 0.80819757545733,
+      "y": 0
+    },
+    {
+      "match_id": 1350,
+      "market": "under_3.5",
+      "version": "0.2.1",
+      "first_prediction_id": 619,
+      "latest_prediction_id": 1131,
+      "first_p": 0.8931718346905613,
+      "latest_p": 0.8931718346905613,
+      "y": 0
+    },
+    {
+      "match_id": 1343,
+      "market": "double_chance_x2",
+      "version": "0.2.1",
+      "first_prediction_id": 644,
+      "latest_prediction_id": 1159,
+      "first_p": 0.8810151309741004,
+      "latest_p": 0.8810151309741004,
+      "y": 1
+    },
+    {
+      "match_id": 1351,
+      "market": "over_1.5",
+      "version": "0.2.1",
+      "first_prediction_id": 567,
+      "latest_prediction_id": 1178,
+      "first_p": 0.9512532493476697,
+      "latest_p": 0.9512532493476697,
+      "y": 1
+    },
+    {
+      "match_id": 1372,
+      "market": "double_chance_x2",
+      "version": "0.2.1",
+      "first_prediction_id": 660,
+      "latest_prediction_id": 5714,
+      "first_p": 0.8288537542072575,
+      "latest_p": 0.8289220185754262,
+      "y": 0
+    },
+    {
+      "match_id": 1365,
+      "market": "under_2.5",
+      "version": "0.2.1",
+      "first_prediction_id": 793,
+      "latest_prediction_id": 5847,
+      "first_p": 0.8400953157086203,
+      "latest_p": 0.8351662567225799,
+      "y": 1
+    },
+    {
+      "match_id": 1356,
+      "market": "over_2.5",
+      "version": "0.2.1",
+      "first_prediction_id": 904,
+      "latest_prediction_id": 5958,
+      "first_p": 0.8409049420462483,
+      "latest_p": 0.8370227217293201,
+      "y": 1
+    },
+    {
+      "match_id": 1366,
+      "market": "under_3.5",
+      "version": "0.2.1",
+      "first_prediction_id": 811,
+      "latest_prediction_id": 5865,
+      "first_p": 0.9270434128714521,
+      "latest_p": 0.9258883832963967,
+      "y": 1
+    },
+    {
+      "match_id": 1366,
+      "market": "btts_no",
+      "version": "0.2.1",
+      "first_prediction_id": 815,
+      "latest_prediction_id": 5869,
+      "first_p": 0.7346274309715601,
+      "latest_p": 0.7322684158220445,
+      "y": 0
+    },
+    {
+      "match_id": 1372,
+      "market": "away_win",
+      "version": "0.2.1",
+      "first_prediction_id": 658,
+      "latest_prediction_id": 5712,
+      "first_p": 0.5363697142936781,
+      "latest_p": 0.5378332906785726,
+      "y": 0
+    },
+    {
+      "match_id": 1356,
+      "market": "home_win",
+      "version": "0.2.1",
+      "first_prediction_id": 912,
+      "latest_prediction_id": 5966,
+      "first_p": 0.5433533325484465,
+      "latest_p": 0.5442837260789566,
+      "y": 1
+    },
+    {
+      "match_id": 1357,
+      "market": "btts_no",
+      "version": "0.2.1",
+      "first_prediction_id": 879,
+      "latest_prediction_id": 5933,
+      "first_p": 0.5750465465785446,
+      "latest_p": 0.5723286657286354,
+      "y": 0
+    },
+    {
+      "match_id": 1375,
+      "market": "double_chance_x2",
+      "version": "0.2.1",
+      "first_prediction_id": 1255,
+      "latest_prediction_id": 5762,
+      "first_p": 0.8075711206055693,
+      "latest_p": 0.8075711206055693,
+      "y": 1
+    },
+    {
+      "match_id": 1370,
+      "market": "under_3.5",
+      "version": "0.2.1",
+      "first_prediction_id": 1470,
+      "latest_prediction_id": 5977,
+      "first_p": 0.839469903407534,
+      "latest_p": 0.839469903407534,
+      "y": 0
+    },
+    {
+      "match_id": 1366,
+      "market": "under_2.5",
+      "version": "0.2.1",
+      "first_prediction_id": 1724,
+      "latest_prediction_id": 5863,
+      "first_p": 0.8050135857248075,
+      "latest_p": 0.8050135857248075,
+      "y": 1
+    },
+    {
+      "match_id": 1368,
+      "market": "under_3.5",
+      "version": "0.2.1",
+      "first_prediction_id": 1758,
+      "latest_prediction_id": 5897,
+      "first_p": 0.8609707080178526,
+      "latest_p": 0.8609707080178526,
+      "y": 0
+    },
+    {
+      "match_id": 1356,
+      "market": "over_3.5",
+      "version": "0.2.1",
+      "first_prediction_id": 1821,
+      "latest_prediction_id": 5960,
+      "first_p": 0.6923841877626308,
+      "latest_p": 0.6923841877626308,
+      "y": 0
+    },
+    {
+      "match_id": 1367,
+      "market": "double_chance_x2",
+      "version": "0.2.1",
+      "first_prediction_id": 5890,
+      "latest_prediction_id": 5890,
+      "first_p": 0.7517720474531936,
+      "latest_p": 0.7517720474531936,
+      "y": 0
+    },
+    {
+      "match_id": 1357,
+      "market": "under_3.5",
+      "version": "0.2.1",
+      "first_prediction_id": 5929,
+      "latest_prediction_id": 5929,
+      "first_p": 0.7658364747803942,
+      "latest_p": 0.7658364747803942,
+      "y": 1
+    },
+    {
+      "match_id": 1370,
+      "market": "under_2.5",
+      "version": "0.2.1",
+      "first_prediction_id": 5975,
+      "latest_prediction_id": 5975,
+      "first_p": 0.663666314173418,
+      "latest_p": 0.663666314173418,
+      "y": 0
+    },
+    {
+      "match_id": 1396,
+      "market": "double_chance_1x",
+      "version": "0.2.1",
+      "first_prediction_id": 6369,
+      "latest_prediction_id": 8705,
+      "first_p": 0.8742527018903884,
+      "latest_p": 0.8701991915772295,
+      "y": 1
+    },
+    {
+      "match_id": 1429,
+      "market": "btts_no",
+      "version": "0.2.1",
+      "first_prediction_id": 6973,
+      "latest_prediction_id": 9293,
+      "first_p": 0.8212347214361081,
+      "latest_p": 0.8260782391105168,
+      "y": 1
+    },
+    {
+      "match_id": 1451,
+      "market": "under_4.5",
+      "version": "0.2.1",
+      "first_prediction_id": 7195,
+      "latest_prediction_id": 8331,
+      "first_p": 0.9634425622055638,
+      "latest_p": 0.9648001367287772,
+      "y": 1
+    },
+    {
+      "match_id": 1451,
+      "market": "under_3.5",
+      "version": "0.2.1",
+      "first_prediction_id": 7193,
+      "latest_prediction_id": 8329,
+      "first_p": 0.8998237538716908,
+      "latest_p": 0.9035035682050176,
+      "y": 1
+    },
+    {
+      "match_id": 1380,
+      "market": "under_3.5",
+      "version": "0.2.1",
+      "first_prediction_id": 6425,
+      "latest_prediction_id": 8761,
+      "first_p": 0.8731666269113972,
+      "latest_p": 0.8780136497577024,
+      "y": 1
+    },
+    {
+      "match_id": 1450,
+      "market": "under_2.5",
+      "version": "0.2.1",
+      "first_prediction_id": 6135,
+      "latest_prediction_id": 8471,
+      "first_p": 0.7992047871869984,
+      "latest_p": 0.8041487897205323,
+      "y": 0
+    },
+    {
+      "match_id": 1387,
+      "market": "under_3.5",
+      "version": "0.2.1",
+      "first_prediction_id": 6233,
+      "latest_prediction_id": 8585,
+      "first_p": 0.9154651418489569,
+      "latest_p": 0.9180145591521196,
+      "y": 0
+    },
+    {
+      "match_id": 1427,
+      "market": "under_3.5",
+      "version": "0.2.1",
+      "first_prediction_id": 6937,
+      "latest_prediction_id": 9257,
+      "first_p": 0.943169501293205,
+      "latest_p": 0.9521693781335333,
+      "y": 1
+    },
+    {
+      "match_id": 1409,
+      "market": "under_3.5",
+      "version": "0.2.1",
+      "first_prediction_id": 6697,
+      "latest_prediction_id": 9033,
+      "first_p": 0.7784985942691119,
+      "latest_p": 0.7793357113914086,
+      "y": 0
+    },
+    {
+      "match_id": 1396,
+      "market": "home_win",
+      "version": "0.2.1",
+      "first_prediction_id": 6366,
+      "latest_prediction_id": 8702,
+      "first_p": 0.65687865511799,
+      "latest_p": 0.6499471644139727,
+      "y": 0
+    },
+    {
+      "match_id": 1427,
+      "market": "btts_no",
+      "version": "0.2.1",
+      "first_prediction_id": 6941,
+      "latest_prediction_id": 9261,
+      "first_p": 0.7740647160240754,
+      "latest_p": 0.7882261682264796,
+      "y": 0
+    },
+    {
+      "match_id": 1417,
+      "market": "under_2.5",
+      "version": "0.2.1",
+      "first_prediction_id": 6759,
+      "latest_prediction_id": 9095,
+      "first_p": 0.7706796807328233,
+      "latest_p": 0.7788388702366897,
+      "y": 0
+    },
+    {
+      "match_id": 1450,
+      "market": "btts_no",
+      "version": "0.2.1",
+      "first_prediction_id": 6141,
+      "latest_prediction_id": 8477,
+      "first_p": 0.728249597337434,
+      "latest_p": 0.7330392874895767,
+      "y": 1
+    },
+    {
+      "match_id": 1386,
+      "market": "btts_no",
+      "version": "0.2.1",
+      "first_prediction_id": 6221,
+      "latest_prediction_id": 8573,
+      "first_p": 0.5928304836297951,
+      "latest_p": 0.5962513202104068,
+      "y": 1
+    },
+    {
+      "match_id": 1391,
+      "market": "away_win",
+      "version": "0.2.1",
+      "first_prediction_id": 6480,
+      "latest_prediction_id": 8816,
+      "first_p": 0.6249616514102182,
+      "latest_p": 0.6297771167297178,
+      "y": 0
+    },
+    {
+      "match_id": 1429,
+      "market": "under_2.5",
+      "version": "0.2.1",
+      "first_prediction_id": 6967,
+      "latest_prediction_id": 9287,
+      "first_p": 0.6443753041958115,
+      "latest_p": 0.6567160032580691,
+      "y": 1
+    },
+    {
+      "match_id": 1391,
+      "market": "over_3.5",
+      "version": "0.2.1",
+      "first_prediction_id": 6472,
+      "latest_prediction_id": 8808,
+      "first_p": 0.7108279154798425,
+      "latest_p": 0.7125923715761429,
+      "y": 1
+    },
+    {
+      "match_id": 1409,
+      "market": "under_4.5",
+      "version": "0.2.1",
+      "first_prediction_id": 7835,
+      "latest_prediction_id": 9035,
+      "first_p": 0.9000870550179294,
+      "latest_p": 0.8997492597152249,
+      "y": 1
+    },
+    {
+      "match_id": 1390,
+      "market": "over_2.5",
+      "version": "0.2.1",
+      "first_prediction_id": 7590,
+      "latest_prediction_id": 8790,
+      "first_p": 0.8922683126554259,
+      "latest_p": 0.8952626458543292,
+      "y": 1
+    },
+    {
+      "match_id": 1386,
+      "market": "under_2.5",
+      "version": "0.2.1",
+      "first_prediction_id": 7367,
+      "latest_prediction_id": 8567,
+      "first_p": 0.6657648804990085,
+      "latest_p": 0.6669372781032318,
+      "y": 0
+    },
+    {
+      "match_id": 1443,
+      "market": "double_chance_1x",
+      "version": "0.2.1",
+      "first_prediction_id": 7953,
+      "latest_prediction_id": 9153,
+      "first_p": 0.8582227925193431,
+      "latest_p": 0.8592400340694497,
+      "y": 0
+    },
+    {
+      "match_id": 1417,
+      "market": "btts_no",
+      "version": "0.2.1",
+      "first_prediction_id": 7901,
+      "latest_prediction_id": 9101,
+      "first_p": 0.7044774843120921,
+      "latest_p": 0.7059493695021488,
+      "y": 0
+    },
+    {
+      "match_id": 1427,
+      "market": "under_2.5",
+      "version": "0.2.1",
+      "first_prediction_id": 9255,
+      "latest_prediction_id": 9255,
+      "first_p": 0.8577698416944971,
+      "latest_p": 0.8577698416944971,
+      "y": 0
+    },
+    {
+      "match_id": 1417,
+      "market": "under_3.5",
+      "version": "0.2.1",
+      "first_prediction_id": 9097,
+      "latest_prediction_id": 9097,
+      "first_p": 0.9103678436937735,
+      "latest_p": 0.9103678436937735,
+      "y": 1
+    },
+    {
+      "match_id": 1395,
+      "market": "under_3.5",
+      "version": "0.2.1",
+      "first_prediction_id": 8681,
+      "latest_prediction_id": 8681,
+      "first_p": 0.9471868446689956,
+      "latest_p": 0.9471868446689956,
+      "y": 1
+    },
+    {
+      "match_id": 1484,
+      "market": "double_chance_x2",
+      "version": "0.3.0",
+      "first_prediction_id": 10594,
+      "latest_prediction_id": 10594,
+      "first_p": 0.7920291865182973,
+      "latest_p": 0.7920291865182973,
+      "y": 0
+    }
+  ],
+  "synthetic_threshold_counterexample": {
+    "all": {
+      "n": 200,
+      "fixtures": 200,
+      "days": 1,
+      "wins": 100,
+      "losses": 100,
+      "mean_p": 0.5,
+      "hit_rate": 0.5,
+      "gap": 2.2204460492503132e-17,
+      "brier": 0.16000000000000003,
+      "log_loss": 0.5004024235381879,
+      "ece": 2.2204460492503132e-17,
+      "constant_half_brier": 0.25,
+      "same_sample_base_rate_brier": 0.25,
+      "priced_n": 0,
+      "paper_profit": 0,
+      "paper_roi": null,
+      "quoted_implied_brier": null,
+      "model_brier_on_priced": null,
+      "snapshot_priced_n": 200,
+      "snapshot_paper_profit": 0,
+      "snapshot_paper_roi": 0.0
+    },
+    "p_ge_70": {
+      "n": 100,
+      "fixtures": 100,
+      "days": 1,
+      "wins": 80,
+      "losses": 20,
+      "mean_p": 0.8,
+      "hit_rate": 0.8,
+      "gap": 4.4408920985006264e-17,
+      "brier": 0.16,
+      "log_loss": 0.5004024235381879,
+      "ece": 4.4408920985006264e-17,
+      "constant_half_brier": 0.25,
+      "same_sample_base_rate_brier": 0.15999999999999998,
+      "priced_n": 0,
+      "paper_profit": 0,
+      "paper_roi": null,
+      "quoted_implied_brier": null,
+      "model_brier_on_priced": null,
+      "snapshot_priced_n": 100,
+      "snapshot_paper_profit": 60,
+      "snapshot_paper_roi": 0.6
+    }
+  }
+}

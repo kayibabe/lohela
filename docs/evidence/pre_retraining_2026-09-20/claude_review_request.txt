@@ -1,0 +1,858 @@
+The user explicitly asks Codex and Claude Code to review the analysis until they reach a general consensus. You are a NEW independent Claude Code review, not the original session. Do not claim you inspected anything outside the evidence supplied here. No tools, code changes, fitting, or external actions. Challenge Codex if wrong; do not agree merely to achieve consensus. Return a concise verdict on each disagreement and a defensible shared conclusion, with unresolved items and recommended next action.
+
+The user pasted an earlier Claude review claiming:
+1. Published picks are overconfident (61 picks, 79.9% mean p vs 50.8% wins, Brier .3163); underlying all-market forecasts are 'essentially'/'almost perfectly' calibrated (1963, Brier .2223, pooled gap -.6pp).
+2. Q score uses raw p at 25%; tier Q thresholds are 75-85, top-30 pool sorted by (Q, EV, p). This CONFIRMS selection as the mechanism of the +29pp gap, even absent totals bias. 'Selecting on predicted probability ... will always inflate ... probability versus win rate, even if ... near-perfectly calibrated.' Winner's curse is the claimed explanation.
+3. Several Q components are often missing/zero. This noisy composite explains selection bias.
+4. Under market loss allocation and calibration are 'two independent angles'; home-win +12.26 units from four picks was invoked alongside ticket P&L +2.05.
+5. Fix selection first: remove/greatly reduce p's Q weight or switch ranking to edge/EV or isotonic-shrunk probabilities, without retraining. Then tackle totals bias.
+
+Codex assessment to challenge:
+A. Code facts verify confidence-sensitive selection, not the causal magnitude or a guaranteed defect. If E[Y|P]=P and inclusion S is a threshold determined solely by P, E[Y-P|S]=0. General Q/EV/top-k selection can reveal subgroup miscalibration; marginal calibration alone does not ensure calibration conditional on all selection variables. Winner's curse is plausible, not proven by sorting code.
+B. Brier mixes resolution and reliability. Opposite-market biases cancel in the pooled signed gap. All-market ECE=6.00pp; Under2.5 gap +13.17pp, Under3.5 +8.95pp, BTTS No +11.66pp, 70-80% and 80-90% bins overconfident by ~9pp. Not near-perfect calibration. See https://scikit-learn.org/1.8/modules/calibration.html .
+C. Current local selector also has prior-period league/market calibration gates (sample>=20), odds/edge/data quality/freshness gates, bounded Q relaxation, partial-beam EV ranking and EV-based final objectives. It selects within a completed model run/date, not all 11k prediction rows. Deployed SHA and historical gate configurations remain unverified.
+D. NEW frozen-snapshot matched comparison: all 61 first-published picks match to latest pre-kickoff forecasts for the same fixture/market/model version; same outcomes. First mean p=.7989658936, latest=.8000193727, hit=.5081967213; gap .290769 -> .291823; Brier .316343 -> .316821. Thus forecast timing barely explains the gap. Published snapshots exactly equal their linked predictions (0 discrepancies). This supports concentration of existing forecast error rather than numerical inflation during publication. All latest p>=.7 records: n466, mean .825828, wins .738197, gap .087630. Not a matched counterfactual against published picks.
+E. All 61 published records mark all nine Q components 'available'. Stored metadata does not prove input validity but does not establish missing-component causation. xG input is explicitly rolling-goal-derived expected-goals proxy, not measured xG.
+F. Edge=p-implied and EV=p*odds-1 still reuse p, so EV-only selection is not inherently a cure. Isotonic needs a distinct calibration fit/holdout. Removing 25 Q points while retaining thresholds radically changes eligibility. Recommend frozen, offline matched ablations after reconstructing historical candidate pools/gates, not immediate live Q changes. Retain training/promotion hold.
+G. The two diagnostics reuse outcomes; complementary, not independent confirmations. Home-win +12.26 belongs to the 61-pick singles simulation, not the 15-ticket ledger. Quote linkage absent proves absent now, not necessarily that it once existed. Five dates/39 published fixtures cannot prove causation or eliminate variance.
+
+Please state explicitly whether you accept/reject A-G, what is actually established, and whether immediate Q-weight changes are justified. Also identify errors in the supplied report or new comparison. Your answer will be preserved and attributed as a fresh Claude Code reconciliation, not the original author's reply.
+
+NEW COMPUTED EVIDENCE:
+{
+  "source_sha256": "388db18a93acc3c46760318ac863c884b7112c7618862d5bf13b1785a978a5dd",
+  "published_first": {
+    "n": 61,
+    "fixtures": 39,
+    "days": 5,
+    "wins": 31,
+    "losses": 30,
+    "mean_p": 0.7989658936287583,
+    "hit_rate": 0.5081967213114754,
+    "gap": 0.29076917231728283,
+    "brier": 0.3163433438751644,
+    "log_loss": 0.8618830323684699,
+    "ece": 0.29076917231728283,
+    "constant_half_brier": 0.25,
+    "same_sample_base_rate_brier": 0.249932813759742,
+    "priced_n": 16,
+    "paper_profit": 0.5200000000000005,
+    "paper_roi": 0.03250000000000003,
+    "quoted_implied_brier": 0.22712992055340228,
+    "model_brier_on_priced": 0.33071722904573897,
+    "snapshot_priced_n": 61,
+    "snapshot_paper_profit": 2.719999999999999,
+    "snapshot_paper_roi": 0.04459016393442621
+  },
+  "matched_latest_same_version": {
+    "n": 61,
+    "fixtures": 39,
+    "days": 5,
+    "wins": 31,
+    "losses": 30,
+    "mean_p": 0.8000193726897942,
+    "hit_rate": 0.5081967213114754,
+    "gap": 0.29182265137831875,
+    "brier": 0.3168206177173895,
+    "log_loss": 0.8636670026194164,
+    "ece": 0.29182265137831875,
+    "constant_half_brier": 0.25,
+    "same_sample_base_rate_brier": 0.249932813759742,
+    "priced_n": 61,
+    "paper_profit": 2.3599999999999994,
+    "paper_roi": 0.03868852459016393,
+    "quoted_implied_brier": 0.22982560177926326,
+    "model_brier_on_priced": 0.3168206177173895,
+    "snapshot_priced_n": 61,
+    "snapshot_paper_profit": 2.3599999999999994,
+    "snapshot_paper_roi": 0.03868852459016393
+  },
+  "matched_n": 61,
+  "missing": [],
+  "snapshot_probability_discrepancies": [],
+  "identical_prediction_ids": 16,
+  "probability_revisions": 30,
+  "mean_probability_revision": 0.0010534790610359332,
+  "all_latest_p_ge_70": {
+    "n": 466,
+    "fixtures": 140,
+    "days": 5,
+    "wins": 344,
+    "losses": 122,
+    "mean_p": 0.8258277517826668,
+    "hit_rate": 0.7381974248927039,
+    "gap": 0.08763032688996288,
+    "brier": 0.1952088054945719,
+    "log_loss": 0.5888320392298905,
+    "ece": 0.08763032688996286,
+    "constant_half_brier": 0.25,
+    "same_sample_base_rate_brier": 0.1932619867744847,
+    "priced_n": 466,
+    "paper_profit": -7.900000000000002,
+    "paper_roi": -0.01695278969957082,
+    "quoted_implied_brier": 0.16539297135898756,
+    "model_brier_on_priced": 0.1952088054945719,
+    "snapshot_priced_n": 466,
+    "snapshot_paper_profit": -7.900000000000002,
+    "snapshot_paper_roi": -0.01695278969957082
+  },
+  "same_run_sensitivity": {
+    "n": 5060,
+    "fixtures": 141,
+    "days": 5,
+    "wins": 2567,
+    "losses": 2493,
+    "mean_p": 0.497559088624295,
+    "hit_rate": 0.5073122529644268,
+    "gap": -0.009753164340131924,
+    "brier": 0.22139597162956362,
+    "log_loss": 0.6370241659840038,
+    "ece": 0.0585028673654777,
+    "constant_half_brier": 0.25,
+    "same_sample_base_rate_brier": 0.24994653095658423,
+    "priced_n": 0,
+    "paper_profit": 0,
+    "paper_roi": null,
+    "quoted_implied_brier": null,
+    "model_brier_on_priced": null,
+    "snapshot_priced_n": 5060,
+    "snapshot_paper_profit": -218.20000000000002,
+    "snapshot_paper_roi": -0.04312252964426878
+  },
+  "same_run_count": 11,
+  "published_q_component_status_counts": {
+    "model_probability=available": 61,
+    "value_edge=available": 61,
+    "xg_model=available": 61,
+    "recent_form=available": 61,
+    "market_consensus=available": 61,
+    "odds_stability=available": 61,
+    "team_news=available": 61,
+    "league_reliability=available": 61,
+    "data_quality=available": 61,
+    "xg_input=rolling_goal_derived_expected_goals_proxy": 61,
+    "model_set=available": 61,
+    "source_odds=fresh": 61
+  },
+  "synthetic_threshold_counterexample": {
+    "all": {
+      "n": 200,
+      "fixtures": 200,
+      "days": 1,
+      "wins": 100,
+      "losses": 100,
+      "mean_p": 0.5,
+      "hit_rate": 0.5,
+      "gap": 2.2204460492503132e-17,
+      "brier": 0.16000000000000003,
+      "log_loss": 0.5004024235381879,
+      "ece": 2.2204460492503132e-17,
+      "constant_half_brier": 0.25,
+      "same_sample_base_rate_brier": 0.25,
+      "priced_n": 0,
+      "paper_profit": 0,
+      "paper_roi": null,
+      "quoted_implied_brier": null,
+      "model_brier_on_priced": null,
+      "snapshot_priced_n": 200,
+      "snapshot_paper_profit": 0,
+      "snapshot_paper_roi": 0.0
+    },
+    "p_ge_70": {
+      "n": 100,
+      "fixtures": 100,
+      "days": 1,
+      "wins": 80,
+      "losses": 20,
+      "mean_p": 0.8,
+      "hit_rate": 0.8,
+      "gap": 4.4408920985006264e-17,
+      "brier": 0.16,
+      "log_loss": 0.5004024235381879,
+      "ece": 4.4408920985006264e-17,
+      "constant_half_brier": 0.25,
+      "same_sample_base_rate_brier": 0.15999999999999998,
+      "priced_n": 0,
+      "paper_profit": 0,
+      "paper_roi": null,
+      "quoted_implied_brier": null,
+      "model_brier_on_priced": null,
+      "snapshot_priced_n": 100,
+      "snapshot_paper_profit": 60,
+      "snapshot_paper_roi": 0.6
+    }
+  }
+}
+
+SOURCE backend/app/services/models/ensemble.py:36
+36: }
+37: 
+38: Q_SCORE_WEIGHTS = {
+39:     "model_probability": 25.0,
+40:     "value_edge": 20.0,
+41:     "xg_model": 15.0,
+42:     "recent_form": 10.0,
+43:     "market_consensus": 10.0,
+44:     "odds_stability": 5.0,
+45:     "team_news": 5.0,
+46:     "league_reliability": 5.0,
+47:     "data_quality": 5.0,
+48: }
+49: 
+
+SOURCE backend/app/services/models/ensemble.py:131
+131:     ensemble: EnsembleResult,
+132:     inputs: QScoreInputs,
+133: ) -> QScoreResult:
+134:     """
+135:     Composite Q-Score on 0–100 scale — spec §12, §27.
+136: 
+137:     Each component is normalised to 0–1 then multiplied by its weight.
+138:     """
+139:     p = ensemble.ensemble_probability
+140:     has_odds = inputs.implied_probability is not None
+141: 
+142:     # Component 1: Model Probability (25%).  The formal specification defines
+143:     # this component as the ensemble probability for the specific market, so
+144:     # the probability itself is the normalised 0–1 input.  Subtracting a 50%
+145:     # baseline would turn the documented 75% Safe target into only 12.5/25 and
+146:     # is not part of the Q-Score contract.
+147:     c_prob = max(0.0, min(1.0, p))
+148: 
+149:     # Downgrade if models disagree significantly
+150:     if ensemble.confidence_downgraded:
+151:         c_prob *= 0.75
+152: 
+153:     # Component 2: Value / Edge (20%)
+154:     # Zero when no odds exist — implied_prob=None means market has no bookmaker data
+155:     if has_odds:
+156:         edge: Optional[float] = p - inputs.implied_probability  # type: ignore[operator]
+157:         c_edge = max(0.0, min(1.0, edge / 0.20)) if edge > 0 else 0.0  # type: ignore[operator]
+158:     else:
+159:         edge = None
+160:         c_edge = 0.0
+161: 
+162:     status: dict[str, str] = {
+
+SOURCE backend/app/services/models/ensemble.py:187
+187:     def _component(value: Optional[float], name: str, reason: str) -> float:
+188:         if value is None:
+189:             status[name] = reason
+190:             return 0.0
+191:         status[name] = "available"
+192:         return max(0.0, min(1.0, value))
+193: 
+194:     c_form = _component(inputs.form_score, "recent_form", "missing_form")
+195:     c_consensus = _component(inputs.market_consensus, "market_consensus", "missing_market_odds")
+196:     c_stability = _component(inputs.odds_stability, "odds_stability", "missing_odds_history")
+197:     c_news = _component(inputs.team_news_impact, "team_news", "missing_team_news")
+198:     c_league = _component(inputs.league_reliability, "league_reliability", "missing_league_reliability")
+199:     c_data = _component(inputs.data_quality, "data_quality", "missing_data_quality")
+200: 
+201:     # Weighted sum → 0–100
+202:     q = (
+203:         c_prob * Q_SCORE_WEIGHTS["model_probability"] +
+204:         c_edge * Q_SCORE_WEIGHTS["value_edge"] +
+205:         c_xg * Q_SCORE_WEIGHTS["xg_model"] +
+206:         c_form * Q_SCORE_WEIGHTS["recent_form"] +
+207:         c_consensus * Q_SCORE_WEIGHTS["market_consensus"] +
+208:         c_stability * Q_SCORE_WEIGHTS["odds_stability"] +
+209:         c_news * Q_SCORE_WEIGHTS["team_news"] +
+210:         c_league * Q_SCORE_WEIGHTS["league_reliability"] +
+211:         c_data * Q_SCORE_WEIGHTS["data_quality"]
+212:     )
+213:     q = max(0.0, min(100.0, q))
+214: 
+215:     # Expected value — spec §11: EV = (P × Odds) - 1; None when no odds
+216:     ev: Optional[float] = (p * inputs.best_odds) - 1.0 if inputs.best_odds else None
+217: 
+218:     return QScoreResult(
+219:         q_score=q,
+220:         q_grade=_grade(q),
+
+SOURCE backend/app/services/accumulator_builder.py:30
+30: 
+31: _MIN_LEG_ODDS = 1.20
+32: _MAX_LEG_ODDS = 10.0
+33: _MAX_LEGS_PER_LEAGUE = 2
+34: _MIN_ACTIVE_MODELS = 3
+35: _BEAM_WIDTH = 800
+36: _CANDIDATE_LIMIT = 30
+37: 
+38: 
+39: @dataclass(frozen=True)
+40: class TicketSpec:
+41:     ticket_type: TicketType
+42:     display_name: str
+43:     min_legs: int
+44:     max_legs: int
+45:     min_combined_odds: float
+46:     max_combined_odds: float
+47:     min_q_score: float
+48:     min_high_grade_ratio: float
+49:     min_market_types: int
+50:     min_adjusted_probability: float
+51:     max_pair_correlation: float
+52:     internal_only: bool = False
+53: 
+54: 
+55: TICKET_SPECS: tuple[TicketSpec, ...] = (
+56:     TicketSpec(TicketType.SAFE, "Conservative", 3, 6, 3.0, 5.0, 85.0, 1.0, 3, 0.0, 0.05),
+57:     TicketSpec(TicketType.BALANCED, "Balanced", 4, 7, 5.0, 10.0, 80.0, 0.60, 1, 0.0, 0.10),
+58:     TicketSpec(TicketType.AGGRESSIVE, "Aggressive", 5, 10, 10.0, math.inf, 75.0, 0.40, 1, 0.05, 0.15),
+59:     TicketSpec(TicketType.BEST_VALUE, "Best Value", 3, 6, 0.0, math.inf, 85.0, 1.0, 1, 0.0, 0.05, True),
+60: )
+61: 
+62: # Bounded relaxation ladder for the minimum-daily-tickets fallback (see
+63: # AccumulatorBuilder.build). Each step loosens the constraints that a thin
+64: # weekday slate hits first — the high-grade-leg ratio, market-family diversity,
+65: # and (for the conservative tier) combined-odds ceiling — while leaving
+66: # min/max legs and correlation tolerance untouched. A relaxed ticket remains a
+67: # coherent, auditable accumulator rather than an arbitrary leg dump. Applied
+68: # cumulatively (step 2 includes step 1's loosening) and only ever to public
+69: # tiers that produced no ticket at full strength.
+70: _RELAXATION_STEPS: tuple[dict, ...] = (
+71:     {"min_high_grade_ratio": -0.30, "min_market_types": -1, "max_combined_odds": 1.0},
+72:     {"min_high_grade_ratio": -0.60, "min_q_score": -5.0, "max_combined_odds": 2.0},
+73:     {"min_high_grade_ratio": -1.00, "min_q_score": -10.0, "max_combined_odds": 2.0},
+74: )
+75: _RELAXATION_FLOOR_Q_SCORE = 60.0
+76: _RELAXATION_MAX_COMBINED_ODDS = 10.0
+77: 
+
+SOURCE backend/app/services/accumulator_builder.py:313
+313:             .order_by(ModelRun.id.desc())
+314:             .limit(1)
+315:         )
+316:         return result.scalar_one_or_none()
+317: 
+318:     async def _load_qualified_legs(self, target_date: date, model_run_id: int) -> list[Leg]:
+319:         return [
+320:             leg
+321:             for leg in await self._load_all_legs(target_date, model_run_id)
+322:             if leg.edge is not None and leg.best_odds >= _MIN_LEG_ODDS
+323:         ]
+324: 
+325:     async def _load_calibration_gates(
+326:         self,
+327:         target_date: date,
+328:         model_version: str,
+329:         fallback_model_version: str | None = None,
+330:     ) -> dict:
+331:         """Load prior-period cohorts for the exact model lineage, deterministically."""
+332:         from app.models import LeaguePerformance, ModelPerformance
+333:         league_result = await self.db.execute(
+334:             select(LeaguePerformance).where(LeaguePerformance.period_end < target_date)
+335:             .order_by(LeaguePerformance.period_end.desc())
+336:         )
+337:         leagues = {}
+338:         for row in league_result.scalars().all():
+339:             if row.competition_id not in leagues:
+340:                 leagues[row.competition_id] = row
+341:         versions = [model_version]
+342:         if fallback_model_version and fallback_model_version not in versions:
+343:             versions.append(fallback_model_version)
+344:         version_priority = case(
+345:             (ModelPerformance.model_version == model_version, 0), else_=1
+346:         )
+347:         market_result = await self.db.execute(
+348:             select(ModelPerformance).where(
+349:                 ModelPerformance.model_name == "ensemble",
+350:                 ModelPerformance.model_version.in_(versions),
+351:                 ModelPerformance.period_end < target_date,
+352:             ).order_by(
+353:                 version_priority,
+354:                 ModelPerformance.period_end.desc(),
+355:                 ModelPerformance.id.desc(),
+356:             )
+357:         )
+358:         markets = {}
+359:         for row in market_result.scalars().all():
+360:             if row.market not in markets:
+361:                 markets[row.market] = row
+362:         return {"leagues": leagues, "markets": markets}
+363: 
+364:     async def _load_all_legs(self, target_date: date, model_run_id: int) -> list[Leg]:
+365:         result = await self.db.execute(
+366:             select(Prediction, Match, Competition, Odds)
+367:             .join(Match, Prediction.match_id == Match.id)
+368:             .join(Competition, Match.competition_id == Competition.id)
+369:             .outerjoin(Odds, Prediction.source_odds_id == Odds.id)
+370:             .where(
+371:                 Prediction.model_run_id == model_run_id,
+372:                 Match.kickoff_at >= cat_day_bounds_utc(target_date)[0],
+373:                 Match.kickoff_at < cat_day_bounds_utc(target_date)[1],
+374:                 Match.excluded_from_models.is_(False),
+375:             )
+376:             .order_by(Prediction.q_score.desc())
+377:         )
+378:         legs: list[Leg] = []
+379:         for prediction, match, competition, source_odds in result.all():
+380:             home_team = await self.db.get(Team, match.home_team_id)
+381:             away_team = await self.db.get(Team, match.away_team_id)
+382:             if not home_team or not away_team:
+383:                 continue
+384:             odds = source_odds
+385:             decimal_odds = prediction.source_decimal_odds
+386:             source_odds_at = prediction.source_odds_at
+387:             if decimal_odds is None and odds is not None:
+388:                 # Compatibility for predictions created before snapshot columns
+389:                 # existed. New model runs always use the immutable values above.
+390:                 decimal_odds = odds.decimal_odds
+391:                 source_odds_at = odds.fetched_at
+392:             legs.append(
+393:                 Leg(
+394:                     prediction.id,
+395:                     match.id,
+396:                     match.home_team_id,
+397:                     match.away_team_id,
+398:                     home_team.name,
+399:                     away_team.name,
+400:                     competition.name,
+401:                     competition.id,
+402:                     match.kickoff_at,
+403:                     prediction.market,
+404:                     prediction.selection,
+405:                     prediction.model_probability,
+406:                     prediction.model_agreement,
+407:                     decimal_odds or 0.0,
+408:                     source_odds_at,
+409:                     prediction.q_score,
+410:                     prediction.q_grade,
+411:                     prediction.edge,
+412:                     prediction.expected_value,
+413:                     list(prediction.active_models or []),
+414:                     float((prediction.data_quality_snapshot or {}).get("score", 0.0)),
+415:                 )
+416:             )
+417:         return legs
+418: 
+419:     async def _load_correlation_coefficients(self) -> dict[tuple[str, str, str, int | None], float]:
+420:         result = await self.db.execute(select(CorrelationCoefficient))
+
+SOURCE backend/app/services/accumulator_builder.py:426
+426: 
+427: def selection_rejection_reasons(leg: Leg, spec: TicketSpec, calibration: dict | None = None) -> list[str]:
+428:     reasons: list[str] = []
+429:     if leg.best_odds <= 0:
+430:         reasons.append("MISSING_ODDS")
+431:     elif not (_MIN_LEG_ODDS <= leg.best_odds <= _MAX_LEG_ODDS):
+432:         reasons.append("LEG_ODDS_OUT_OF_RANGE")
+433:     if leg.edge is None:
+434:         reasons.append("MISSING_EDGE")
+435:     elif leg.edge < settings.min_selection_edge:
+436:         reasons.append("EDGE_BELOW_NO_BET_THRESHOLD")
+437:     if leg.q_score < spec.min_q_score:
+438:         reasons.append("Q_SCORE_BELOW_TIER")
+439:     if len(leg.active_models) < _MIN_ACTIVE_MODELS:
+440:         reasons.append("INSUFFICIENT_MODEL_SET")
+441:     if leg.data_quality_score < settings.min_data_quality_score:
+442:         reasons.append("DATA_QUALITY_BELOW_THRESHOLD")
+443:     if leg.source_odds_at is None:
+444:         reasons.append("MISSING_ODDS_TIMESTAMP")
+445:     elif _odds_age_hours(leg.source_odds_at) > settings.max_selection_odds_age_hours:
+446:         reasons.append("STALE_ODDS")
+447:     if calibration:
+448:         league = calibration.get("leagues", {}).get(leg.competition_id)
+449:         if league and league.sample_size >= 20 and (league.reliability_score or 0.0) < 0.40:
+450:             reasons.append("LEAGUE_CALIBRATION_BELOW_THRESHOLD")
+451:         market = calibration.get("markets", {}).get(leg.market)
+452:         if market and market.sample_size >= 20 and (market.calibration_error or 0.0) > 0.25:
+453:             reasons.append("MARKET_CALIBRATION_UNRELIABLE")
+454:     return reasons
+455: 
+
+SOURCE backend/app/services/accumulator_builder.py:548
+548:     league_counts: dict[int, int] = {}
+549:     for leg in legs:
+550:         league_counts[leg.competition_id] = league_counts.get(leg.competition_id, 0) + 1
+551:     if max(league_counts.values(), default=0) > _MAX_LEGS_PER_LEAGUE:
+552:         return None
+553:     if sum(leg.q_score >= 85.0 for leg in legs) / len(legs) + 1e-9 < spec.min_high_grade_ratio:
+554:         return None
+555:     if len({_market_family(leg.market) for leg in legs}) < spec.min_market_types:
+556:         return None
+557:     combined_odds = math.prod(leg.best_odds for leg in legs)
+558:     if not (spec.min_combined_odds <= combined_odds <= spec.max_combined_odds):
+559:         return None
+560: 
+561:     combined_probability = math.prod(leg.model_probability for leg in legs)
+562:     details: list[CorrelationDetail] = []
+563:     survival = 1.0
+564:     for index, left in enumerate(legs):
+565:         for right in legs[index + 1 :]:
+566:             detail = _pair_correlation(left, right, learned)
+567:             if detail.coefficient > spec.max_pair_correlation:
+568:                 return None
+569:             details.append(detail)
+570:             survival *= 1.0 - detail.coefficient
+571:     correlation_penalty = 1.0 - survival
+572:     adjusted_probability = combined_probability * survival
+573:     if adjusted_probability + 1e-12 < spec.min_adjusted_probability:
+574:         return None
+575: 
+576:     expected_value = adjusted_probability * combined_odds - 1.0
+577:     average_q = sum(leg.q_score for leg in legs) / len(legs)
+
+SOURCE backend/app/services/accumulator_builder.py:610
+610: 
+611: def _objective(ticket: Ticket) -> float:
+612:     if ticket.ticket_type == TicketType.SAFE:
+613:         return ticket.adjusted_probability + max(0.0, ticket.expected_value) * 0.05
+614:     return ticket.expected_value / (1.0 + ticket.risk_score / 100.0)
+615: 
+616: 
+617: def _partial_score(legs: tuple[Leg, ...]) -> float:
+618:     average_q = sum(leg.q_score for leg in legs) / len(legs)
+619:     positive_ev = sum(max(-0.2, leg.expected_value or -0.2) for leg in legs)
+620:     return average_q + positive_ev * 20.0 + len({_market_family(leg.market) for leg in legs})
+621: 
+622: 
+623: def _find_best_ticket(
+624:     pool: list[Leg],
+625:     spec: TicketSpec,
+626:     learned: dict[tuple[str, str, str, int | None], float],
+627:     *,
+628:     prior_tickets: list[Ticket] | None = None,
+629:     max_shared_matches: int | None = None,
+630:     max_match_market_exposure: int | None = None,
+631: ) -> Optional[Ticket]:
+632:     candidates = sorted(
+633:         pool,
+634:         key=lambda leg: (leg.q_score, leg.expected_value or -1.0, leg.model_probability),
+635:         reverse=True,
+636:     )[:_CANDIDATE_LIMIT]
+637:     if len(candidates) < spec.min_legs:
+638:         return None
+639:     partials: list[tuple[tuple[int, ...], tuple[Leg, ...]]] = [(tuple(), tuple())]
+640:     best: Ticket | None = None
+641:     best_score = -math.inf
+642:     for size in range(1, spec.max_legs + 1):
+643:         expanded: list[tuple[tuple[int, ...], tuple[Leg, ...]]] = []
+644:         for indices, legs in partials:
+645:             start = indices[-1] + 1 if indices else 0
+646:             for index in range(start, len(candidates)):
+647:                 leg = candidates[index]
+648:                 if any(existing.match_id == leg.match_id for existing in legs):
+649:                     continue
+650:                 if sum(existing.competition_id == leg.competition_id for existing in legs) >= _MAX_LEGS_PER_LEAGUE:
+651:                     continue
+652:                 next_legs = legs + (leg,)
+653:                 if math.prod(item.best_odds for item in next_legs) > spec.max_combined_odds:
+654:                     continue
+655:                 expanded.append((indices + (index,), next_legs))
+656:         expanded.sort(key=lambda item: _partial_score(item[1]), reverse=True)
+657:         partials = expanded[:_BEAM_WIDTH]
+658:         if size < spec.min_legs:
+659:             continue
+660:         for _, legs in partials:
+661:             ticket = _evaluate_combo(legs, spec, learned)
+662:             if ticket is not None and _within_ticket_overlap_limit(
+663:                 ticket,
+664:                 prior_tickets or [],
+665:                 max_shared_matches,
+666:                 max_match_market_exposure,
+667:             ) and _objective(ticket) > best_score:
+668:                 best, best_score = ticket, _objective(ticket)
+669:     return best
+670: 
+
+SOURCE backend/app/services/ticket_publisher.py:205
+205:         await self.db.flush()
+206:         for position, leg in enumerate(candidate.legs, start=1):
+207:             self.db.add(
+208:                 TicketSelection(
+209:                     ticket_id=ticket.id,
+210:                     prediction_id=leg.prediction_id,
+211:                     match_id=leg.match_id,
+212:                     position=position,
+213:                     market=leg.market,
+214:                     selection=leg.selection,
+215:                     odds_snapshot=leg.best_odds,
+216:                     probability_snapshot=leg.model_probability,
+217:                     q_score_snapshot=leg.q_score,
+218:                     edge_snapshot=leg.edge,
+219:                     source_odds_at=leg.source_odds_at,
+220:                 )
+221:             )
+222:         self.db.add(
+223:             AuditEvent(
+
+ORIGINAL REPORT:
+# Loss-attribution and probability-calibration report — before retraining
+
+**Decision: keep retraining and promotion on hold pending a controlled data/selection audit and an untouched evaluation design.** This report identifies diagnostic priorities; it does not fit a model, alter weights or thresholds, publish selections, or change production state.
+
+**Verified:** published selections are substantially overconfident in this archive. Their average probability was **79.90%**, versus **50.82%** observed wins: **+29.08 percentage points**. Positive paper returns do not resolve this calibration defect. **Inferred:** totals underestimation and the publication/selection process deserve investigation before general retraining. This is not a causal proof of why an individual match was lost.
+
+Completed: production read-only capture, cohort reconciliation, loss attribution, probability scoring, boundary checks, independent settlement comparison, and report review. Needs attention: quote-record retention, feature/parameter lineage, and later untouched observations. Retraining remains unperformed.
+
+## Evidence and scope
+
+
+Capture: **2026-09-20T05:33:30.491115+00:00** (07:33:30 Africa/Blantyre on 20 September 2026). Source: Railway production web, PostgreSQL; transaction `REPEATABLE READ READ ONLY`, verified `transaction_read_only=on`, ended with rollback. No database writes or model fitting. Snapshot figures stop at capture time; unresolved fixtures may settle later.
+
+
+Local analysis revision before changes: `f09f23c6d17646b86054f0c7c4dac5f3cc8aae81`. The deployed Git SHA was unavailable from the runtime environment, so local/deployed code identity is not asserted. Results are computed offline from captured records. Database final scores were not independently reconciled to a second results provider. No bookmaker account or cash wagers were inspected.
+
+This production evidence supersedes neither nor combines with the 19 September **local Docker** singles baseline; they are different databases and cohorts.
+
+
+| Table | Rows |
+| --- | --- |
+| predictions | 11444 |
+| accumulator_tickets | 45 |
+| ticket_selections | 201 |
+| ticket_results | 37 |
+| competitions | 24 |
+| teams | 514 |
+| matches | 1232 |
+
+## Cohort construction and exclusions
+
+- All-market diagnostic: exclude historical `as_of_at` replays; require prediction creation strictly before kickoff and matching market/selection; retain the latest eligible prediction per fixture, market, selection and model version. Only finished fixtures with scores and binary supported outcomes are scored. Quote availability does not determine calibration inclusion.
+- Published diagnostic: retain the **first pre-kickoff published snapshot** per fixture/market/selection across all ticket versions, including superseded versions. Require prediction creation no later than publication. This measures what was actually published, not a hypothetical latest prediction. Reserve the first record before looking at outcome. Repeated publication is not an independent trial.
+- Ticket P&L: latest ticket version per target date/type, latest settlement version. This matches the daily-ticket accounting convention, but is not an executed-wager ledger. It is a different cohort from first-published unique picks. Four of 19 latest tickets remain unsettled and contribute no settled P&L.
+- Exclude draw-no-bet from binary calibration rather than treat pushes as losses or assume unconditional probabilities are conditional on a non-draw. Quarter/integer totals are likewise unsupported by this report.
+
+
+| All-prediction disposition | Count |
+| --- | --- |
+| superseded_pre_match_prediction | 4566 |
+| historical_replay | 3771 |
+| unsupported or push-sensitive market | 280 |
+| unresolved | 864 |
+| Scored | 1963 |
+
+| Published-selection disposition | Count |
+| --- | --- |
+| repeat_publication | 122 |
+| unresolved | 18 |
+| Scored unique picks | 61 |
+
+The 1,963 scored all-market records represent only **141 fixtures and five CAT dates (16–20 September)**. The 61 published records represent **39 fixtures**, also five dates. Complementary and overlapping markets are dependent. The date range includes a partially completed 20 September. Pre-kickoff insertion timestamps do not prove that every feature and parameter was constructed without future information.
+
+## Loss attribution
+
+### Ticket ledger: losses and offsets
+
+The 15 settled latest daily tickets contain **3 wins and 12 losses**, staking 15 paper units. Gross losing stakes are **12.00 units**; winning tickets contribute **14.047929 units of net profit**, giving **+2.047929 units net / +13.65% paper ROI**. Winning returns are 17.047929 units. Mean adjusted ticket probability is **43.32%**, versus **20.00%** observed wins. Tickets share fixtures and cannot be treated as 15 independent trials.
+
+
+| Tier | Settled | Wins | Net paper units |
+| --- | --- | --- | --- |
+| AGGRESSIVE | 3 | 0 | -3.0000 |
+| BALANCED | 4 | 1 | +5.1461 |
+| BEST_VALUE | 4 | 0 | -4.0000 |
+| SAFE | 4 | 2 | +3.9018 |
+
+Allocate each lost ticket's stake equally among its losing legs. This is an additive accounting convention, **not causal attribution or the profit recoverable by removing a leg**. It avoids charging a full ticket loss to every losing selection. Allocations sum to 12.00 units.
+
+
+| Failed-leg market | Allocated gross ticket loss | Share |
+| --- | --- | --- |
+| under_3.5 | 3.583 | 29.9% |
+| double_chance_x2 | 2.750 | 22.9% |
+| under_2.5 | 2.167 | 18.1% |
+| under_4.5 | 1.000 | 8.3% |
+| btts_no | 0.917 | 7.6% |
+| double_chance_1x | 0.500 | 4.2% |
+| away_win | 0.417 | 3.5% |
+| home_win | 0.417 | 3.5% |
+| over_3.5 | 0.250 | 2.1% |
+
+Under 2.5 and Under 3.5 together account for **5.75 units / 47.92%** of allocated gross ticket losses. Double chance X2 contributes **2.75 units / 22.92%**. These are the first exposure groups to inspect, not automatic exclusion recommendations.
+
+### Unique published picks
+
+Across 61 picks, **31 won and 30 lost**. A hypothetical one-unit stake at each saved ticket price returns **+2.72 units / +4.46%**. Home-win picks contribute +12.26 units; without that subgroup the other 57 picks total −9.54 units. This concentration matters more than the small positive aggregate return.
+
+All 61 saved prices are usable for snapshot arithmetic, but **45 predictions no longer have a linked source-odds ID**. Their saved bookmaker/provenance fields remain. Missing links are a traceability limitation, not proof that those prices were fabricated or unavailable. The stricter linked-quote subset has only **16 picks**, +0.52 paper units / +3.25%; it must not be represented as the full cohort. Source odds themselves were not exported, so the link's presence is not full price verification. No executable-price or realized-return claim is made.
+
+
+| Market | Picks | Wins | Losses | Snapshot paper units |
+| --- | --- | --- | --- | --- |
+| away_win | 2 | 0 | 2 | -2.00 |
+| btts_no | 7 | 3 | 4 | -0.31 |
+| double_chance_1x | 5 | 3 | 2 | +1.91 |
+| double_chance_x2 | 9 | 4 | 5 | -2.71 |
+| home_win | 4 | 3 | 1 | +12.26 |
+| over_1.5 | 1 | 1 | 0 | +0.27 |
+| over_2.5 | 2 | 2 | 0 | +1.03 |
+| over_3.5 | 2 | 1 | 1 | +0.17 |
+| under_2.5 | 9 | 3 | 6 | -3.26 |
+| under_3.5 | 16 | 8 | 8 | -4.54 |
+| under_4.5 | 4 | 3 | 1 | -0.10 |
+
+**23 of 30 losses** were picks assigned at least 70% probability. Only **3 of 30** had odds at least 3.0. None of the losing published picks had Q-score below 70 or recorded edge below 0.05. Therefore low Q-score/thin-edge flags do not explain these observed losses; high recorded Q/edge is not independent evidence of quality. Flags overlap and are descriptive.
+
+## Probability calibration
+
+Brier is mean squared probability error; log loss uses natural logarithms with numerical clipping at 1e-15. Lower is better. Gap is mean predicted probability minus win frequency. ECE is count-weighted absolute gap in fixed 10-percentage-point bins. These are descriptive scores, not guarantees of future performance.
+
+
+| Cohort | n | Mean probability | Observed win rate | Gap (pp) | Brier | Log loss |
+| --- | --- | --- | --- | --- | --- | --- |
+| All latest pre-match binary forecasts | 1963 | 49.8% | 50.3% | -0.6 | 0.2223 | 0.6401 |
+| First published unique picks | 61 | 79.9% | 50.8% | +29.1 | 0.3163 | 0.8619 |
+| Published picks with p >= 70% | 48 | 84.4% | 52.1% | +32.4 | 0.3263 | 0.8908 |
+
+The published cohort expected **48.74 wins** in aggregate but recorded **31**. Its Brier **0.3163** is worse than constant 50% forecasts (**0.2500**), and log loss **0.8619** is worse than the same baseline (**0.6931**). Published ECE is **29.08 pp**. The high-confidence subset is 25/48 wins, despite an average probability of **84.44%**.
+
+The pooled all-market signed gap is only −0.57 pp, but **opposing-market errors cancel**. Its ECE is **6.00 pp**. A small pooled signed gap cannot establish calibration. All-market Brier is 0.2223, versus **0.1996 for raw 1/quoted odds on the same rows**. Raw implied probabilities include bookmaker margin and are not a de-vigged fair-probability benchmark. All-market flat-stake arithmetic loses **96.01 units / −4.89%**; wagering on all overlapping/opposing markets is not a proposed strategy.
+
+### Published reliability bins
+
+
+| Cohort | n | Mean probability | Observed win rate | Gap (pp) | Brier | Log loss |
+| --- | --- | --- | --- | --- | --- | --- |
+| 0.5-0.6 | 4 | 56.2% | 50.0% | +6.2 | 0.2482 | 0.6893 |
+| 0.6-0.7 | 9 | 66.2% | 44.4% | +21.7 | 0.2933 | 0.7842 |
+| 0.7-0.8 | 14 | 75.2% | 21.4% | +53.8 | 0.4659 | 1.1829 |
+| 0.8-0.9 | 21 | 85.3% | 47.6% | +37.7 | 0.3925 | 1.0886 |
+| 0.9-1.0 | 13 | 92.9% | 92.3% | +0.6 | 0.0693 | 0.2568 |
+
+Bins are left-inclusive/right-exclusive, with 1.0 included in the last bin. The 70–80% bin wins **3/14**, and the 80–90% bin wins **10/21**. The 90–100% bin's 12/13 result is too small to justify raising a threshold after seeing outcomes.
+
+### All-market reliability bins
+
+
+| Cohort | n | Mean probability | Observed win rate | Gap (pp) | Brier | Log loss |
+| --- | --- | --- | --- | --- | --- | --- |
+| 0.0-0.1 | 74 | 6.3% | 13.5% | -7.3 | 0.1244 | 0.4572 |
+| 0.1-0.2 | 161 | 15.5% | 21.7% | -6.2 | 0.1738 | 0.5378 |
+| 0.2-0.3 | 268 | 25.2% | 35.4% | -10.3 | 0.2394 | 0.6770 |
+| 0.3-0.4 | 257 | 34.6% | 40.1% | -5.4 | 0.2421 | 0.6777 |
+| 0.4-0.5 | 239 | 45.0% | 48.1% | -3.2 | 0.2517 | 0.6965 |
+| 0.5-0.6 | 254 | 55.0% | 54.3% | +0.7 | 0.2487 | 0.6905 |
+| 0.6-0.7 | 244 | 65.1% | 60.7% | +4.4 | 0.2399 | 0.6732 |
+| 0.7-0.8 | 197 | 75.1% | 66.0% | +9.1 | 0.2328 | 0.6630 |
+| 0.8-0.9 | 173 | 84.9% | 76.3% | +8.6 | 0.1878 | 0.5729 |
+| 0.9-1.0 | 96 | 93.7% | 85.4% | +8.3 | 0.1313 | 0.4653 |
+
+### Market diagnosis
+
+
+| Cohort | n | Mean probability | Observed win rate | Gap (pp) | Brier | Log loss |
+| --- | --- | --- | --- | --- | --- | --- |
+| away_win | 141 | 35.0% | 29.8% | +5.2 | 0.1935 | 0.5664 |
+| btts_no | 140 | 52.4% | 40.7% | +11.7 | 0.2732 | 0.7442 |
+| btts_yes | 140 | 47.6% | 59.3% | -11.7 | 0.2732 | 0.7442 |
+| double_chance_1x | 140 | 63.8% | 70.7% | -6.9 | 0.1952 | 0.5676 |
+| double_chance_x2 | 140 | 62.3% | 55.7% | +6.5 | 0.2315 | 0.6608 |
+| draw | 141 | 25.9% | 26.2% | -0.4 | 0.1919 | 0.5704 |
+| home_win | 141 | 39.1% | 44.0% | -4.9 | 0.2286 | 0.6507 |
+| over_1.5 | 140 | 71.0% | 78.6% | -7.6 | 0.1851 | 0.5562 |
+| over_2.5 | 140 | 48.3% | 61.4% | -13.2 | 0.2646 | 0.7267 |
+| over_3.5 | 140 | 29.6% | 38.6% | -9.0 | 0.2545 | 0.7215 |
+| over_4.5 | 140 | 16.6% | 17.9% | -1.3 | 0.1512 | 0.5030 |
+| under_2.5 | 140 | 51.7% | 38.6% | +13.2 | 0.2646 | 0.7267 |
+| under_3.5 | 140 | 70.4% | 61.4% | +9.0 | 0.2545 | 0.7215 |
+| under_4.5 | 140 | 83.4% | 82.1% | +1.3 | 0.1512 | 0.5030 |
+
+**Inferred:** totals lean too low in this window. Over 2.5 occurs in 61.43% of fixtures against 48.26% predicted; BTTS Yes occurs in 59.29% against 47.62%. The corresponding Under/BTTS No forecasts are too high. Both Over/Under 2.5 Brier scores are 0.2646, and BTTS scores are 0.2732, worse than constant 50%. Under 3.5 is 70.38% predicted versus 61.43% observed in the all-market cohort, but **86.73% versus 50.00%** among 16 published picks. This difference motivates investigating selection and prediction timing as well as model calibration; the two cohorts are not matched causal controls.
+
+### Model-version separation
+
+
+| Cohort | n | Mean probability | Observed win rate | Gap (pp) | Brier | Log loss |
+| --- | --- | --- | --- | --- | --- | --- |
+| 0.2.1 | 1739 | 49.7% | 50.3% | -0.6 | 0.2196 | 0.6329 |
+| 0.3.0 | 224 | 50.2% | 50.4% | -0.2 | 0.2432 | 0.6965 |
+
+Version 0.2.1 contributes 1,739 forecasts across 125 fixtures/four dates; 0.3.0 contributes 224 forecasts across 16 fixtures/one date. Published picks are 60 from 0.2.1 and only one from 0.3.0. These are different fixtures/time periods, not a head-to-head experiment. No version superiority or deterioration is established.
+
+### Components on matched rows
+
+
+| Component | Available n | Component Brier | Ensemble Brier, same rows |
+| --- | --- | --- | --- |
+| poisson_prob | 1960 | 0.2251 | 0.2223 |
+| zinb_prob | 0 | N/A | N/A |
+| bayes_prob | 1960 | 0.2495 | 0.2223 |
+| elo_prob | 423 | 0.2126 | 0.2046 |
+| xg_prob | 1960 | 0.2143 | 0.2223 |
+
+xG has a better observed Brier than the ensemble on its matched rows; Bayes is worse. This is diagnostic evidence to examine inputs/weights, not permission to tune weights on this same archive. ZINB has no observations in this scored cohort. Component errors can be correlated; counting models does not establish independent corroboration.
+
+### Published day and league sensitivity
+
+
+| Cohort | n | Mean probability | Observed win rate | Gap (pp) | Brier | Log loss |
+| --- | --- | --- | --- | --- | --- | --- |
+| 2026-09-16 | 7 | 81.4% | 71.4% | +10.0 | 0.2186 | 0.6154 |
+| 2026-09-17 | 12 | 84.4% | 41.7% | +42.7 | 0.4082 | 1.1097 |
+| 2026-09-18 | 16 | 75.1% | 43.8% | +31.3 | 0.3232 | 0.8695 |
+| 2026-09-19 | 25 | 80.4% | 56.0% | +24.4 | 0.2828 | 0.7788 |
+| 2026-09-20 | 1 | 79.2% | 0.0% | +79.2 | 0.6273 | 1.5704 |
+
+| Cohort | n | Mean probability | Observed win rate | Gap (pp) | Brier | Log loss |
+| --- | --- | --- | --- | --- | --- | --- |
+| 2. Bundesliga | 1 | 80.8% | 100.0% | -19.2 | 0.0370 | 0.2137 |
+| Brasileirão Série A | 3 | 80.5% | 0.0% | +80.5 | 0.6513 | 1.6921 |
+| Bundesliga | 3 | 74.3% | 66.7% | +7.6 | 0.1619 | 0.4787 |
+| Championship | 3 | 79.5% | 33.3% | +46.2 | 0.3661 | 0.9285 |
+| Jupiler Pro League | 2 | 76.4% | 50.0% | +26.4 | 0.3563 | 0.9613 |
+| La Liga | 1 | 80.8% | 0.0% | +80.8 | 0.6532 | 1.6513 |
+| League Cup | 5 | 76.3% | 60.0% | +16.3 | 0.2937 | 0.8133 |
+| League of Ireland | 6 | 72.2% | 33.3% | +38.9 | 0.3797 | 1.0149 |
+| Ligue 1 | 5 | 70.3% | 40.0% | +30.3 | 0.3665 | 1.0424 |
+| Ligue 2 | 9 | 83.3% | 44.4% | +38.8 | 0.3615 | 0.9618 |
+| Major League Soccer | 2 | 93.2% | 100.0% | -6.8 | 0.0057 | 0.0714 |
+| Premier League | 4 | 73.7% | 75.0% | -1.3 | 0.1823 | 0.5245 |
+| Premiership | 1 | 85.8% | 0.0% | +85.8 | 0.7365 | 1.9535 |
+| Primeira Liga | 2 | 83.9% | 50.0% | +33.9 | 0.3080 | 0.8063 |
+| Serie A | 3 | 82.6% | 66.7% | +15.9 | 0.1500 | 0.4194 |
+| UEFA Europa League | 11 | 87.1% | 63.6% | +23.4 | 0.2709 | 0.7637 |
+
+League groups contain only 1–11 picks. Do not blacklist leagues or select a profitable market from these post-hoc comparisons. Full all-market league, date, version-by-market metrics and individual scored rows are in `analysis.json`.
+
+## Uncertainty and attribution limits
+
+The published probability-minus-outcome gap's exploratory percentile 95% interval is **+16.74 to +42.21 pp** when resampling fixtures, and **+21.33 to +39.96 pp** when resampling dates. Each uses 1,000 bootstrap replicates, seed 20260920. Entire fixture/date groups are resampled to retain within-group dependence. Only five date clusters exist, making date intervals unstable; neither method captures all repeated-team, competition, temporal, or policy-search dependence. These are diagnostic intervals, not a promotion test.
+
+All-market fixture-resampled gap is −1.29 to +0.16 pp, but complements make this aggregate especially uninformative. No claim of adequate calibration follows from that interval. No new fitted calibrator, calibration slope/intercept, tuned threshold, or retrained model was estimated. Per-market base-rate Brier in the JSON uses the same sample's outcomes and is descriptive, not an out-of-sample baseline.
+
+CLV fields are populated on all 1,963 scored latest predictions, but closing quote timestamps/provenance have not been independently audited here; populated CLV is not established price advantage. Match data quality at settlement time cannot explain decision-time losses without a matching historical snapshot. Existing loss-review flags such as “normal variance” do not establish the absence of systematic error.
+
+## Required sequence before retraining
+
+1. **Audit lineage and selection first.** Preserve this snapshot. Trace the high-confidence losses (see examples below) back to feature cutoffs, model-run parameters, quote capture, and publication. Explain why selected probabilities are so much higher than later all-market probabilities; compare the same fixture/market at first publication and later pre-match runs. Verify retention of source quotes and exact market mapping. These checks are still open.
+2. **Freeze evaluation rules before fitting.** Separate prospective live records from reconstructed replays; keep fixtures and their overlapping markets together. Define chronological training, calibration, and later untouched test windows. Restrict feature/parameter availability at every forecast cutoff. The five observed dates cannot serve simultaneously as tuning data and proof of improvement.
+3. **Use a bounded challenger experiment only after that audit.** Prioritize totals/BTTS probability bias and component contributions. Compare the incumbent, an explicit calibration-only challenger, and any retrained challenger on identical later fixtures/quotes. Fit calibration only inside its designated earlier window; do not change live weights or thresholds from this report.
+4. **Retain operational promotion gates.** Require reproducible lineage, settlement integrity, market-level calibration/Brier/log-loss comparisons, positive fixed-unit net returns and the existing positive lower ROI-bound requirement, coverage, drawdown and dependence-aware uncertainty on untouched observations. Define acceptable calibration tolerances and sample/duration requirements before viewing those results. No adequate new promotion sample size or tolerance is inferred here.
+
+No retraining, deployment, ledger rewrite, settlement change, or live-staking change was made. The report is complete; those follow-up investigations and a future training experiment are separate work.
+
+## Traceable high-confidence misses
+
+
+| Prediction ID | Selection ID | Fixture ID | Market | Probability | Final score |
+| --- | --- | --- | --- | --- | --- |
+| 6233 | 101 | 1387 | under_3.5 | 91.55% | 3-2 |
+| 619 | 25 | 1350 | under_3.5 | 89.32% | 4-1 |
+| 325 | 15 | 1354 | under_3.5 | 88.67% | 3-2 |
+| 382 | 17 | 1345 | double_chance_x2 | 87.03% | 4-0 |
+| 1758 | 70 | 1368 | under_3.5 | 86.10% | 3-4 |
+
+## Reproduction and verification
+
+Frozen input: `docs/evidence/pre_retraining_2026-09-20/source.json.gz` (compressed JSON). Derived output: `analysis.json` in the same folder. Input tables contain football research records, not user accounts, credentials or bet-account balances.
+
+
+Input SHA-256: `388db18a93acc3c46760318ac863c884b7112c7618862d5bf13b1785a978a5dd`.
+
+
+Run from the repository root:
+
+```powershell
+python backend/scripts/pre_retraining_report.py docs/evidence/pre_retraining_2026-09-20/source.json.gz docs/evidence/pre_retraining_2026-09-20/analysis.json
+python backend/scripts/render_pre_retraining_report.py
+python -m unittest discover -s backend/tests -p test_pre_retraining_report.py -v
+```
+
+The production export script is `backend/scripts/export_pre_retraining.py`; it was transmitted to the web runtime and executed in memory using Railway SSH. It issues SELECT queries in an explicitly read-only transaction and rolls back. It does not invoke application lifespan, settlement, calibration aggregation, or training.
+
+**Verified:** four focused tests passed. They compare 960 binary-market/score combinations against the application's settlement function; reject push-sensitive/unknown markets; check perfect/wrong/extreme and empty probability scores; reconcile all prediction and publication dispositions, unique picks, gross-loss allocations and paper profit. Supported finished legs in the latest settled-ticket cohort have zero stored-versus-score settlement mismatches. All those ticket publications preceded their leg kickoffs. Unsupported/push-sensitive settlements are not certified by that check.
+
+**Limitations:** this is a timestamp-valid, retrospective diagnosis of recorded forecasts, not a fully certified no-lookahead backtest, causal loss explanation, cash performance audit, or evidence for retraining/promotion success.
