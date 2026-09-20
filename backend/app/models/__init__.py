@@ -28,6 +28,7 @@ from app.models.research import (
     PipelineRun,
     PipelineStageRun,
     BacktestRun,
+    SinglesLedgerSnapshot,
 )
 
 __all__ = [
@@ -44,4 +45,5 @@ __all__ = [
     "ModelRun", "ModelLearningRun", "MarketLearningProfile", "ModelLearningPromotion", "StrongestSelectionSnapshot", "TicketGeneration", "AccumulatorTicket", "TicketSelection", "TicketResult",
     "AuditEvent", "ModelPerformance", "LeaguePerformance", "CorrelationCoefficient",
     "PipelineRun", "PipelineStageRun", "BacktestRun",
+    "SinglesLedgerSnapshot",
 ]

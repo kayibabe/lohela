@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.security import require_research_access
 from app.config import CURRENT_MODEL_VERSION
 from app.database import get_db
+from app.services.singles_ledger import review_all_snapshots_db
 from app.services.singles_report import singles_report
 
 router = APIRouter(prefix="/singles", tags=["singles"],
@@ -22,3 +23,17 @@ async def research_singles(start: date, end: date,
         return report
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.get("/ledger")
+async def singles_ledger(db: AsyncSession = Depends(get_db)):
+    """The real frozen prospective ledger: every daily-captured decision combined.
+
+    Distinct from /research, which replays a policy over already-published
+    predictions after the fact. This reads only outcome-blind snapshots
+    captured before each pick's kickoff and frozen as insert-only DB rows.
+    """
+    try:
+        return await review_all_snapshots_db(db)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc

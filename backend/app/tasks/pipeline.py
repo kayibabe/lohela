@@ -600,6 +600,37 @@ def train_shadow_challenger(self):
         raise self.retry(exc=exc, countdown=300)
 
 
+@celery_app.task(name="pipeline.capture_singles_ledger", bind=True, max_retries=1)
+def capture_singles_ledger(self):
+    """Freeze today's real prospective singles decision into the DB ledger.
+
+    Outcome-blind by construction (see app.services.singles_ledger): this
+    only selects from predictions already on the board, applies the fixed
+    odds>1.50/probability>=0.70 research policy, and writes an insert-only
+    row. A day with zero eligible picks still records a row — a no-bet day
+    is valid evidence, so it is never treated as a failure or skipped.
+    """
+    from app.config import cat_today
+    from app.database import AsyncSessionLocal
+    from app.services.singles_ledger import freeze_snapshot_db
+
+    today = cat_today()
+
+    async def _run():
+        async with AsyncSessionLocal() as db:
+            result = await freeze_snapshot_db(db, today, today, CURRENT_MODEL_VERSION)
+            await db.commit()
+            return result
+
+    try:
+        result = _run_async(_run())
+        logger.info("Singles ledger snapshot captured: %s", result)
+        return result
+    except Exception as exc:
+        logger.exception("Singles ledger capture failed")
+        raise self.retry(exc=exc, countdown=300)
+
+
 def _daily_pipeline_canvas(today: str, pipeline_run_id: int):
     """Build the deterministic task graph separately so its wiring is testable."""
     from celery import chain

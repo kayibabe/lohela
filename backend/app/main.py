@@ -93,6 +93,18 @@ async def lifespan(app: FastAPI):
             id="weekly_shadow_model_learning",
             replace_existing=True,
         )
+    if settings.singles_ledger_capture_enabled:
+        scheduler.add_job(
+            _trigger_singles_ledger_capture,
+            CronTrigger(
+                hour=settings.singles_ledger_capture_cron_hour,
+                minute=settings.singles_ledger_capture_cron_minute,
+            ),
+            id="daily_singles_ledger_capture",
+            replace_existing=True,
+            coalesce=True,
+            max_instances=1,
+        )
     scheduler.start()
     logger.info(
         "Pipeline scheduled at %02d:%02d UTC and %02d:%02d UTC (00:15 and 05:00 CAT)",
@@ -256,6 +268,22 @@ async def _queue_shadow_learning():
 
     train_shadow_challenger.delay()
     logger.info("Weekly shadow model-learning task queued")
+
+
+async def _trigger_singles_ledger_capture():
+    """Queue the daily prospective singles ledger capture."""
+    async with _scheduler_leadership("singles_ledger_capture") as leader:
+        if not leader:
+            return
+        await _queue_singles_ledger_capture()
+
+
+async def _queue_singles_ledger_capture():
+    """Queue the ledger capture after scheduler leadership has been acquired."""
+    from app.tasks.pipeline import capture_singles_ledger
+
+    capture_singles_ledger.delay()
+    logger.info("Daily singles ledger capture task queued")
 
 
 app = FastAPI(

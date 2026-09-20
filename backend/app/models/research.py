@@ -413,6 +413,33 @@ class PipelineStageRun(Base):
     pipeline_run: Mapped["PipelineRun"] = relationship("PipelineRun", back_populates="stages")
 
 
+class SinglesLedgerSnapshot(Base):
+    """Immutable, insert-only capture of one real prospective singles decision.
+
+    Application code must never UPDATE or DELETE rows here — a captured
+    decision is permanent evidence, exactly like the local-file snapshots in
+    app.services.singles_ledger (whose "'x' mode refuses overwrite" comment
+    describes the same guarantee this table provides via insert-only Postgres
+    storage instead of the container's ephemeral filesystem, which does not
+    survive a redeploy or restart). sha256 detects accidental payload
+    corruption; it is not an externally trusted timestamp.
+    """
+
+    __tablename__ = "singles_ledger_snapshots"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    sha256: Mapped[str] = mapped_column(String(64), nullable=False, unique=True, index=True)
+    captured_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, unique=True, index=True)
+    start_date: Mapped[date] = mapped_column(Date, nullable=False, index=True)
+    end_date: Mapped[date] = mapped_column(Date, nullable=False)
+    model_version: Mapped[str] = mapped_column(String(40), nullable=False, index=True)
+    picks_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    payload: Mapped[dict] = mapped_column(JSON, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+
 class BacktestRun(Base):
     __tablename__ = "backtest_runs"
 

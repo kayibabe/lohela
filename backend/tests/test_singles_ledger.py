@@ -3,9 +3,10 @@ from dataclasses import replace
 from datetime import datetime, timedelta, timezone
 import json
 from types import SimpleNamespace
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from sqlalchemy.exc import IntegrityError
 
 from app.models import MatchStatus
 from app.services import singles_ledger as ledger
@@ -92,3 +93,67 @@ async def test_review_only_settles_finished_results(tmp_path, status, expected):
     assert report["voids"] == 0
     assert report["evidence_class"] == "frozen_local_paper_decisions"
     assert not report["ready_for_promotion"]
+
+
+@pytest.mark.asyncio
+async def test_freeze_snapshot_db_persists_insert_only_row(monkeypatch):
+    now, row = context()
+    monkeypatch.setattr(ledger, "load_rows", AsyncMock(return_value=[]))
+    monkeypatch.setattr(ledger, "adapt_rows", lambda rows: ([row], {}, {}))
+    db = SimpleNamespace(add=MagicMock(), flush=AsyncMock())
+    result = await ledger.freeze_snapshot_db(db, now.date(), (now + timedelta(days=1)).date(), "test-v1")
+    assert result["picks"] == 1
+    added = db.add.call_args.args[0]
+    assert added.sha256 == result["sha256"]
+    assert added.picks_count == 1
+    assert added.payload["schema"] == "singles-paper-v1"
+    db.flush.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_freeze_snapshot_db_duplicate_capture_raises_value_error(monkeypatch):
+    now, row = context()
+    monkeypatch.setattr(ledger, "load_rows", AsyncMock(return_value=[]))
+    monkeypatch.setattr(ledger, "adapt_rows", lambda rows: ([row], {}, {}))
+    db = SimpleNamespace(add=MagicMock(), flush=AsyncMock(side_effect=IntegrityError("stmt", {}, Exception())))
+    with pytest.raises(ValueError, match="already exists"):
+        await ledger.freeze_snapshot_db(db, now.date(), (now + timedelta(days=1)).date(), "test-v1")
+
+
+@pytest.mark.asyncio
+async def test_review_all_snapshots_db_combines_rows_and_drops_duplicates():
+    now, row = context()
+    document = ledger._build_snapshot_document(
+        Selection((row,), {}, Policy()), start=now.date(),
+        end=(now + timedelta(days=1)).date(), captured_at=now, model_version="test-v1",
+    )
+    snapshot_row = SimpleNamespace(
+        id=1, sha256=document["sha256"], payload=document["payload"],
+        start_date=now.date(), end_date=(now + timedelta(days=1)).date(),
+        model_version="test-v1", captured_at=now,
+    )
+    # A second capture of the *same* match/market (e.g. a delayed kickoff
+    # recaptured the next day) must be dropped, not double-counted.
+    duplicate_row = SimpleNamespace(
+        id=2, sha256=document["sha256"], payload=document["payload"],
+        start_date=now.date(), end_date=(now + timedelta(days=1)).date(),
+        model_version="test-v1", captured_at=now + timedelta(seconds=1),
+    )
+    match = SimpleNamespace(id=10, status=MatchStatus.FINISHED, home_goals=2, away_goals=0)
+    db = SimpleNamespace(execute=AsyncMock(side_effect=[
+        SimpleNamespace(scalars=lambda: SimpleNamespace(all=lambda: [snapshot_row, duplicate_row])),
+        SimpleNamespace(scalars=lambda: SimpleNamespace(all=lambda: [match])),
+    ]))
+    report = await ledger.review_all_snapshots_db(db)
+    assert report["snapshots_combined"] == 2
+    assert report["duplicate_picks_dropped"] == 1
+    assert report["wins"] == 1
+    assert report["evidence_class"] == "frozen_prospective_singles_ledger"
+
+
+@pytest.mark.asyncio
+async def test_review_all_snapshots_db_empty_raises_value_error():
+    db = SimpleNamespace(execute=AsyncMock(return_value=SimpleNamespace(
+        scalars=lambda: SimpleNamespace(all=lambda: []))))
+    with pytest.raises(ValueError, match="No singles ledger snapshots"):
+        await ledger.review_all_snapshots_db(db)

@@ -93,6 +93,15 @@ class Settings(BaseSettings):
     learning_shadow_cron_day: str = "sun"
     learning_shadow_cron_hour: int = 4
     learning_shadow_cron_minute: int = 30
+
+    # Daily capture of the real prospective singles ledger (spec: outcome-blind,
+    # frozen decisions only — see app.services.singles_ledger). Runs after the
+    # morning pipeline so freshly-created predictions are within the ledger's
+    # 6-hour decision-freshness window. A missed or no-pick day is valid
+    # evidence, not a failure, so this has no watchdog/retry of its own.
+    singles_ledger_capture_enabled: bool = True
+    singles_ledger_capture_cron_hour: int = 4
+    singles_ledger_capture_cron_minute: int = 10
     learning_train_days: int = 180
     learning_validation_days: int = 30
 
