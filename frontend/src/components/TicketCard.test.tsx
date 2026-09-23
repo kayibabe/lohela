@@ -73,6 +73,31 @@ describe('audited ticket surfaces', () => {
     expect(html).toContain('level 2')
   })
 
+  it('labels a rolling-horizon ticket and dates its later legs', () => {
+    const horizonTicket: Ticket = {
+      ...ticket,
+      horizon_days: 3,
+      legs: [
+        ticket.legs[0],
+        { ...ticket.legs[0], selection_id: 2, prediction_id: 8, kickoff_at: '2026-08-31T14:00:00Z' },
+      ],
+    }
+    const html = renderToStaticMarkup(
+      <TicketCard ticket={horizonTicket} tierName="Balanced" tierDesc="Q ≥80" color="blue" />,
+    )
+    expect(html).toContain('Includes games to Mon 31 Aug')
+    expect(html).toContain('Fri 28 Aug')
+    expect(html).toContain('up to 3 day(s) later')
+  })
+
+  it('omits horizon labelling for a same-day ticket', () => {
+    const html = renderToStaticMarkup(
+      <TicketCard ticket={ticket} tierName="Balanced" tierDesc="Q ≥80" color="blue" />,
+    )
+    expect(html).not.toContain('Includes games to')
+    expect(html).not.toContain('Fri 28 Aug')
+  })
+
   it('renders a clear empty persisted-ticket state', () => {
     const html = renderToStaticMarkup(
       <TicketCard ticket={null} tierName="Conservative" tierDesc="Q ≥85" color="green" />,

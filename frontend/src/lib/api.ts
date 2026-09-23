@@ -48,6 +48,8 @@ export interface Ticket {
   high_risk_label: boolean
   relaxed_tier: boolean
   relaxation_level: number
+  /** >0 when a thin day's ticket includes fixtures up to this many days later. */
+  horizon_days?: number
   internal_only: boolean
   result: string | null
   profit_loss: number | null

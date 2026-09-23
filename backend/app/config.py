@@ -167,6 +167,17 @@ class Settings(BaseSettings):
     # The public daily portfolio targets all three tiers. Missing tiers remain
     # visible as PARTIAL rather than being fabricated or replaced by history.
     min_daily_public_tickets: int = 3
+    # Rolling-horizon fallback (app/services/ticket_horizon.py). When the
+    # target CAT day cannot fill min_daily_public_tickets even after
+    # relaxation — international breaks leave whole weeks with 0-5 tracked
+    # fixtures a day — the ticket stage prepares the following days one at a
+    # time (up to this many) and admits their legs for the missing tiers only.
+    # Tickets record how far ahead they reach (accumulator_tickets.horizon_days).
+    ticket_horizon_max_days: int = 4
+    # Reuse a horizon day's completed model run if it finished this recently;
+    # older runs are re-scored so their odds pass the stale-odds gate
+    # (max_selection_odds_age_hours).
+    ticket_horizon_run_reuse_hours: float = 1.0
 
     # Tier 1 league IDs on API-Football (spec Appendix B)
     tier1_league_ids: list[int] = [2, 3, 39, 61, 78, 135, 140]
@@ -187,6 +198,28 @@ class Settings(BaseSettings):
         48, 81, 137,
         179, 144, 253,
     ]
+    # Tier 3 break-resilient supply (added 2026-09-23). The Sept 2026 FIFA
+    # window left 22 Sep..1 Oct with 0-5 fixtures a day across every league
+    # above, while ~200-1200 fixtures a day were played elsewhere. These keep
+    # playing through international windows and midweek (checked against the
+    # Oct/Nov 2025 windows too), each with current-season odds coverage per
+    # GET /leagues. Rows are auto-seeded (seed.seed_missing_competitions) and
+    # their history auto-backfilled (pipeline.backfill_leagues) on deploy.
+    tier3_league_ids: list[int] = [
+        41, 42, 43, 180, 408,          # England L1/L2/National, Scotland, N. Ireland
+        89, 141, 435, 436,             # Eerste Divisie, Segunda, Primera RFEF x2
+        138, 942, 943,                 # Serie C groups A/B/C
+        239, 262, 268, 255,            # Colombia, Liga MX, Uruguay, USL Championship
+    ]
+    # Days of finished-match history pulled for a newly added league so its
+    # teams clear the models' history requirements (3-model minimum).
+    new_league_backfill_days: int = 400
+
+    @property
+    def tracked_league_ids(self) -> list[int]:
+        return list(dict.fromkeys(
+            self.tier1_league_ids + self.tier2_league_ids + self.tier3_league_ids
+        ))
 
     # Football-Data.co.uk (historical odds CSVs — no key required)
     football_data_base_url: str = "https://www.football-data.co.uk/mmz4281"

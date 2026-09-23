@@ -130,6 +130,9 @@ class Ticket:
     internal_only: bool
     relaxed: bool = False
     relaxation_level: int = 0
+    # Days beyond the target date the ticket's legs may kick off (0 = target
+    # day only). Set only by the rolling-horizon fallback — see build().
+    horizon_days: int = 0
 
 
 @dataclass
@@ -142,6 +145,10 @@ class DailyTickets:
     best_value: Optional[Ticket]
     qualified_pool: int
     selection_diagnostics: dict[str, dict] = field(default_factory=dict)
+    horizon_dates: list[date] = field(default_factory=list)
+
+    def public_count(self) -> int:
+        return sum(t is not None for t in (self.conservative, self.balanced, self.aggressive))
 
 
 class AccumulatorBuilder:
@@ -153,7 +160,18 @@ class AccumulatorBuilder:
         target_date: date | None = None,
         model_run_id: int | None = None,
         research_min_qscore: float | None = None,
+        horizon_dates: list[date] | None = None,
     ) -> DailyTickets:
+        """Build the day's portfolio.
+
+        `horizon_dates` (later CAT days, each with its own completed model run)
+        enables the rolling-horizon fallback: only when the target day's own
+        slate cannot fill `settings.min_daily_public_tickets` public tiers —
+        even after gate relaxation — are legs kicking off on those later days
+        admitted, and only for the tiers still missing. Every leg must still
+        clear the same per-leg gates (edge, model set, data quality, fresh
+        odds, calibration); only *when* it kicks off is widened.
+        """
         td = target_date or cat_today()
         run = await self._resolve_model_run(td, model_run_id)
         if run is None:
@@ -214,8 +232,30 @@ class AccumulatorBuilder:
                 max_match_market_exposure=settings.max_public_ticket_exposure_per_match_market,
             )
 
+        used_horizon: list[date] = []
         if research_min_qscore is None and settings.ticket_relaxation_enabled:
             self._apply_minimum_ticket_relaxation(output, pool, calibration, coefficients)
+            if horizon_dates and _public_count(output) < settings.min_daily_public_tickets:
+                extended_pool = list(pool)
+                seen = {leg.prediction_id for leg in pool}
+                for horizon_date in horizon_dates:
+                    horizon_run = await self._resolve_model_run(horizon_date, None)
+                    if horizon_run is None:
+                        continue
+                    used_horizon.append(horizon_date)
+                    for leg in await self._load_qualified_legs(horizon_date, horizon_run.id):
+                        if leg.prediction_id not in seen:
+                            seen.add(leg.prediction_id)
+                            extended_pool.append(leg)
+                if len(extended_pool) > len(pool):
+                    self._apply_minimum_ticket_relaxation(
+                        output, extended_pool, calibration, coefficients,
+                        first_level=0, target_date=td,
+                    )
+                diagnostics["horizon"] = {
+                    "horizon_dates": [d.isoformat() for d in used_horizon],
+                    "horizon_pool_count": len(extended_pool) - len(pool),
+                }
 
         return DailyTickets(
             td,
@@ -226,6 +266,7 @@ class AccumulatorBuilder:
             output[TicketType.BEST_VALUE],
             len(pool),
             diagnostics,
+            used_horizon,
         )
 
     def _apply_minimum_ticket_relaxation(
@@ -234,31 +275,74 @@ class AccumulatorBuilder:
         pool: list[Leg],
         calibration: dict,
         coefficients: dict[tuple[str, str, str, int | None], float],
+        *,
+        first_level: int = 1,
+        target_date: date | None = None,
     ) -> None:
         """Guarantee `settings.min_daily_public_tickets` public tickets when the
         qualified pool can support it, by loosening the tightest gates (only) for
         public tiers that produced nothing at full strength. Never touches a tier
         that already has a full-strength ticket, and never invents a combination
-        the beam search can't actually build from real, edge-qualified legs."""
-        public_types = (TicketType.SAFE, TicketType.BALANCED, TicketType.AGGRESSIVE)
-        published = sum(1 for t in public_types if output[t] is not None)
-        if published >= settings.min_daily_public_tickets:
+        the beam search can't actually build from real, edge-qualified legs.
+
+        `first_level=0` tries the unrelaxed spec first; the rolling-horizon
+        pass uses it (with `target_date`, to stamp each ticket's horizon_days)
+        so a wider pool is exhausted at full strength before any gate loosens."""
+        if _public_count(output) >= settings.min_daily_public_tickets:
             return
         # Loosest base spec first (AGGRESSIVE), so relaxation reaches the floor
-        # with the fewest, least-invasive concessions.
-        relax_order = [
-            t for t in (TicketType.AGGRESSIVE, TicketType.BALANCED, TicketType.SAFE)
-            if output[t] is None
-        ]
-        for ticket_type in relax_order:
+        # with the fewest, least-invasive concessions. On a thin pool that order
+        # can starve the others: AGGRESSIVE may claim up to 10 legs and the
+        # public one-exposure-per-match/market rule leaves too few for
+        # CONSERVATIVE. So when it falls short, also try smallest-ticket-first
+        # and keep whichever fills more tiers (ties keep the original order).
+        orders = (
+            (TicketType.AGGRESSIVE, TicketType.BALANCED, TicketType.SAFE),
+            (TicketType.SAFE, TicketType.BALANCED, TicketType.AGGRESSIVE),
+        )
+        best: dict[TicketType, Ticket | None] | None = None
+        for order in orders:
+            attempt = dict(output)
+            self._fill_missing_public_tiers(
+                attempt, order, pool, calibration, coefficients, first_level, target_date
+            )
+            if best is None or _public_count(attempt) > _public_count(best):
+                best = attempt
+            if _public_count(best) >= settings.min_daily_public_tickets:
+                break
+        output.update(best)
+        for ticket_type in (TicketType.SAFE, TicketType.BALANCED, TicketType.AGGRESSIVE):
+            ticket = output[ticket_type]
+            if ticket is not None and (ticket.relaxed or ticket.horizon_days):
+                logger.warning(
+                    "Filled %s ticket (relaxation level %d, horizon +%dd) to meet minimum "
+                    "daily publication (%d/%d public)",
+                    ticket_type.value, ticket.relaxation_level, ticket.horizon_days,
+                    _public_count(output), settings.min_daily_public_tickets,
+                )
+
+    def _fill_missing_public_tiers(
+        self,
+        output: dict[TicketType, Ticket | None],
+        order: tuple[TicketType, ...],
+        pool: list[Leg],
+        calibration: dict,
+        coefficients: dict[tuple[str, str, str, int | None], float],
+        first_level: int,
+        target_date: date | None,
+    ) -> None:
+        public_types = (TicketType.SAFE, TicketType.BALANCED, TicketType.AGGRESSIVE)
+        published = _public_count(output)
+        for ticket_type in (t for t in order if output[t] is None):
             if published >= settings.min_daily_public_tickets:
                 break
             base_spec = next(item for item in TICKET_SPECS if item.ticket_type == ticket_type)
-            for level in range(1, len(_RELAXATION_STEPS) + 1):
-                relaxed_spec = _relax_spec(base_spec, level)
+            for level in range(first_level, len(_RELAXATION_STEPS) + 1):
+                relaxed_spec = _relax_spec(base_spec, level) if level else base_spec
                 eligible = [
                     leg for leg in pool
-                    if not selection_rejection_reasons(leg, relaxed_spec, calibration)
+                    if not _research_market_rejection_reasons(leg)
+                    and not selection_rejection_reasons(leg, relaxed_spec, calibration)
                 ]
                 prior_public = [
                     existing for existing_type, existing in output.items()
@@ -275,14 +359,14 @@ class AccumulatorBuilder:
                     max_match_market_exposure=settings.max_public_ticket_exposure_per_match_market,
                 )
                 if ticket is not None:
-                    ticket.relaxed = True
+                    ticket.relaxed = level > 0
                     ticket.relaxation_level = level
+                    if target_date is not None:
+                        ticket.horizon_days = max(
+                            _cat_day_offset(leg.kickoff_at, target_date) for leg in ticket.legs
+                        )
                     output[ticket_type] = ticket
                     published += 1
-                    logger.warning(
-                        "Relaxed %s ticket to level %d to meet minimum daily publication (%d/%d public)",
-                        ticket_type.value, level, published, settings.min_daily_public_tickets,
-                    )
                     break
 
     async def rejected_selections(
@@ -490,6 +574,24 @@ def _research_market_rejection_reasons(leg: Leg) -> list[str]:
     return []
 
 
+def _public_count(output: dict[TicketType, Ticket | None]) -> int:
+    return sum(
+        output.get(t) is not None
+        for t in (TicketType.SAFE, TicketType.BALANCED, TicketType.AGGRESSIVE)
+    )
+
+
+def _cat_day_offset(kickoff_at: datetime, target_date: date) -> int:
+    """Whole CAT days between `target_date` and the CAT day `kickoff_at` falls on."""
+    when = kickoff_at if kickoff_at.tzinfo else kickoff_at.replace(tzinfo=timezone.utc)
+    offset = 0
+    while offset < 31 and when >= cat_day_bounds_utc(
+        date.fromordinal(target_date.toordinal() + offset)
+    )[1]:
+        offset += 1
+    return offset
+
+
 def _relax_spec(spec: TicketSpec, level: int) -> TicketSpec:
     """Apply relaxation steps 1..level cumulatively to `spec`, clamped to sane floors."""
     ratio_delta = sum(step.get("min_high_grade_ratio", 0.0) for step in _RELAXATION_STEPS[:level])
@@ -665,6 +767,18 @@ def _find_best_ticket(
     # primary sort keys (q_score, expected_value) already embed
     # model_probability regardless of this tie-break. See
     # docs/SELECTION_CALIBRATION_REVIEW_2026-09-20.md.
+    if max_match_market_exposure is not None and prior_tickets:
+        # A leg whose match/market an earlier public tier already exposes up
+        # to the limit can never be part of a valid ticket. Drop it before the
+        # beam: otherwise the top-_BEAM_WIDTH partials can consist entirely of
+        # such legs and a buildable later tier is reported as impossible.
+        exposed = Counter(
+            (leg.match_id, leg.market) for prior in prior_tickets for leg in prior.legs
+        )
+        pool = [
+            leg for leg in pool
+            if exposed[(leg.match_id, leg.market)] < max_match_market_exposure
+        ]
     candidates = sorted(
         pool,
         key=lambda leg: (leg.q_score, leg.expected_value or -1.0, leg.prediction_id),

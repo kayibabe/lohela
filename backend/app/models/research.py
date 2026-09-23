@@ -233,6 +233,9 @@ class AccumulatorTicket(Base):
     high_risk_label: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     relaxed_tier: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     relaxation_level: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    # >0 when the rolling-horizon fallback admitted legs kicking off this many
+    # CAT days after target_date (thin/international-break slates).
+    horizon_days: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     publication_hash: Mapped[str] = mapped_column(String(64), nullable=False, unique=True)
     published_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

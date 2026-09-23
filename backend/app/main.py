@@ -248,13 +248,25 @@ async def _scheduler_leadership(scope: str):
 
 
 async def _seed_competitions_if_empty():
-    """Seed competition rows on first deploy; no-op on subsequent restarts."""
-    from app.services.seed import seed_competitions_if_empty
+    """Seed competition rows missing from the table (all of them on first
+    deploy; newly added leagues on later deploys) and queue a history
+    backfill for any league that was just added. No-op once in sync."""
+    from app.services.seed import seed_missing_competitions
 
     async with AsyncSessionLocal() as db:
-        added = await seed_competitions_if_empty(db)
-        if added:
-            logger.info("Competition seed complete: %d competitions added", added)
+        added = await seed_missing_competitions(db)
+    if not added:
+        return
+    logger.info("Competition seed complete: %d competitions added %s", len(added), added)
+    try:
+        from app.tasks.pipeline import backfill_leagues
+
+        backfill_leagues.delay(added)
+        logger.info("New-league history backfill queued for %s", added)
+    except Exception:
+        # Rows are committed; the backfill can be re-queued manually via
+        # POST /admin/leagues/backfill without re-seeding.
+        logger.exception("Could not queue new-league backfill for %s", added)
 
 
 async def _run_startup_automation():

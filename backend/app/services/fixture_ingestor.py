@@ -146,6 +146,14 @@ class APIFootballClient:
         )
         return data.get("response", [])
 
+    async def get_league_seasons(self, league_id: int) -> list[dict]:
+        """All seasons API-Football knows for a league, with start/end dates."""
+        data = await self.get(
+            "/leagues", {"id": league_id}, cache_prefix="league-seasons", cache_ttl=86400,
+        )
+        response = data.get("response", [])
+        return response[0].get("seasons", []) if response else []
+
     async def get_teams(self, league_id: int, season: int) -> list[dict]:
         data = await self.get("/teams", {"league": league_id, "season": season})
         return data.get("response", [])
@@ -264,19 +272,25 @@ class FixtureIngestor:
         to_date: date | None = None,
         season: int | None = None,
         skip_enrichment: bool | None = None,
+        league_ids: list[int] | None = None,
     ) -> dict:
         """Pull fixtures for `from_date` to `to_date` (default: today + 48h).
 
-        Pass `season` explicitly to pull historical data (e.g. season=2024 for
-        the 2024/25 season) — useful on free API plans limited to 2022–2024.
+        Pass `season` explicitly to pull one specific season (e.g. season=2024
+        for 2024/25). Otherwise each league's season(s) covering the range are
+        resolved from API-Football's own season calendar, so calendar-year
+        leagues (Brazil, Argentina, MLS, ...) and ranges crossing a season
+        boundary are handled correctly.
 
         `skip_enrichment`: when True, skips per-fixture stats/injury API calls.
         Defaults to True for historical ranges (>7 days) to preserve API quota.
+
+        `league_ids`: restrict to these tracked leagues (e.g. a new-league
+        history backfill); default is settings.tracked_league_ids.
         """
         today = cat_today()
         from_date = from_date or today
         to_date = to_date or today + timedelta(days=2)
-        season = season or _current_season()
 
         # Auto-skip enrichment calls for bulk historical pulls to conserve quota
         date_range_days = (to_date - from_date).days
@@ -286,15 +300,30 @@ class FixtureIngestor:
         stats = {"ingested": 0, "updated": 0, "skipped": 0, "leagues_processed": 0}
 
         async with APIFootballClient() as client:
-            league_ids = list(dict.fromkeys(settings.tier1_league_ids + settings.tier2_league_ids))
+            tracked = settings.tracked_league_ids
+            if league_ids is not None:
+                tracked = [league_id for league_id in tracked if league_id in set(league_ids)]
+            league_ids = tracked
             for i, league_id in enumerate(league_ids):
                 competition = await self._get_or_skip_competition(league_id)
                 if competition is None:
                     logger.warning("League %d not seeded in DB — run seed first", league_id)
                     continue
 
-                fixtures = await client.get_fixtures(league_id, season, from_date, to_date)
-                logger.info("League %d: %d fixtures fetched (%s to %s)", league_id, len(fixtures), from_date, to_date)
+                if season is not None:
+                    segments = [(season, from_date, to_date)]
+                else:
+                    segments = await _season_segments(client, league_id, from_date, to_date)
+                fixtures = []
+                for segment_season, segment_from, segment_to in segments:
+                    fixtures.extend(
+                        await client.get_fixtures(league_id, segment_season, segment_from, segment_to)
+                    )
+                logger.info(
+                    "League %d: %d fixtures fetched (%s to %s, seasons %s)",
+                    league_id, len(fixtures), from_date, to_date,
+                    [segment[0] for segment in segments],
+                )
 
                 for fixture_data in fixtures:
                     result = await self._upsert_match(client, fixture_data, competition, skip_enrichment=skip_enrichment)
@@ -467,6 +496,43 @@ def _parse_kickoff(date_str: str | None) -> "datetime | None":
         import re
         date_str = re.sub(r"(\+\d{2}):(\d{2})$", r"+\1\2", date_str)
         return datetime.strptime(date_str, "%Y-%m-%dT%H:%M:%S%z")
+
+
+async def _season_segments(
+    client: APIFootballClient, league_id: int, from_date: date, to_date: date
+) -> list[tuple[int, date, date]]:
+    """Split [from_date, to_date] by the league's own season calendar.
+
+    API-Football's /fixtures needs the season year alongside league+dates, and
+    that year means different things per league: 2025 is Aug-2025..May-2026
+    for the Premier League but Jan..Dec-2025 for the Brasileirão. The old fixed
+    July cut-over asked calendar-year leagues for last year's season every
+    January-June, silently returning nothing. Falls back to that cut-over only
+    when the season calendar can't be read.
+    """
+    try:
+        seasons = await client.get_league_seasons(league_id)
+    except Exception as exc:
+        logger.warning("Season calendar unavailable for league %d: %s", league_id, exc)
+        seasons = []
+    segments: list[tuple[int, date, date]] = []
+    for item in sorted(seasons, key=lambda s: s.get("year") or 0):
+        try:
+            start = date.fromisoformat(item["start"])
+            end = date.fromisoformat(item["end"])
+            year = int(item["year"])
+        except (KeyError, TypeError, ValueError):
+            continue
+        segment_from, segment_to = max(start, from_date), min(end, to_date)
+        if segment_from <= segment_to:
+            segments.append((year, segment_from, segment_to))
+    if segments:
+        return segments
+    # Gap between seasons (or no calendar): ask the current season, which is
+    # what API-Football flags as live for the league, else the old heuristic.
+    current = next((s for s in seasons if s.get("current")), None)
+    fallback = int(current["year"]) if current and current.get("year") else _current_season()
+    return [(fallback, from_date, to_date)]
 
 
 def _current_season() -> int:

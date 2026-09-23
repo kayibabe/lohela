@@ -278,10 +278,16 @@ def generate_tickets(
     model_run_id = model_result.get("model_run_id") if isinstance(model_result, dict) else None
 
     async def _run():
+        from app.services.ticket_horizon import resolve_horizon_dates
+
+        horizon_dates, horizon_reports = await resolve_horizon_dates(
+            AsyncSessionLocal, date.fromisoformat(target_date), model_run_id
+        )
         async with AsyncSessionLocal() as db:
             generation = await TicketPublisher(db).generate_and_publish(
                 date.fromisoformat(target_date), model_run_id=model_run_id,
                 pipeline_run_id=pipeline_run_id,
+                horizon_dates=horizon_dates or None,
             )
             publication_summary = generation.config_snapshot.get("publication_summary", {})
             missing_public_types = publication_summary.get("missing_public_ticket_types", [])
@@ -297,7 +303,9 @@ def generate_tickets(
                     detail=(
                         f"Ticket generation for {target_date} published {public_published} of "
                         f"{settings.min_daily_public_tickets} required public tickets even after "
-                        f"the relaxation fallback (qualified pool: {generation.input_count} legs). "
+                        f"the relaxation and rolling-horizon fallbacks (qualified pool: "
+                        f"{generation.input_count} legs; horizon: "
+                        f"{[d.isoformat() for d in horizon_dates] or 'none'}). "
                         f"Missing tiers: {missing_public_types or 'all'}."
                     ),
                     context={
@@ -319,6 +327,9 @@ def generate_tickets(
                 "status": generation.status.value,
                 "missing_public_ticket_types": missing_public_types,
                 "public_published": public_published,
+                "horizon_dates": [d.isoformat() for d in horizon_dates],
+                "horizon_ticket_types": publication_summary.get("horizon_ticket_types", {}),
+                "horizon_preparation": horizon_reports,
             }
             await db.commit()
             return result
@@ -394,6 +405,48 @@ def settle_results(
     except Exception as exc:
         _track_quietly(pipeline_run_id, stages, RunStatus.FAILED, retry_count=self.request.retries + 1, error=str(exc))
         raise self.retry(exc=exc, countdown=120)
+
+
+@celery_app.task(name="pipeline.backfill_leagues", bind=True, max_retries=2)
+def backfill_leagues(self, league_ids: list[int], lookback_days: int | None = None):
+    """Pull finished-match history for newly tracked leagues.
+
+    Queued on startup for competitions seed_missing_competitions just added:
+    without history their teams fail the models' 3-model minimum and never
+    produce an eligible leg. One league per lock hold, so live refresh and
+    settlement (which share `matches-write`) are never blocked for long.
+    """
+    from app.database import AsyncSessionLocal
+    from app.services import cache
+    from app.services.fixture_ingestor import FixtureIngestor
+    from app.services.model_preparation import ModelPreparationService
+
+    days = lookback_days or settings.new_league_backfill_days
+
+    async def _run():
+        today = cat_today()
+        start, end = today - timedelta(days=days), today - timedelta(days=1)
+        report = {}
+        for league_id in league_ids:
+            async with cache.lock("matches-write", timeout=900, blocking_timeout=900):
+                async with AsyncSessionLocal() as db:
+                    report[league_id] = await FixtureIngestor(db).ingest(
+                        start, end, skip_enrichment=True, league_ids=[league_id]
+                    )
+                    await db.commit()
+        # Refresh team posteriors/xG proxies so the new history is usable by
+        # the very next model run rather than the next daily enrich stage.
+        async with AsyncSessionLocal() as db:
+            await ModelPreparationService(db).prepare(today)
+            await db.commit()
+        logger.info("New-league backfill complete (%s..%s): %s", start, end, report)
+        return {"period_start": start.isoformat(), "period_end": end.isoformat(), "leagues": report}
+
+    try:
+        return _run_async(_run())
+    except Exception as exc:
+        logger.exception("New-league backfill failed for %s", league_ids)
+        raise self.retry(exc=exc, countdown=300)
 
 
 @celery_app.task(name="pipeline.sync_historical_results", bind=True, max_retries=2)

@@ -105,6 +105,7 @@ class TicketOut(BaseModel):
     high_risk_label: bool
     relaxed_tier: bool
     relaxation_level: int
+    horizon_days: int = 0
     internal_only: bool
     result: Optional[str]
     profit_loss: Optional[float]
@@ -481,6 +482,7 @@ def _ticket(ticket: AccumulatorTicket, *, reveal: bool = True) -> TicketOut:
         high_risk_label=ticket.high_risk_label,
         relaxed_tier=ticket.relaxed_tier,
         relaxation_level=ticket.relaxation_level,
+        horizon_days=ticket.horizon_days or 0,
         internal_only=ticket.ticket_type == TicketType.BEST_VALUE,
         result=latest_result.result.value if latest_result else None,
         profit_loss=latest_result.profit_loss if latest_result else None,

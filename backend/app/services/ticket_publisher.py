@@ -36,11 +36,13 @@ class TicketPublisher:
         model_run_id: int | None = None,
         research_min_qscore: float | None = None,
         pipeline_run_id: int | None = None,
+        horizon_dates: list[date] | None = None,
     ) -> TicketGeneration:
         built = await AccumulatorBuilder(self.db).build(
             target_date,
             model_run_id=model_run_id,
             research_min_qscore=research_min_qscore,
+            horizon_dates=horizon_dates,
         )
         if built.model_run_id is None:
             raise ValueError("No completed model run exists for the requested date")
@@ -107,12 +109,19 @@ class TicketPublisher:
             for candidate in tickets
             if candidate is not None and candidate.relaxed
         }
+        horizon_ticket_types = {
+            candidate.ticket_type.value: candidate.horizon_days
+            for candidate in tickets
+            if candidate is not None and candidate.horizon_days
+        }
         generation.config_snapshot = {
             **generation.config_snapshot,
             "publication_summary": {
                 "published_ticket_types": published_types,
                 "missing_public_ticket_types": missing_public_types,
                 "relaxed_ticket_types": relaxed_ticket_types,
+                "horizon_ticket_types": horizon_ticket_types,
+                "horizon_dates": [d.isoformat() for d in built.horizon_dates],
             },
         }
         self.db.add(
@@ -129,6 +138,7 @@ class TicketPublisher:
                     "published_ticket_types": published_types,
                     "missing_public_ticket_types": missing_public_types,
                     "relaxed_ticket_types": relaxed_ticket_types,
+                    "horizon_ticket_types": horizon_ticket_types,
                 },
             )
         )
@@ -198,6 +208,7 @@ class TicketPublisher:
             high_risk_label=candidate.high_risk_label,
             relaxed_tier=candidate.relaxed,
             relaxation_level=candidate.relaxation_level,
+            horizon_days=candidate.horizon_days,
             publication_hash=publication_hash,
             published_at=now,
         )
@@ -322,6 +333,7 @@ def _canonical_ticket_content(
         "confidence_score": candidate.confidence_score,
         "relaxed_tier": candidate.relaxed,
         "relaxation_level": candidate.relaxation_level,
+        "horizon_days": candidate.horizon_days,
         "legs": [
             {
                 "position": position,

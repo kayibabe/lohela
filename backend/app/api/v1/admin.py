@@ -150,15 +150,37 @@ async def update_user_access(user_id: int, payload: UserAccessUpdate, db=Depends
 
 @router.post("/seed/competitions")
 async def seed_competitions():
-    """Seed competition rows if the table is empty. Safe to call multiple times."""
-    from app.services.seed import seed_competitions_if_empty, COMPETITIONS
+    """Seed any missing competition rows and queue their history backfill.
+    Safe to call multiple times."""
+    from app.services.seed import seed_missing_competitions, COMPETITIONS
     from app.database import AsyncSessionLocal
 
     async with AsyncSessionLocal() as db:
-        added = await seed_competitions_if_empty(db)
-        if added:
-            return {"status": "seeded", "added": added}
-        return {"status": "already_seeded", "competition_count": len(COMPETITIONS)}
+        added = await seed_missing_competitions(db)
+    if added:
+        from app.tasks.pipeline import backfill_leagues
+
+        backfill_leagues.delay(added)
+        return {"status": "seeded", "added": len(added), "league_ids": added, "backfill": "queued"}
+    return {"status": "already_seeded", "competition_count": len(COMPETITIONS)}
+
+
+class LeagueBackfillRequest(BaseModel):
+    league_ids: list[int] = Field(min_length=1, max_length=60)
+    lookback_days: int | None = Field(default=None, ge=7, le=800)
+
+
+@router.post("/leagues/backfill")
+async def backfill_leagues(payload: LeagueBackfillRequest):
+    """Queue a finished-match history pull for specific tracked leagues."""
+    from app.config import settings
+    from app.tasks.pipeline import backfill_leagues as task
+
+    unknown = sorted(set(payload.league_ids) - set(settings.tracked_league_ids))
+    if unknown:
+        raise HTTPException(422, f"Not tracked league ids: {unknown}")
+    task.delay(payload.league_ids, payload.lookback_days)
+    return {"status": "queued", "league_ids": payload.league_ids, "lookback_days": payload.lookback_days}
 
 
 @router.post("/historical/sync")

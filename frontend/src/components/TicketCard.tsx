@@ -16,6 +16,13 @@ interface Props {
 
 const PCT = (n: number) => `${n >= 0 ? '+' : ''}${(n * 100).toFixed(1)}%`
 
+const formatLegDay = (iso: string) =>
+  new Date(iso).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' })
+
+/** Latest leg's kickoff day, e.g. "Sat 26 Sep" — how far a horizon ticket reaches. */
+const formatHorizonEnd = (kickoffs: string[]) =>
+  formatLegDay(kickoffs.reduce((latest, iso) => (Date.parse(iso) > Date.parse(latest) ? iso : latest)))
+
 export default function TicketCard({ ticket, tierName, tierDesc, color, research, onSelectLeg, suggestedStake }: Props) {
   const [expanded, setExpanded] = useState(false)
   if (!ticket) {
@@ -85,6 +92,14 @@ export default function TicketCard({ ticket, tierName, tierDesc, color, research
                 title={`Thin match day: tier thresholds were relaxed (level ${ticket.relaxation_level}) to publish a ticket instead of none. Treat grade-mix and Q-score expectations as looser than usual.`}
               >
                 Relaxed · Thin Slate
+              </span>
+            )}
+            {(ticket.horizon_days ?? 0) > 0 && ticket.legs.length > 0 && (
+              <span
+                className="relaxed-badge horizon-badge"
+                title={`Too few fixtures on the ticket date (e.g. an international break), so this ticket also uses games up to ${ticket.horizon_days} day(s) later. Check each leg's kickoff time.`}
+              >
+                Includes games to {formatHorizonEnd(ticket.legs.map(leg => leg.kickoff_at))}
               </span>
             )}
           </div>
@@ -161,7 +176,10 @@ export default function TicketCard({ ticket, tierName, tierDesc, color, research
                 </div>
                 <div className="leg-meta">
                   <span className="leg-comp">{leg.competition}</span>
-                  <span className="leg-time kickoff-time">{formatKickoff(leg.kickoff_at)}</span>
+                  <span className="leg-time kickoff-time">
+                    {(ticket.horizon_days ?? 0) > 0 && <>{formatLegDay(leg.kickoff_at)} </>}
+                    {formatKickoff(leg.kickoff_at)}
+                  </span>
                   {(leg.live_phase || leg.match_status === 'live') && <span className="live-phase-badge">{leg.live_phase ? ({ '1st_half': '1st Half', half_time: 'Half Time', '2nd_half': '2nd Half', extra_time: 'Extra Time', penalties: 'Penalties', suspended: 'Suspended', interrupted: 'Interrupted', live: 'Live' } as Record<string, string>)[leg.live_phase] ?? 'Live' : 'Live'}{leg.elapsed_minutes != null ? ` · ${leg.elapsed_minutes}'` : ''}</span>}
                   {leg.home_goals != null && leg.away_goals != null && <span className="live-score-badge">Score {leg.home_goals}–{leg.away_goals}</span>}
                   <span className="leg-market">{formatMarket(leg.market)}</span>
