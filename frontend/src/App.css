@@ -695,6 +695,12 @@ body {
 .individual-chart { margin: 14px 0; }
 .ticket-card .risk-badge { max-width: 180px; line-height: 1.25; text-align: center; }
 .review-badge { display: inline-flex; align-items: center; padding: 3px 7px; border: 1px solid color-mix(in srgb, var(--warning) 45%, var(--border)); border-radius: 999px; background: color-mix(in srgb, var(--warning) 10%, var(--surface)); color: var(--warning); font-size: 9px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; }
+/* Market-priced ("fair-priced") tickets: honest chance, no value claim.
+   Note text uses --text2 (not --muted) to keep small copy at WCAG AA contrast. */
+.fair-price-badge { display: inline-flex; align-items: center; min-height: 23px; padding: 3px 8px; border: 1px solid color-mix(in srgb, var(--accent) 40%, transparent); border-radius: 999px; background: var(--accent-bg); color: var(--accent); font-size: 11px; font-weight: 700; }
+.fair-price-note { margin: 8px 0 0; padding: 8px 10px; border-left: 3px solid var(--accent); background: color-mix(in srgb, var(--accent) 6%, var(--surface)); color: var(--text2); font-size: 12px; line-height: 1.45; }
+.stat-sub { display: block; margin-top: 2px; color: var(--text2); font-size: 11px; font-weight: 500; }
+.ticket-card .leg-chance { color: var(--text); font-size: 12px; font-weight: 700; }
 .value-review-note { margin: 0; padding: 9px 10px; border-left: 3px solid var(--warning); background: color-mix(in srgb, var(--warning) 8%, var(--surface)); color: var(--muted); font-size: 11px; line-height: 1.4; }
 .value-review-note strong,
 .settlement-pending-note strong { display: block; margin-bottom: 2px; color: var(--warning); }

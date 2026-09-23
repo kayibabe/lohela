@@ -106,6 +106,9 @@ class TicketOut(BaseModel):
     relaxed_tier: bool
     relaxation_level: int
     horizon_days: int = 0
+    # "market": legs priced at the bookmaker's de-vigged probability (no value
+    # claimed); "model": the original edge-seeking research pricing.
+    pricing: str = "model"
     internal_only: bool
     result: Optional[str]
     profit_loss: Optional[float]
@@ -483,6 +486,7 @@ def _ticket(ticket: AccumulatorTicket, *, reveal: bool = True) -> TicketOut:
         relaxed_tier=ticket.relaxed_tier,
         relaxation_level=ticket.relaxation_level,
         horizon_days=ticket.horizon_days or 0,
+        pricing=_ticket_pricing(ticket),
         internal_only=ticket.ticket_type == TicketType.BEST_VALUE,
         result=latest_result.result.value if latest_result else None,
         profit_loss=latest_result.profit_loss if latest_result else None,
@@ -491,6 +495,12 @@ def _ticket(ticket: AccumulatorTicket, *, reveal: bool = True) -> TicketOut:
         settlement_version=latest_result.version if latest_result else None,
         locked_fields=locked,
     )
+
+
+def _ticket_pricing(ticket: AccumulatorTicket) -> str:
+    """Pricing recorded on the ticket's generation; older generations are model-priced."""
+    generation = ticket.__dict__.get("generation")  # never lazy-load in async context
+    return ((generation.config_snapshot or {}).get("pricing") if generation else None) or "model"
 
 
 def _history_ticket(ticket: AccumulatorTicket, *, reveal: bool = True) -> TicketHistoryOut:

@@ -32,6 +32,8 @@ interface Props {
   selection: DetailSelection
   modelVersion?: string
   publishedAt?: string
+  /** 'market': the leg's probability is the bookmaker's fair price, not a model estimate. */
+  pricing?: 'market' | 'model'
   onClose: () => void
 }
 
@@ -56,6 +58,16 @@ function freshness(iso?: string | null) {
   return { label: 'Historical price snapshot', state: 'stale' }
 }
 
+function marketDecisionStrength(selection: DetailSelection, priceState: ReturnType<typeof freshness>) {
+  // Market-priced legs claim no edge: judge the price (margin) and its freshness.
+  const cautions: string[] = []
+  if (selection.expected_value != null && selection.expected_value < -0.05) cautions.push('Bookmaker margin above 5%')
+  if (priceState.state === 'stale' || priceState.state === 'unknown') cautions.push('Odds are not fresh')
+  const strong = priceState.state === 'fresh' && (selection.expected_value ?? -1) >= -0.03
+  const caution = cautions.length > 0
+  return { label: strong ? 'Strong' : caution ? 'Review' : 'Acceptable', tone: strong ? 'strong' : caution ? 'caution' : 'acceptable', cautions }
+}
+
 function decisionStrength(selection: DetailSelection, priceState: ReturnType<typeof freshness>) {
   const cautions: string[] = []
   if (selection.edge == null) cautions.push('No captured market edge')
@@ -71,7 +83,11 @@ function decisionStrength(selection: DetailSelection, priceState: ReturnType<typ
   return { label: strong ? 'Strong' : caution ? 'Review' : 'Acceptable', tone: strong ? 'strong' : caution ? 'caution' : 'acceptable', cautions }
 }
 
-export default function SelectionDetail({ selection, modelVersion, publishedAt, onClose }: Props) {
+export default function SelectionDetail({ selection, modelVersion, publishedAt, pricing, onClose }: Props) {
+  const market = pricing === 'market'
+  const label = market
+    ? { prob: 'Fair chance', edge: 'Price vs fair', probRow: 'Fair chance (margin removed)', impliedRow: 'Quoted price implies', subtitle: 'Fair price vs quoted price', ev: 'Long-run return at this price against the fair chance. Negative values are the bookmaker margin.' }
+    : { prob: 'Calibrated probability', edge: 'Positive edge', probRow: 'Lohela model', impliedRow: 'Market implied', subtitle: 'Model vs market', ev: 'Theoretical value based on the model probability and captured odds. It is not a guaranteed return or win probability.' }
   const [activeTab, setActiveTab] = useState<'overview' | 'stats' | 'probability' | 'h2h' | 'signals' | 'odds'>('probability')
   const [copied, setCopied] = useState(false)
   const [stake, setStake] = useState('10')
@@ -85,7 +101,7 @@ export default function SelectionDetail({ selection, modelVersion, publishedAt, 
   const closeRef = useRef<HTMLButtonElement>(null)
   const implied = selection.avg_implied ?? (selection.best_odds ? 1 / selection.best_odds : null)
   const priceState = useMemo(() => freshness(selection.source_odds_at), [selection.source_odds_at])
-  const strength = useMemo(() => decisionStrength(selection, priceState), [selection, priceState])
+  const strength = useMemo(() => (market ? marketDecisionStrength : decisionStrength)(selection, priceState), [selection, priceState, market])
   const stakeValue = Number(stake)
   const hasPublishedBetSource = Boolean(selection.selection_id && selection.best_odds)
   const canConfirmBet = hasPublishedBetSource && Number.isFinite(stakeValue) && stakeValue > 0
@@ -131,7 +147,9 @@ export default function SelectionDetail({ selection, modelVersion, publishedAt, 
     const summary = [
       `${selection.home_team} vs ${selection.away_team}`,
       `${formatMarket(selection.market)} @ ${selection.best_odds?.toFixed(2) ?? 'n/a'}`,
-      `Q ${selection.q_score == null ? 'Pro only' : selection.q_score.toFixed(1)} · model ${pct(selection.model_probability)} · edge ${pct(selection.edge, true)}`,
+      market
+        ? `fair chance ${pct(selection.model_probability)} · return at price ${pct(selection.expected_value, true)}`
+        : `Q ${selection.q_score == null ? 'Pro only' : selection.q_score.toFixed(1)} · model ${pct(selection.model_probability)} · edge ${pct(selection.edge, true)}`,
       'Lohela research / paper trading only',
     ].join('\n')
     await navigator.clipboard?.writeText(summary)
@@ -171,8 +189,8 @@ export default function SelectionDetail({ selection, modelVersion, publishedAt, 
         <section className="decision-strength-card" aria-label="Decision strength review">
           <div className="evidence-title"><h3>Decision strength</h3><span>Leg-level review · advisory</span></div>
           <div className="decision-strength-grid">
-            <Metric label="Calibrated probability" value={pct(selection.model_probability)} />
-            <Metric label="Positive edge" value={pct(selection.edge, true)} />
+            <Metric label={label.prob} value={pct(selection.model_probability)} />
+            <Metric label={label.edge} value={pct(selection.edge, true)} />
             <Metric label="Model spread" value={selection.model_agreement == null ? '—' : `${(selection.model_agreement * 100).toFixed(1)} pp`} note={spreadLabel(selection.model_agreement)} />
             <Metric label="Historical evidence" value="Analytics" note="Use settled market/Q-score samples; not an individual-match guarantee." />
           </div>
@@ -192,14 +210,14 @@ export default function SelectionDetail({ selection, modelVersion, publishedAt, 
         {form && activeTab === 'overview' && <section className="form-evidence-card"><div className="evidence-title"><h3>Recent form</h3><span>Last {Math.max(form.home.matches, form.away.matches)} finished matches</span></div><div className="form-teams"><TeamForm team={form.home} /><span className="form-vs">vs</span><TeamForm team={form.away} /></div></section>}
         {form && activeTab === 'stats' && <section className="form-evidence-card"><div className="evidence-title"><h3>Recent team statistics</h3><span>Last five finished matches</span></div><div className="team-stats-grid"><TeamStats team={form.home} /><TeamStats team={form.away} /></div></section>}
         {form && activeTab === 'h2h' && <section className="form-evidence-card"><div className="evidence-title"><h3>Head-to-head</h3><span>Previous finished meetings</span></div>{form.h2h.length ? <div className="h2h-list">{form.h2h.map(game => <div key={game.date + game.score}><span>{game.date}</span><strong>{game.home_team} {game.score} {game.away_team}</strong></div>)}</div> : <div className="detail-empty-note">No previous meetings found in the persisted data.</div>}</section>}
-        {activeTab === 'signals' && <section className="form-evidence-card"><div className="evidence-title"><h3>Lohela signal</h3><span>Current published selection</span></div><div className="signal-summary"><div><span>Market</span><strong>{formatMarket(selection.market)}</strong></div><div><span>Selection</span><strong>{formatSelection(selection.selection)}</strong></div><div><span>Model probability</span><strong>{pct(selection.model_probability)}</strong></div><div><span>Estimated edge</span><strong>{pct(selection.edge, true)}</strong></div><div><span>Q-score</span><strong>{selection.q_score == null ? 'Pro only' : `${selection.q_score.toFixed(1)} · ${selection.q_grade ? 'graded' : '—'}`}</strong></div><div><span>Expected value</span><strong>{pct(selection.expected_value, true)}</strong></div></div></section>}
+        {activeTab === 'signals' && <section className="form-evidence-card"><div className="evidence-title"><h3>Lohela signal</h3><span>Current published selection</span></div><div className="signal-summary"><div><span>Market</span><strong>{formatMarket(selection.market)}</strong></div><div><span>Selection</span><strong>{formatSelection(selection.selection)}</strong></div><div><span>{market ? label.prob : 'Model probability'}</span><strong>{pct(selection.model_probability)}</strong></div><div><span>{market ? label.edge : 'Estimated edge'}</span><strong>{pct(selection.edge, true)}</strong></div><div><span>Q-score</span><strong>{selection.q_score == null ? 'Pro only' : `${selection.q_score.toFixed(1)} · ${selection.q_grade ? 'graded' : '—'}`}</strong></div><div><span>Expected value</span><strong>{pct(selection.expected_value, true)}</strong></div></div></section>}
 
         {activeTab === 'probability' && <section className="evidence-card">
-          <div className="evidence-title"><h3>Probability evidence</h3><span>Model vs market</span></div>
-          <ProbabilityRow label="Lohela model" value={selection.model_probability ?? null} tone="model" />
-          <ProbabilityRow label="Market implied" value={implied} tone="market" />
+          <div className="evidence-title"><h3>Probability evidence</h3><span>{label.subtitle}</span></div>
+          <ProbabilityRow label={label.probRow} value={selection.model_probability ?? null} tone="model" />
+          <ProbabilityRow label={label.impliedRow} value={implied} tone="market" />
           <div className="edge-callout">
-            <span>Estimated edge</span>
+            <span>{market ? label.edge : 'Estimated edge'}</span>
             <strong>{pct(selection.edge, true)}</strong>
           </div>
         </section>}
@@ -208,7 +226,7 @@ export default function SelectionDetail({ selection, modelVersion, publishedAt, 
 
         {activeTab === 'probability' && <section className="detail-metrics">
           <Metric label="Q score" value={selection.q_score == null ? 'Pro only' : selection.q_score.toFixed(1)} />
-          <Metric label="Expected value" value={pct(selection.expected_value, true)} hint="Theoretical value based on the model probability and captured odds. It is not a guaranteed return or win probability." />
+          <Metric label="Expected value" value={pct(selection.expected_value, true)} hint={label.ev} />
           <Metric label="Model spread" value={selection.model_agreement == null ? '—' : `${(selection.model_agreement * 100).toFixed(1)} pp`} note={spreadLabel(selection.model_agreement)} hint="Standard deviation between the active model probabilities. Up to 5 pp is strong alignment; above 15 pp triggers a confidence downgrade." />
           <Metric label="Bookmakers" value={(quotes.length || selection.bookmaker_count)?.toString() ?? 'Snapshot'} />
         </section>}

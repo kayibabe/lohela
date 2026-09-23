@@ -47,8 +47,10 @@ export default function TicketCard({ ticket, tierName, tierDesc, color, research
     )
   }
 
+  const marketPriced = ticket.pricing === 'market'
   const evPositive = (ticket.expected_value ?? 0) > 0
-  const flaggedLegs = ticket.legs.filter(leg => leg.edge != null && leg.edge > 0.30)
+  // Value review flags model/odds gaps; a market-priced leg has no model gap.
+  const flaggedLegs = marketPriced ? [] : ticket.legs.filter(leg => leg.edge != null && leg.edge > 0.30)
   const visibleLegs = expanded ? ticket.legs : ticket.legs.slice(0, 4)
   const resultCounts = ticket.legs.reduce<Record<string, number>>((counts, leg) => { const result = leg.result || 'pending'; counts[result] = (counts[result] ?? 0) + 1; return counts }, {})
   const settlementPending = ticket.legs.some(leg => leg.home_goals != null && leg.away_goals != null && (leg.result === 'pending' || !leg.result))
@@ -106,7 +108,7 @@ export default function TicketCard({ ticket, tierName, tierDesc, color, research
           <div className="ticket-tier-badges">
             <span className={`ticket-status-badge ${ticketStatusTone}`}>{ticketStatusLabel}</span>
             <span className="version-badge" title="Latest published ticket version">v{ticket.version}</span>
-            <GradeBadge grade={ticket.legs[0]?.q_grade ?? 'C'} />
+            {marketPriced ? <span className="fair-price-badge">Fair-priced</span> : <GradeBadge grade={ticket.legs[0]?.q_grade ?? 'C'} />}
             {flaggedLegs.length > 0 && <span className="review-badge">Value review · {flaggedLegs.length}</span>}
           </div>
         </div>
@@ -115,14 +117,29 @@ export default function TicketCard({ ticket, tierName, tierDesc, color, research
             <span className="stat-label">Ticket odds</span>
             <span className="stat-value neutral">{ticket.combined_odds == null ? 'Pro only' : `${ticket.combined_odds.toFixed(2)}×`}</span>
           </div>
-          <div className="stat" title="Estimated ticket probability after correlation adjustment">
-            <span className="stat-label">Hit probability</span>
-            <span className="stat-value neutral">{ticket.adjusted_probability == null ? 'Pro only' : `${(ticket.adjusted_probability * 100).toFixed(1)}%`}</span>
+          <div className="stat" title={marketPriced ? "Chance every leg wins, from the bookmaker's own odds with its margin removed" : 'Estimated ticket probability after correlation adjustment'}>
+            <span className="stat-label">{marketPriced ? 'Chance to win' : 'Hit probability'}</span>
+            <span className="stat-value neutral">
+              {ticket.adjusted_probability == null
+                ? 'Pro only'
+                : `${(ticket.adjusted_probability * 100).toFixed(1)}%`}
+              {marketPriced && ticket.adjusted_probability != null && ticket.adjusted_probability > 0 && (
+                <small className="stat-sub">about 1 in {Math.max(1, Math.round(1 / ticket.adjusted_probability))}</small>
+              )}
+            </span>
           </div>
           <div className="stat" title="Higher scores indicate a riskier accumulator">
             <span className="stat-label">Risk score</span>
             <span className={`stat-value risk-${riskTone}`}>{ticket.risk_score == null ? 'Pro only' : `${ticket.risk_score.toFixed(0)}/100`}</span>
           </div>
+          {marketPriced ? (
+            <div className="stat" title="Average long-run return per unit staked at these odds. Negative means the bookmaker's margin outweighs any price advantage.">
+              <span className="stat-label">Expected return</span>
+              <span className={`stat-value ${evPositive ? 'positive' : 'neutral'}`}>
+                {ticket.expected_value == null ? 'Pro only' : PCT(ticket.expected_value)}
+              </span>
+            </div>
+          ) : (<>
           <div className="stat" title="Average Q-score across all ticket legs">
             <span className="stat-label">Avg Q-score</span>
             <span className="stat-value neutral">{ticket.avg_q_score == null ? 'Pro only' : ticket.avg_q_score.toFixed(1)}</span>
@@ -137,7 +154,14 @@ export default function TicketCard({ ticket, tierName, tierDesc, color, research
               {flaggedLegs.length > 0 ? 'Unverified' : ticket.expected_value == null ? 'Pro only' : PCT(ticket.expected_value)}
             </span>
           </div>
+          </>)}
         </div>
+        {marketPriced && (
+          <p className="fair-price-note">
+            Built for the best chance of winning at these odds, not for value. Chances come from bookmaker prices
+            with their margin removed. Over many tickets, expect to lose roughly the margin shown above.
+          </p>
+        )}
         {(flaggedLegs.length > 0 || settlementPending) && (
           <div className="ticket-alerts">
             {flaggedLegs.length > 0 && <div className="value-review-note"><strong>Value check</strong><span>{flaggedLegs.length} leg{flaggedLegs.length === 1 ? '' : 's'} show unusually large model/odds gaps. Treat edge and EV as provisional until market mapping and odds freshness are checked.</span></div>}
@@ -191,12 +215,16 @@ export default function TicketCard({ ticket, tierName, tierDesc, color, research
               </div>
               <div className="leg-right">
                 <span className="leg-odds">{leg.best_odds == null ? 'Pro only' : `${leg.best_odds.toFixed(2)}×`}</span>
+                {marketPriced ? (
+                  leg.model_probability != null && <span className="leg-chance">{(leg.model_probability * 100).toFixed(0)}% chance</span>
+                ) : (<>
                 {leg.edge != null && (
                   <span className="leg-edge">{PCT(leg.edge)} edge</span>
                 )}
                 {leg.edge != null && leg.edge > 0.30 && leg.best_odds != null && leg.best_odds > 1 && <span className="leg-review">Implied {(100 / leg.best_odds).toFixed(0)}% · review</span>}
                 <span className="leg-q">Q {leg.q_score == null ? 'Pro only' : leg.q_score.toFixed(1)}</span>
-                <span className={`leg-spread ${leg.model_agreement == null ? 'unknown' : leg.model_agreement <= 0.05 ? 'strong' : leg.model_agreement <= 0.10 ? 'acceptable' : leg.model_agreement <= 0.15 ? 'caution' : 'high'}`}>Spread {leg.model_agreement == null ? '—' : `${(leg.model_agreement * 100).toFixed(1)} pp`}</span>
+                </>)}
+                {!marketPriced && <span className={`leg-spread ${leg.model_agreement == null ? 'unknown' : leg.model_agreement <= 0.05 ? 'strong' : leg.model_agreement <= 0.10 ? 'acceptable' : leg.model_agreement <= 0.15 ? 'caution' : 'high'}`}>Spread {leg.model_agreement == null ? '—' : `${(leg.model_agreement * 100).toFixed(1)} pp`}</span>}
               </div>
               <span className="leg-open-icon" aria-hidden="true">›</span>
             </button>

@@ -167,6 +167,18 @@ class Settings(BaseSettings):
     # The public daily portfolio targets all three tiers. Missing tiers remain
     # visible as PARTIAL rather than being fabricated or replaced by history.
     min_daily_public_tickets: int = 3
+    # How ticket legs are priced. "market" (default since 2026-09-23): the
+    # bookmaker's de-vigged probability — on both the frozen production
+    # archive and the local DB it beat the ensemble, and the model's ">=3%
+    # edge" legs won 14.5-18.5pp less often than claimed. Tickets are then
+    # built as the most likely combination in each tier's odds band, with
+    # honest (normally slightly negative) EV. "model": the original
+    # edge-seeking research tiers. See docs/HONEST_PRICING_2026-09-23.md.
+    leg_probability_source: Literal["market", "model"] = "market"
+    # Market mode: skip a leg whose quoted price gives back more than this
+    # fraction of stake against its fair probability (expected value below
+    # -max_leg_margin), so accumulators don't compound heavy margins.
+    max_leg_margin: float = 0.07
     # Rolling-horizon fallback (app/services/ticket_horizon.py). When the
     # target CAT day cannot fill min_daily_public_tickets even after
     # relaxation — international breaks leave whole weeks with 0-5 tracked

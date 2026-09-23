@@ -46,6 +46,7 @@ export default function DailyTicketsPage({ date }: DailyTicketsPageProps) {
   const [detail, setDetail] = useState<{
     selection: DetailSelection;
     modelVersion?: string;
+    pricing?: "market" | "model";
     publishedAt?: string;
   } | null>(null);
   const [pipelineRunning, setPipelineRunning] = useState(false);
@@ -166,6 +167,7 @@ export default function DailyTicketsPage({ date }: DailyTicketsPageProps) {
       selection: leg,
       modelVersion: ticket.model_version,
       publishedAt: ticket.published_at,
+      pricing: ticket.pricing,
     });
   };
 
@@ -600,6 +602,7 @@ export default function DailyTicketsPage({ date }: DailyTicketsPageProps) {
           selection={detail.selection}
           modelVersion={detail.modelVersion}
           publishedAt={detail.publishedAt}
+          pricing={detail.pricing}
           onClose={() => setDetail(null)}
         />
       )}

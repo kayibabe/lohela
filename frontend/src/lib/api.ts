@@ -50,6 +50,8 @@ export interface Ticket {
   relaxation_level: number
   /** >0 when a thin day's ticket includes fixtures up to this many days later. */
   horizon_days?: number
+  /** 'market': priced at the bookmaker's fair (de-vigged) odds, no value claimed. */
+  pricing?: 'market' | 'model'
   internal_only: boolean
   result: string | null
   profit_loss: number | null

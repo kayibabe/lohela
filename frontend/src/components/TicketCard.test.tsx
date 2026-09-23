@@ -90,6 +90,39 @@ describe('audited ticket surfaces', () => {
     expect(html).toContain('up to 3 day(s) later')
   })
 
+  it('shows a fair-priced ticket as an honest chance with no value claims', () => {
+    const fair: Ticket = {
+      ...ticket,
+      pricing: 'market',
+      adjusted_probability: 0.5,
+      expected_value: -0.041,
+      legs: [{ ...ticket.legs[0], model_probability: 0.79, edge: -0.02, best_odds: 1.21 }],
+    }
+    const html = renderToStaticMarkup(
+      <TicketCard ticket={fair} tierName="Conservative" tierDesc="" color="green" />,
+    )
+    expect(html).toContain('Chance to win')
+    expect(html).toContain('about 1 in 2')
+    expect(html).toContain('Expected return')
+    expect(html).toContain('-4.1%')
+    expect(html).toContain('79% chance')
+    expect(html).toContain('Fair-priced')
+    expect(html).toContain('expect to lose roughly the margin')
+    for (const modelOnly of ['Avg Q-score', 'Avg edge', ' edge<', 'Spread ', 'Value review']) {
+      expect(html).not.toContain(modelOnly)
+    }
+  })
+
+  it('keeps model-priced (historical) tickets unchanged', () => {
+    const html = renderToStaticMarkup(
+      <TicketCard ticket={ticket} tierName="Aggressive" tierDesc="Q ≥75" color="red" />,
+    )
+    expect(html).toContain('Hit probability')
+    expect(html).toContain('Avg Q-score')
+    expect(html).not.toContain('Fair-priced')
+    expect(html).not.toContain('Chance to win')
+  })
+
   it('omits horizon labelling for a same-day ticket', () => {
     const html = renderToStaticMarkup(
       <TicketCard ticket={ticket} tierName="Balanced" tierDesc="Q ≥80" color="blue" />,
@@ -161,6 +194,21 @@ describe('audited ticket surfaces', () => {
     expect(html).toContain('Stake amount')
     expect(html).toContain('Confirm individual bet')
     expect(html).toContain('Copy research summary')
+  })
+
+  it('labels a fair-priced leg as a fair chance, not a model estimate', () => {
+    const html = renderToStaticMarkup(
+      <SelectionDetail
+        selection={{ ...ticket.legs[0], model_probability: 0.79, best_odds: 1.21, edge: -0.036, expected_value: -0.044 }}
+        pricing="market"
+        onClose={() => undefined}
+      />,
+    )
+    expect(html).toContain('Fair chance (margin removed)')
+    expect(html).toContain('Quoted price implies')
+    expect(html).toContain('Price vs fair')
+    expect(html).not.toContain('Lohela model')
+    expect(html).not.toContain('No positive edge')
   })
 
   it('explains when individual-bet confirmation is unavailable', () => {

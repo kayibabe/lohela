@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 import math
 from collections import Counter
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import date, datetime, timezone
 from typing import Optional
 
@@ -52,6 +52,13 @@ class TicketSpec:
     min_adjusted_probability: float
     max_pair_correlation: float
     internal_only: bool = False
+    # "model": legs priced by the ensemble and selected for model edge (the
+    # original research tiers). "market": legs priced at the bookmaker's
+    # de-vigged probability and tickets built for the most likely outcome in
+    # an odds band — see MARKET_TICKET_SPECS.
+    pricing: str = "model"
+    min_leg_odds: float = _MIN_LEG_ODDS
+    max_leg_odds: float = _MAX_LEG_ODDS
 
 
 TICKET_SPECS: tuple[TicketSpec, ...] = (
@@ -60,6 +67,29 @@ TICKET_SPECS: tuple[TicketSpec, ...] = (
     TicketSpec(TicketType.AGGRESSIVE, "Aggressive", 5, 10, 10.0, math.inf, 75.0, 0.40, 1, 0.05, 0.15),
     TicketSpec(TicketType.BEST_VALUE, "Best Value", 3, 6, 0.0, math.inf, 85.0, 1.0, 1, 0.0, 0.05, True),
 )
+
+# Honest "likely winners" tiers (settings.leg_probability_source == "market").
+# On both the frozen production archive (1,823 settled forecasts) and the local
+# DB (1,300), the de-vigged market beat the ensemble on Brier and log loss, the
+# best held-out model/market blend put 0-10% weight on the model, and legs the
+# model rated >=3% edge won 14.5-18.5pp less often than claimed (see
+# docs/HONEST_PRICING_2026-09-23.md). So legs are priced at the market's fair
+# probability, Q-score/edge (model judgements) no longer gate selection, and
+# each tier is the most likely ticket inside its odds band.
+MARKET_TICKET_SPECS: tuple[TicketSpec, ...] = (
+    TicketSpec(TicketType.SAFE, "Conservative", 3, 4, 1.8, 3.2, 0.0, 0.0, 1, 0.30, 0.05,
+               pricing="market", min_leg_odds=1.20, max_leg_odds=1.65),
+    TicketSpec(TicketType.BALANCED, "Balanced", 3, 5, 3.2, 6.5, 0.0, 0.0, 1, 0.14, 0.10,
+               pricing="market", min_leg_odds=1.25, max_leg_odds=2.30),
+    TicketSpec(TicketType.AGGRESSIVE, "Aggressive", 4, 6, 6.5, 16.0, 0.0, 0.0, 1, 0.05, 0.15,
+               pricing="market", min_leg_odds=1.30, max_leg_odds=3.50),
+    TicketSpec(TicketType.BEST_VALUE, "Best Value", 2, 5, 2.0, 12.0, 0.0, 0.0, 1, 0.0, 0.10, True,
+               pricing="market", min_leg_odds=1.20, max_leg_odds=4.00),
+)
+
+
+def active_ticket_specs() -> tuple[TicketSpec, ...]:
+    return MARKET_TICKET_SPECS if settings.leg_probability_source == "market" else TICKET_SPECS
 
 # Bounded relaxation ladder for the minimum-daily-tickets fallback (see
 # AccumulatorBuilder.build). Each step loosens the constraints that a thin
@@ -101,6 +131,55 @@ class Leg:
     expected_value: Optional[float]
     active_models: list[str] = field(default_factory=list)
     data_quality_score: float = 0.0
+    # De-vigged market probability for this selection (None when the
+    # complementary prices needed to remove the margin are missing).
+    fair_probability: Optional[float] = None
+    # Set when a leg is market-priced: the ensemble's own probability, kept
+    # for audit only.
+    raw_model_probability: Optional[float] = None
+
+
+def market_priced(leg: Leg) -> Leg:
+    """Re-price a leg at its fair market probability (audit keeps the model's)."""
+    fair = leg.fair_probability
+    return replace(
+        leg,
+        model_probability=fair,
+        raw_model_probability=leg.model_probability,
+        edge=fair - 1.0 / leg.best_odds,
+        expected_value=fair * leg.best_odds - 1.0,
+    )
+
+
+_BINARY_PAIRS = {
+    "over_0.5": "under_0.5", "over_1.5": "under_1.5", "over_2.5": "under_2.5",
+    "over_3.5": "under_3.5", "over_4.5": "under_4.5", "btts_yes": "btts_no",
+}
+_BINARY_PAIRS.update({value: key for key, value in list(_BINARY_PAIRS.items())})
+_RESULT_MARKETS = ("home_win", "draw", "away_win")
+
+
+def fair_market_probabilities(implied: dict[str, float]) -> dict[str, float]:
+    """Remove the bookmaker margin within each complete market for one match.
+
+    `implied` maps market -> 1/decimal odds as quoted. Two-way markets are
+    normalised pairwise, 1X2 across its three outcomes, and double chance is
+    derived from the fair 1X2. Markets without their complement are omitted:
+    their margin can't be removed, so they can't be priced honestly.
+    """
+    fair: dict[str, float] = {}
+    for market, value in implied.items():
+        other = _BINARY_PAIRS.get(market)
+        if other and value and implied.get(other):
+            fair[market] = value / (value + implied[other])
+    if all(implied.get(market) for market in _RESULT_MARKETS):
+        total = sum(implied[market] for market in _RESULT_MARKETS)
+        result = {market: implied[market] / total for market in _RESULT_MARKETS}
+        fair.update(result)
+        fair["double_chance_1x"] = result["home_win"] + result["draw"]
+        fair["double_chance_x2"] = result["away_win"] + result["draw"]
+        fair["double_chance_12"] = result["home_win"] + result["away_win"]
+    return fair
 
 
 @dataclass
@@ -133,6 +212,7 @@ class Ticket:
     # Days beyond the target date the ticket's legs may kick off (0 = target
     # day only). Set only by the rolling-horizon fallback — see build().
     horizon_days: int = 0
+    pricing: str = "model"
 
 
 @dataclass
@@ -177,7 +257,10 @@ class AccumulatorBuilder:
         if run is None:
             return DailyTickets(td, None, None, None, None, None, 0, {})
 
-        pool = await self._load_qualified_legs(td, run.id)
+        # Research Q-score sweeps are model-edge experiments by definition.
+        specs = TICKET_SPECS if research_min_qscore is not None else active_ticket_specs()
+        pricing = specs[0].pricing
+        pool = await self._load_qualified_legs(td, run.id, pricing)
         learning = (run.config_snapshot or {}).get("learning", {})
         calibration = await self._load_calibration_gates(
             td,
@@ -186,8 +269,8 @@ class AccumulatorBuilder:
         )
         coefficients = await self._load_correlation_coefficients()
         output: dict[TicketType, Ticket | None] = {}
-        diagnostics: dict[str, dict] = {}
-        for spec in TICKET_SPECS:
+        diagnostics: dict[str, dict] = {"pricing": {"source": pricing}}
+        for spec in specs:
             effective_spec = spec
             if research_min_qscore is not None:
                 effective_spec = TicketSpec(
@@ -196,12 +279,12 @@ class AccumulatorBuilder:
             eligible = [
                 leg
                 for leg in pool
-                if not _research_market_rejection_reasons(leg)
+                if not _research_market_rejection_reasons(leg, effective_spec)
                 and not selection_rejection_reasons(leg, effective_spec, calibration)
             ]
             rejection_counts: Counter[str] = Counter()
             for leg in pool:
-                rejection_counts.update(_research_market_rejection_reasons(leg))
+                rejection_counts.update(_research_market_rejection_reasons(leg, effective_spec))
                 rejection_counts.update(selection_rejection_reasons(leg, effective_spec, calibration))
             diagnostics[spec.ticket_type.value] = {
                 "pool_count": len(pool),
@@ -243,7 +326,7 @@ class AccumulatorBuilder:
                     if horizon_run is None:
                         continue
                     used_horizon.append(horizon_date)
-                    for leg in await self._load_qualified_legs(horizon_date, horizon_run.id):
+                    for leg in await self._load_qualified_legs(horizon_date, horizon_run.id, pricing):
                         if leg.prediction_id not in seen:
                             seen.add(leg.prediction_id)
                             extended_pool.append(leg)
@@ -336,12 +419,12 @@ class AccumulatorBuilder:
         for ticket_type in (t for t in order if output[t] is None):
             if published >= settings.min_daily_public_tickets:
                 break
-            base_spec = next(item for item in TICKET_SPECS if item.ticket_type == ticket_type)
+            base_spec = next(item for item in active_ticket_specs() if item.ticket_type == ticket_type)
             for level in range(first_level, len(_RELAXATION_STEPS) + 1):
                 relaxed_spec = _relax_spec(base_spec, level) if level else base_spec
                 eligible = [
                     leg for leg in pool
-                    if not _research_market_rejection_reasons(leg)
+                    if not _research_market_rejection_reasons(leg, relaxed_spec)
                     and not selection_rejection_reasons(leg, relaxed_spec, calibration)
                 ]
                 prior_public = [
@@ -375,7 +458,7 @@ class AccumulatorBuilder:
         run = await self._resolve_model_run(target_date, None)
         if run is None:
             return []
-        spec = next(item for item in TICKET_SPECS if item.ticket_type == ticket_type)
+        spec = next(item for item in active_ticket_specs() if item.ticket_type == ticket_type)
         rejected = []
         learning = (run.config_snapshot or {}).get("learning", {})
         calibration = await self._load_calibration_gates(
@@ -384,7 +467,9 @@ class AccumulatorBuilder:
             learning.get("base_model_version") or learning.get("requested_model_version"),
         )
         for leg in await self._load_all_legs(target_date, run.id):
-            reasons = _research_market_rejection_reasons(leg) + selection_rejection_reasons(leg, spec, calibration)
+            if spec.pricing == "market" and leg.fair_probability is not None:
+                leg = market_priced(leg)
+            reasons = _research_market_rejection_reasons(leg, spec) + selection_rejection_reasons(leg, spec, calibration)
             if reasons:
                 rejected.append({"leg": leg, "reason_codes": reasons})
         return rejected
@@ -401,10 +486,19 @@ class AccumulatorBuilder:
         )
         return result.scalar_one_or_none()
 
-    async def _load_qualified_legs(self, target_date: date, model_run_id: int) -> list[Leg]:
+    async def _load_qualified_legs(
+        self, target_date: date, model_run_id: int, pricing: str = "model"
+    ) -> list[Leg]:
+        legs = await self._load_all_legs(target_date, model_run_id)
+        if pricing == "market":
+            return [
+                market_priced(leg)
+                for leg in legs
+                if leg.fair_probability is not None and leg.best_odds >= _MIN_LEG_ODDS
+            ]
         return [
             leg
-            for leg in await self._load_all_legs(target_date, model_run_id)
+            for leg in legs
             if leg.edge is not None and leg.best_odds >= _MIN_LEG_ODDS
         ]
 
@@ -518,6 +612,18 @@ class AccumulatorBuilder:
                     float((prediction.data_quality_snapshot or {}).get("score", 0.0)),
                 )
             )
+        # Fair (de-vigged) market probability per selection, from the same
+        # run's quotes for every market on the match.
+        implied_by_match: dict[int, dict[str, float]] = {}
+        for leg in legs:
+            if leg.best_odds > 1.0:
+                implied_by_match.setdefault(leg.match_id, {})[leg.market] = 1.0 / leg.best_odds
+        fair_by_match = {
+            match_id: fair_market_probabilities(implied)
+            for match_id, implied in implied_by_match.items()
+        }
+        for leg in legs:
+            leg.fair_probability = fair_by_match.get(leg.match_id, {}).get(leg.market)
         return legs
 
     async def _load_correlation_coefficients(self) -> dict[tuple[str, str, str, int | None], float]:
@@ -529,6 +635,8 @@ class AccumulatorBuilder:
 
 
 def selection_rejection_reasons(leg: Leg, spec: TicketSpec, calibration: dict | None = None) -> list[str]:
+    if spec.pricing == "market":
+        return _market_rejection_reasons(leg, spec)
     reasons: list[str] = []
     if leg.best_odds <= 0:
         reasons.append("MISSING_ODDS")
@@ -567,8 +675,39 @@ def selection_rejection_reasons(leg: Leg, spec: TicketSpec, calibration: dict | 
     return reasons
 
 
-def _research_market_rejection_reasons(leg: Leg) -> list[str]:
-    """Exclude restricted markets from generated paper tickets only."""
+def _market_rejection_reasons(leg: Leg, spec: TicketSpec) -> list[str]:
+    """Gates for market-priced legs: the price and the data, not the model.
+
+    Edge, Q-score, model-set and model-calibration gates judge the ensemble's
+    opinion, which no longer prices these legs. What remains: a fair price
+    must exist, sit in the tier's leg-odds band, carry a tolerable margin at
+    the quoted price, and be fresh; the fixture's data must be usable.
+    """
+    reasons: list[str] = []
+    if leg.best_odds <= 0:
+        reasons.append("MISSING_ODDS")
+    elif not (spec.min_leg_odds <= leg.best_odds <= spec.max_leg_odds):
+        reasons.append("LEG_ODDS_OUT_OF_TIER_BAND")
+    if leg.fair_probability is None:
+        reasons.append("MISSING_FAIR_PRICE")
+    elif leg.best_odds > 0 and leg.fair_probability * leg.best_odds - 1.0 < -settings.max_leg_margin:
+        reasons.append("MARGIN_TOO_HIGH")
+    if leg.data_quality_score < settings.min_data_quality_score:
+        reasons.append("DATA_QUALITY_BELOW_THRESHOLD")
+    if leg.source_odds_at is None:
+        reasons.append("MISSING_ODDS_TIMESTAMP")
+    elif _odds_age_hours(leg.source_odds_at) > settings.max_selection_odds_age_hours:
+        reasons.append("STALE_ODDS")
+    return reasons
+
+
+def _research_market_rejection_reasons(leg: Leg, spec: TicketSpec | None = None) -> list[str]:
+    """Exclude restricted markets from generated paper tickets only.
+
+    The restriction answers where the *model* lost; market-priced tiers don't
+    use the model's opinion, so it doesn't apply to them."""
+    if spec is not None and spec.pricing == "market":
+        return []
     if leg.market in settings.research_restricted_markets:
         return ["MARKET_RESTRICTED_FOR_RESEARCH"]
     return []
@@ -594,6 +733,18 @@ def _cat_day_offset(kickoff_at: datetime, target_date: date) -> int:
 
 def _relax_spec(spec: TicketSpec, level: int) -> TicketSpec:
     """Apply relaxation steps 1..level cumulatively to `spec`, clamped to sane floors."""
+    if spec.pricing == "market":
+        # Market tiers have no Q/grade gates to loosen; a thin slate instead
+        # widens the odds band a little per level, and from level 2 allows a
+        # leg fewer (never below a 2-leg accumulator).
+        return replace(
+            spec,
+            min_legs=max(2, spec.min_legs - (1 if level >= 2 else 0)),
+            min_combined_odds=spec.min_combined_odds * (1 - 0.10 * level),
+            max_combined_odds=spec.max_combined_odds * (1 + 0.15 * level),
+            max_leg_odds=spec.max_leg_odds + 0.20 * level,
+            min_adjusted_probability=spec.min_adjusted_probability * (1 - 0.20 * level),
+        )
     ratio_delta = sum(step.get("min_high_grade_ratio", 0.0) for step in _RELAXATION_STEPS[:level])
     market_delta = sum(step.get("min_market_types", 0) for step in _RELAXATION_STEPS[:level])
     q_delta = sum(step.get("min_q_score", 0.0) for step in _RELAXATION_STEPS[:level])
@@ -603,19 +754,12 @@ def _relax_spec(spec: TicketSpec, level: int) -> TicketSpec:
         if math.isinf(spec.max_combined_odds)
         else min(_RELAXATION_MAX_COMBINED_ODDS, spec.max_combined_odds + odds_delta)
     )
-    return TicketSpec(
-        ticket_type=spec.ticket_type,
-        display_name=spec.display_name,
-        min_legs=spec.min_legs,
-        max_legs=spec.max_legs,
-        min_combined_odds=spec.min_combined_odds,
+    return replace(
+        spec,
         max_combined_odds=relaxed_max_odds,
         min_q_score=max(_RELAXATION_FLOOR_Q_SCORE, spec.min_q_score + q_delta),
         min_high_grade_ratio=max(0.0, spec.min_high_grade_ratio + ratio_delta),
         min_market_types=max(1, spec.min_market_types + market_delta),
-        min_adjusted_probability=spec.min_adjusted_probability,
-        max_pair_correlation=spec.max_pair_correlation,
-        internal_only=spec.internal_only,
     )
 
 
@@ -729,6 +873,7 @@ def _evaluate_combo(
         round(average_edge, 6) if average_edge is not None else None,
         spec.ticket_type == TicketType.AGGRESSIVE,
         spec.internal_only,
+        pricing=spec.pricing,
     )
 
 
@@ -740,6 +885,12 @@ def _odds_age_hours(value: datetime | None) -> float:
 
 
 def _objective(ticket: Ticket) -> float:
+    if ticket.pricing == "market":
+        if ticket.internal_only:
+            return ticket.expected_value
+        # Most likely ticket in the tier's odds band, traded against the
+        # bookmaker margin paid: +1% EV is worth +1% relative hit probability.
+        return math.log(max(ticket.adjusted_probability, 1e-9)) + ticket.expected_value
     if ticket.ticket_type == TicketType.SAFE:
         return ticket.adjusted_probability + max(0.0, ticket.expected_value) * 0.05
     return ticket.expected_value / (1.0 + ticket.risk_score / 100.0)
@@ -749,6 +900,40 @@ def _partial_score(legs: tuple[Leg, ...]) -> float:
     average_q = sum(leg.q_score for leg in legs) / len(legs)
     positive_ev = sum(max(-0.2, leg.expected_value or -0.2) for leg in legs)
     return average_q + positive_ev * 20.0 + len({_market_family(leg.market) for leg in legs})
+
+
+def _market_leg_target(spec: TicketSpec) -> float:
+    """Typical leg price for a tier: geometric-mid combined odds of its band,
+    spread over its mid leg count."""
+    mid_legs = (spec.min_legs + spec.max_legs) / 2
+    upper = spec.max_combined_odds if math.isfinite(spec.max_combined_odds) else spec.min_combined_odds * 4
+    return math.sqrt(max(spec.min_combined_odds, 1.01) * upper) ** (1 / mid_legs)
+
+
+def _market_leg_score(leg: Leg, target: float) -> float:
+    """Low margin first, nudged toward the tier's typical leg price.
+
+    Ranking (or beam-pruning) on probability alone keeps only 1.2x favourites,
+    whose combinations never reach the Balanced/Aggressive odds bands; the
+    final choice among valid tickets is still the most likely one
+    (_objective)."""
+    return (leg.expected_value or -1.0) - 0.05 * abs(math.log(leg.best_odds / target))
+
+
+def _market_candidates(pool: list[Leg], spec: TicketSpec) -> list[Leg]:
+    """Best-scoring legs for the tier; at most two markets per match so the
+    window spans enough fixtures for three tickets."""
+    target = _market_leg_target(spec)
+    ranked = sorted(
+        pool, key=lambda leg: (_market_leg_score(leg, target), leg.prediction_id), reverse=True
+    )
+    per_match: Counter[int] = Counter()
+    chosen: list[Leg] = []
+    for leg in ranked:
+        if per_match[leg.match_id] < 2:
+            per_match[leg.match_id] += 1
+            chosen.append(leg)
+    return chosen
 
 
 def _find_best_ticket(
@@ -779,11 +964,19 @@ def _find_best_ticket(
             leg for leg in pool
             if exposed[(leg.match_id, leg.market)] < max_match_market_exposure
         ]
-    candidates = sorted(
-        pool,
-        key=lambda leg: (leg.q_score, leg.expected_value or -1.0, leg.prediction_id),
-        reverse=True,
-    )[:_CANDIDATE_LIMIT]
+    if spec.pricing == "market":
+        candidates = _market_candidates(pool, spec)[:_CANDIDATE_LIMIT]
+        target = _market_leg_target(spec)
+
+        def partial_score(legs: tuple[Leg, ...]) -> float:
+            return sum(_market_leg_score(leg, target) for leg in legs)
+    else:
+        candidates = sorted(
+            pool,
+            key=lambda leg: (leg.q_score, leg.expected_value or -1.0, leg.prediction_id),
+            reverse=True,
+        )[:_CANDIDATE_LIMIT]
+        partial_score = _partial_score
     if len(candidates) < spec.min_legs:
         return None
     partials: list[tuple[tuple[int, ...], tuple[Leg, ...]]] = [(tuple(), tuple())]
@@ -803,7 +996,7 @@ def _find_best_ticket(
                 if math.prod(item.best_odds for item in next_legs) > spec.max_combined_odds:
                     continue
                 expanded.append((indices + (index,), next_legs))
-        expanded.sort(key=lambda item: _partial_score(item[1]), reverse=True)
+        expanded.sort(key=lambda item: partial_score(item[1]), reverse=True)
         partials = expanded[:_BEAM_WIDTH]
         if size < spec.min_legs:
             continue

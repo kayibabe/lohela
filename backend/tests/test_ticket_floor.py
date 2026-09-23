@@ -23,6 +23,13 @@ from app.services.accumulator_builder import (
 from app.services.fixture_ingestor import _season_segments
 
 TARGET = date(2026, 9, 24)
+
+
+@pytest.fixture(autouse=True)
+def _model_pricing(monkeypatch):
+    """These tests cover the horizon/relaxation machinery with model-priced
+    legs; market pricing has its own suite (test_honest_pricing.py)."""
+    monkeypatch.setattr(settings, "leg_probability_source", "model")
 _SAFE_MARKETS = ("over_1.5", "btts_yes", "away_win", "over_2.5", "dnb_away")
 
 
@@ -69,7 +76,7 @@ def _fake_builder(pools: dict[date, list[Leg]]) -> AccumulatorBuilder:
             return None
         return SimpleNamespace(id=1000 + target_date.day, model_version="t", config_snapshot={})
 
-    async def load(target_date, run_id):
+    async def load(target_date, run_id, pricing="model"):
         return list(pools[target_date])
 
     async def calibration(*args):

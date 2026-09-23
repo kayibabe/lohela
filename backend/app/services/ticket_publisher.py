@@ -23,7 +23,7 @@ from app.models import (
     PipelineRun,
     PipelineStageRun,
 )
-from app.services.accumulator_builder import AccumulatorBuilder, DailyTickets, TICKET_SPECS, Ticket
+from app.services.accumulator_builder import AccumulatorBuilder, DailyTickets, Ticket, active_ticket_specs
 
 
 class TicketPublisher:
@@ -75,7 +75,8 @@ class TicketPublisher:
             model_run_id=built.model_run_id,
             status=RunStatus.RUNNING,
             config_snapshot={
-                "ticket_specs": [_spec_snapshot(spec) for spec in TICKET_SPECS],
+                "ticket_specs": [_spec_snapshot(spec) for spec in active_ticket_specs()],
+                "pricing": (built.selection_diagnostics.get("pricing") or {}).get("source", "model"),
                 "research_min_qscore": research_min_qscore,
                 "publication_mode": "immutable_paper_trading",
                 "selection_diagnostics": built.selection_diagnostics,
@@ -334,6 +335,7 @@ def _canonical_ticket_content(
         "relaxed_tier": candidate.relaxed,
         "relaxation_level": candidate.relaxation_level,
         "horizon_days": candidate.horizon_days,
+        "pricing": candidate.pricing,
         "legs": [
             {
                 "position": position,
@@ -343,6 +345,7 @@ def _canonical_ticket_content(
                 "selection": leg.selection,
                 "odds": leg.best_odds,
                 "probability": leg.model_probability,
+                "raw_model_probability": leg.raw_model_probability,
                 "q_score": leg.q_score,
                 "edge": leg.edge,
                 "source_odds_at": leg.source_odds_at.isoformat() if leg.source_odds_at else None,
