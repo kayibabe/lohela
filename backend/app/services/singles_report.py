@@ -9,10 +9,11 @@ from collections import Counter
 from dataclasses import asdict
 from datetime import date, datetime, timezone
 
-from sqlalchemy import select
+from sqlalchemy import func, or_, select
 
 from app.config import cat_day_bounds_utc
-from app.models import Match, MatchStatus, Prediction
+from app.models import Match, MatchStatus, ModelRun, Prediction
+from app.services.ticket_horizon import HORIZON_RUN_TRIGGER
 from app.services.settlement import evaluate_selection
 from app.services.singles_research import Candidate, Policy, evaluate, select_candidates
 
@@ -55,11 +56,19 @@ def adapt_rows(rows):
 async def load_rows(db, start: date, end: date, model_version: str):
     if end < start or (end - start).days > 366:
         raise ValueError("Use an ordered period of at most 367 days")
+    # Exclude the ticket stage's rolling-horizon runs (ticket_horizon.py), which
+    # score fixtures up to 4 days ahead: "earliest eligible decision" would
+    # otherwise let them silently replace this protocol's usual decisions.
+    # Rows with no run (historical backfill) are kept so the adapter still
+    # rejects and counts them as before.
+    run_trigger = func.coalesce(ModelRun.config_snapshot["trigger"].as_string(), "")
     result = await db.execute(
         select(Prediction, Match).join(Match, Prediction.match_id == Match.id)
+        .outerjoin(ModelRun, Prediction.model_run_id == ModelRun.id)
         .where(Prediction.model_version == model_version,
                Match.kickoff_at >= cat_day_bounds_utc(start)[0],
-               Match.kickoff_at < cat_day_bounds_utc(end)[1])
+               Match.kickoff_at < cat_day_bounds_utc(end)[1],
+               or_(ModelRun.id.is_(None), run_trigger != HORIZON_RUN_TRIGGER))
         .order_by(Prediction.created_at, Prediction.id)
     )
     return result.all()

@@ -260,6 +260,34 @@ def test_resolve_horizon_dates_skips_a_failed_day_and_noops_on_full_day(monkeypa
     ) == ([], [])
 
 
+def test_safe_wrapper_contains_horizon_failures_and_skips_refused_pipelines(monkeypatch):
+    from app.services.ticket_publisher import TicketPublisher
+
+    async def ok_context(self, *args):
+        return None
+
+    async def boom(*args, **kwargs):
+        raise RuntimeError("db blip")
+
+    monkeypatch.setattr(TicketPublisher, "_validate_pipeline_context", ok_context)
+    monkeypatch.setattr(ticket_horizon, "resolve_horizon_dates", boom)
+    assert asyncio.run(
+        ticket_horizon.resolve_horizon_dates_safely(_null_session, TARGET, 7, 11)
+    ) == ([], [{"horizon_error": "db blip"}])
+
+    async def refused(self, *args):
+        raise ValueError("Refusing publication: pipeline run is partial")
+
+    async def must_not_run(*args, **kwargs):
+        raise AssertionError("horizon work for a refused pipeline")
+
+    monkeypatch.setattr(TicketPublisher, "_validate_pipeline_context", refused)
+    monkeypatch.setattr(ticket_horizon, "resolve_horizon_dates", must_not_run)
+    assert asyncio.run(
+        ticket_horizon.resolve_horizon_dates_safely(_null_session, TARGET, 7, 11)
+    ) == ([], [])
+
+
 # ── Season calendar per league ──────────────────────────────────────────────
 
 class _SeasonClient:
@@ -306,6 +334,39 @@ def test_season_segments_fall_back_between_seasons_and_on_errors():
         _season_segments(_SeasonClient(RuntimeError("down")), 41, date(2026, 9, 24), date(2026, 9, 24))
     )
     assert segments[0][0] == 2026
+
+
+def test_latest_season_is_open_ended_past_its_scheduled_end():
+    """API "end" = last fixture scheduled so far (e.g. Serie C before playoffs)."""
+    segments = asyncio.run(_season_segments(_SeasonClient(_EURO), 138, date(2027, 5, 20), date(2027, 6, 5)))
+    assert segments == [(2026, date(2027, 5, 20), date(2027, 6, 5))]
+
+
+# ── Review follow-ups: ledgers must not double count / re-time horizon picks ─
+
+def test_published_horizon_leg_is_filed_under_its_match_day():
+    from app.services.recommendation_ledger import _cat_date
+
+    # 22:30 UTC on the 25th is 00:30 CAT on the 26th.
+    assert _cat_date(datetime(2026, 9, 25, 22, 30, tzinfo=timezone.utc)) == date(2026, 9, 26)
+    assert _cat_date(datetime(2026, 9, 25, 13, 0)) == date(2026, 9, 25)  # naive = UTC
+    assert _cat_date(None) is None
+
+
+def test_singles_ledger_excludes_rolling_horizon_runs():
+    from unittest.mock import AsyncMock
+
+    from sqlalchemy.dialects import postgresql
+
+    from app.services.singles_report import load_rows
+
+    db = SimpleNamespace(execute=AsyncMock(return_value=SimpleNamespace(all=lambda: [])))
+    asyncio.run(load_rows(db, date(2026, 9, 19), date(2026, 9, 19), "test"))
+    statement = db.execute.call_args.args[0]
+    sql = str(statement.compile(dialect=postgresql.dialect(), compile_kwargs={"literal_binds": True}))
+    assert "LEFT OUTER JOIN model_runs" in sql
+    assert ticket_horizon.HORIZON_RUN_TRIGGER in sql
+    assert "model_runs.id IS NULL" in sql  # historical rows still reach the adapter
 
 
 # ── Seeding reaches already-seeded databases ────────────────────────────────

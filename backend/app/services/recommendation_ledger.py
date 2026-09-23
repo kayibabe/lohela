@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -20,7 +20,15 @@ from app.models import (
     TicketSelection,
     TicketStatus,
 )
+from app.config import CAT
 from app.services.settlement import evaluate_selection
+
+
+def _cat_date(value: datetime | None) -> date | None:
+    if value is None:
+        return None
+    when = value if value.tzinfo else value.replace(tzinfo=timezone.utc)
+    return when.astimezone(CAT).date()
 
 
 STRONGEST_LIMIT = 8
@@ -256,11 +264,16 @@ async def recommendation_pick_ledger(
             prediction = selection.prediction
             if prediction is None or selection.match is None:
                 continue
-            key = _canonical_pick_key(ticket.target_date, prediction)
+            # File the pick under the CAT day the match is played. For a
+            # same-day ticket that is ticket.target_date; a rolling-horizon
+            # leg plays later, and keying it on the ticket date would count
+            # it twice alongside that later day's own Strongest snapshot.
+            pick_date = _cat_date(selection.match.kickoff_at) or ticket.target_date
+            key = _canonical_pick_key(pick_date, prediction)
             row = rows_by_key.setdefault(
                 key,
                 _new_pick(
-                    ticket.target_date,
+                    pick_date,
                     prediction,
                     ticket.published_at,
                     selection.match,

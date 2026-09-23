@@ -516,13 +516,19 @@ async def _season_segments(
         logger.warning("Season calendar unavailable for league %d: %s", league_id, exc)
         seasons = []
     segments: list[tuple[int, date, date]] = []
-    for item in sorted(seasons, key=lambda s: s.get("year") or 0):
+    ordered = sorted(seasons, key=lambda s: s.get("year") or 0)
+    for index, item in enumerate(ordered):
         try:
             start = date.fromisoformat(item["start"])
             end = date.fromisoformat(item["end"])
             year = int(item["year"])
         except (KeyError, TypeError, ValueError):
             continue
+        # A season's "end" is its last fixture scheduled *so far* (playoffs,
+        # rescheduled games and unpublished rounds come later), so the latest
+        # season is left open-ended rather than trimmed to it.
+        if index == len(ordered) - 1:
+            end = max(end, to_date)
         segment_from, segment_to = max(start, from_date), min(end, to_date)
         if segment_from <= segment_to:
             segments.append((year, segment_from, segment_to))

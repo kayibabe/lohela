@@ -5,7 +5,7 @@ import logging
 from datetime import date, timedelta
 
 from celery import Celery
-from celery.signals import task_failure
+from celery.signals import task_failure, worker_ready
 
 from app.config import CURRENT_MODEL_VERSION, cat_today, settings
 
@@ -278,10 +278,10 @@ def generate_tickets(
     model_run_id = model_result.get("model_run_id") if isinstance(model_result, dict) else None
 
     async def _run():
-        from app.services.ticket_horizon import resolve_horizon_dates
+        from app.services.ticket_horizon import resolve_horizon_dates_safely
 
-        horizon_dates, horizon_reports = await resolve_horizon_dates(
-            AsyncSessionLocal, date.fromisoformat(target_date), model_run_id
+        horizon_dates, horizon_reports = await resolve_horizon_dates_safely(
+            AsyncSessionLocal, date.fromisoformat(target_date), model_run_id, pipeline_run_id
         )
         async with AsyncSessionLocal() as db:
             generation = await TicketPublisher(db).generate_and_publish(
@@ -447,6 +447,49 @@ def backfill_leagues(self, league_ids: list[int], lookback_days: int | None = No
     except Exception as exc:
         logger.exception("New-league backfill failed for %s", league_ids)
         raise self.retry(exc=exc, countdown=300)
+
+
+@celery_app.task(name="pipeline.ensure_league_history")
+def ensure_league_history():
+    """Queue a backfill for any tracked, active league with no finished match.
+
+    Self-heals the startup backfill: web queues it right after seeding, but a
+    worker still on an older image drops an unregistered task, and web won't
+    re-queue once the rows exist. Runs on every worker start (worker_ready).
+    """
+    from sqlalchemy import exists, select
+
+    from app.database import AsyncSessionLocal
+    from app.models import Competition, Match, MatchStatus
+
+    async def _missing():
+        async with AsyncSessionLocal() as db:
+            finished = select(Match.id).where(
+                Match.competition_id == Competition.id,
+                Match.status == MatchStatus.FINISHED,
+            )
+            result = await db.execute(
+                select(Competition.api_football_id).where(
+                    Competition.active.is_(True),
+                    Competition.api_football_id.in_(settings.tracked_league_ids),
+                    ~exists(finished),
+                )
+            )
+            return sorted(result.scalars().all())
+
+    missing = _run_async(_missing())
+    if missing:
+        backfill_leagues.delay(missing)
+        logger.warning("Tracked leagues without history, backfill queued: %s", missing)
+    return {"missing_history": missing}
+
+
+@worker_ready.connect
+def _queue_league_history_check(sender=None, **_):
+    try:
+        ensure_league_history.delay()
+    except Exception:
+        logger.exception("Could not queue the league-history check")
 
 
 @celery_app.task(name="pipeline.sync_historical_results", bind=True, max_retries=2)

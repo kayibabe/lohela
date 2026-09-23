@@ -17,10 +17,15 @@ from datetime import date, datetime, timedelta, timezone
 
 from sqlalchemy import select
 
-from app.config import CURRENT_MODEL_VERSION, settings
+from app.config import CURRENT_MODEL_VERSION, cat_today, settings
 from app.models import ModelRun, RunStatus
 
 logger = logging.getLogger(__name__)
+
+# Stamped into ModelRun.config_snapshot["trigger"] so consumers with their own
+# decision-time protocol (the singles research ledger) can exclude these
+# early-scored runs.
+HORIZON_RUN_TRIGGER = "rolling_horizon"
 
 
 async def _recent_completed_run(db, target: date) -> ModelRun | None:
@@ -80,6 +85,13 @@ async def prepare_horizon_date(
         await db.commit()
     async with session_factory() as db:
         result = await ModelRunner(db, model_version=model_version).run(target)
+        run = await db.get(ModelRun, result.get("model_run_id")) if result.get("model_run_id") else None
+        if run is not None:
+            run.config_snapshot = {
+                **(run.config_snapshot or {}),
+                "trigger": HORIZON_RUN_TRIGGER,
+                "scored_days_ahead": (target - cat_today()).days,
+            }
         await db.commit()
     report = {
         "date": target.isoformat(),
@@ -91,6 +103,29 @@ async def prepare_horizon_date(
     }
     logger.info("Prepared rolling-horizon date %s: %s", target, report)
     return report
+
+
+async def resolve_horizon_dates_safely(
+    session_factory, target: date, model_run_id: int | None, pipeline_run_id: int | None
+) -> tuple[list[date], list[dict]]:
+    """resolve_horizon_dates for the ticket stage: never costs the day tickets.
+
+    Skips the work when the publisher is going to refuse this pipeline anyway
+    (it raises that refusal itself, as before), and falls back to no horizon
+    on any error — the horizon only ever adds tickets.
+    """
+    from app.services.ticket_publisher import TicketPublisher
+
+    try:
+        async with session_factory() as db:
+            await TicketPublisher(db)._validate_pipeline_context(pipeline_run_id, target, model_run_id)
+    except ValueError:
+        return [], []
+    try:
+        return await resolve_horizon_dates(session_factory, target, model_run_id)
+    except Exception as exc:
+        logger.exception("Rolling horizon failed for %s; publishing without it", target)
+        return [], [{"horizon_error": str(exc)}]
 
 
 async def resolve_horizon_dates(
