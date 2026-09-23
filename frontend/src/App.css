@@ -1311,6 +1311,10 @@ body {
 .leg-spread.high { color: var(--negative); }
 .leg-spread.unknown { color: var(--muted); }
 .live-phase-badge { display:inline-block; margin-left:5px; padding:2px 6px; border-radius:999px; background:color-mix(in srgb, var(--negative) 12%, var(--surface)); color:var(--negative); font-size:11px; font-weight:800; }
+.match-state-badge { display:inline-block; margin-left:5px; padding:2px 6px; border-radius:999px; background:var(--surface2); color:var(--muted); font-size:11px; font-weight:800; white-space:nowrap; }
+.match-state-badge.live { background:color-mix(in srgb, var(--negative) 12%, var(--surface)); color:var(--negative); }
+.match-state-badge.finished { background:color-mix(in srgb, var(--positive) 12%, var(--surface)); color:var(--positive); }
+.match-state-badge.postponed, .match-state-badge.cancelled { background:color-mix(in srgb, var(--warning) 12%, var(--surface)); color:var(--warning); }
 .live-score-badge { display:inline-block; margin-left:5px; padding:2px 7px; border-radius:999px; background:color-mix(in srgb, var(--positive) 14%, var(--surface)); color:var(--positive); font-size:11px; font-weight:800; white-space:nowrap; }
 .ticket-result-summary { text-transform: capitalize; color: var(--muted); }.ticket-result-summary::first-letter { color: var(--text); }
 .ticket-settlement-meta { margin-top: 7px; color: var(--muted); font-size: 11px; }

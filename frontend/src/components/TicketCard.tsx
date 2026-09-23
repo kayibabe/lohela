@@ -23,6 +23,25 @@ const formatLegDay = (iso: string) =>
 const formatHorizonEnd = (kickoffs: string[]) =>
   formatLegDay(kickoffs.reduce((latest, iso) => (Date.parse(iso) > Date.parse(latest) ? iso : latest)))
 
+const LIVE_PHASE_LABELS: Record<string, string> = {
+  '1st_half': '1st Half', half_time: 'Half Time', '2nd_half': '2nd Half',
+  extra_time: 'Extra Time', penalties: 'Penalties', suspended: 'Suspended',
+  interrupted: 'Interrupted', live: 'Live',
+}
+
+function matchStateLabel(leg: Leg): string {
+  const status = (leg.match_status ?? '').toLowerCase()
+  if (status === 'live' || leg.live_phase) {
+    const phase = leg.live_phase ? LIVE_PHASE_LABELS[leg.live_phase] ?? 'Live' : 'Live'
+    return `${phase}${leg.elapsed_minutes != null ? ` · ${leg.elapsed_minutes}'` : ''}`
+  }
+  if (status === 'finished') return 'Finished'
+  if (status === 'postponed') return 'Postponed'
+  if (status === 'cancelled') return 'Cancelled'
+  if (status === 'scheduled') return 'Upcoming'
+  return 'Pending'
+}
+
 export default function TicketCard({ ticket, tierName, tierDesc, color, research, onSelectLeg, suggestedStake }: Props) {
   const [expanded, setExpanded] = useState(false)
   if (!ticket) {
@@ -205,12 +224,14 @@ export default function TicketCard({ ticket, tierName, tierDesc, color, research
                     {(ticket.horizon_days ?? 0) > 0 && <>{formatLegDay(leg.kickoff_at)} </>}
                     {formatKickoff(leg.kickoff_at)}
                   </span>
-                  {(leg.live_phase || leg.match_status === 'live') && <span className="live-phase-badge">{leg.live_phase ? ({ '1st_half': '1st Half', half_time: 'Half Time', '2nd_half': '2nd Half', extra_time: 'Extra Time', penalties: 'Penalties', suspended: 'Suspended', interrupted: 'Interrupted', live: 'Live' } as Record<string, string>)[leg.live_phase] ?? 'Live' : 'Live'}{leg.elapsed_minutes != null ? ` · ${leg.elapsed_minutes}'` : ''}</span>}
-                  {leg.home_goals != null && leg.away_goals != null && <span className="live-score-badge">Score {leg.home_goals}–{leg.away_goals}</span>}
+                  <span className={`match-state-badge ${(leg.match_status ?? 'pending').toLowerCase()}`}>
+                    {matchStateLabel(leg)}
+                  </span>
+                  {leg.home_goals != null && leg.away_goals != null && <span className="live-score-badge" aria-label={`Score ${leg.home_goals} to ${leg.away_goals}`}>{leg.home_goals}–{leg.away_goals}</span>}
                   <span className="leg-market">{formatMarket(leg.market)}</span>
                 </div>
                 <div className={`leg-outcome ${leg.result}`}>
-                  <span className="leg-outcome-label">Outcome</span>
+                  <span className="leg-outcome-label">Pick</span>
                   <strong>{leg.result === 'pending' ? (leg.home_goals != null && leg.away_goals != null ? 'Settlement pending' : 'Pending') : leg.result === 'won' ? 'Won' : leg.result === 'lost' ? 'Lost' : 'Void'}</strong>
                 </div>
               </div>

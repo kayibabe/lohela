@@ -123,6 +123,27 @@ describe('audited ticket surfaces', () => {
     expect(html).not.toContain('Chance to win')
   })
 
+  it('shows match state, live phase and score separately from pick settlement', () => {
+    const live = { ...ticket.legs[0], match_status: 'live', live_phase: '2nd_half', elapsed_minutes: 67, home_goals: 2, away_goals: 1 }
+    const html = renderToStaticMarkup(
+      <TicketCard ticket={{ ...ticket, legs: [live] }} tierName="Balanced" tierDesc="" color="blue" />,
+    )
+    expect(html).toContain('2nd Half · 67&#x27;')
+    expect(html).toContain('aria-label="Score 2 to 1"')
+    expect(html).toContain('Pick')
+    expect(html).toContain('>Settlement pending</strong>')
+  })
+
+  it('identifies finished matches whose pick still awaits settlement', () => {
+    const finished = { ...ticket.legs[0], match_status: 'finished', home_goals: 0, away_goals: 0 }
+    const html = renderToStaticMarkup(
+      <TicketCard ticket={{ ...ticket, legs: [finished] }} tierName="Balanced" tierDesc="" color="blue" />,
+    )
+    expect(html).toContain('match-state-badge finished">Finished')
+    expect(html).toContain('Score 0 to 0')
+    expect(html).toContain('Settlement pending')
+  })
+
   it('omits horizon labelling for a same-day ticket', () => {
     const html = renderToStaticMarkup(
       <TicketCard ticket={ticket} tierName="Balanced" tierDesc="Q ≥80" color="blue" />,
