@@ -293,8 +293,16 @@ async def recommendation_pick_ledger(
                 row["odds_source"] = "publication_snapshot"
                 row["source_odds_at"] = selection.source_odds_at
                 row["q_score"] = selection.q_score_snapshot
-                row["model_probability"] = selection.probability_snapshot
-                row["edge"] = selection.edge_snapshot
+                if (ticket.pricing or "model") == "market":
+                    # The published snapshot is the fair market price; this
+                    # ledger evaluates the model, so keep the model's own view.
+                    row["model_probability"] = prediction.model_probability
+                    row["edge"] = prediction.edge
+                    row["published_fair_probability"] = selection.probability_snapshot
+                else:
+                    row["model_probability"] = selection.probability_snapshot
+                    row["edge"] = selection.edge_snapshot
+                row["published_pricing"] = ticket.pricing or "model"
                 row["selection_settled_at"] = selection.settled_at
 
     strongest_result = await db.execute(

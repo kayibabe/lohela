@@ -6,16 +6,17 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.config import cat_day_bounds_utc, cat_today
-from app.models import Match, Prediction, SelectionResult, TicketSelection
+from app.models import AccumulatorTicket, Match, Prediction, SelectionResult, TicketSelection
 
 
 async def review_losses(db: AsyncSession, target_date: date | None = None) -> dict:
     target = target_date or cat_today()
     start, end = cat_day_bounds_utc(target)
     result = await db.execute(
-        select(TicketSelection, Match, Prediction)
+        select(TicketSelection, Match, Prediction, AccumulatorTicket.pricing)
         .join(Match, Match.id == TicketSelection.match_id)
         .join(Prediction, Prediction.id == TicketSelection.prediction_id)
+        .join(AccumulatorTicket, AccumulatorTicket.id == TicketSelection.ticket_id)
         .where(
             TicketSelection.result == SelectionResult.LOST,
             Match.kickoff_at >= start,
@@ -27,16 +28,19 @@ async def review_losses(db: AsyncSession, target_date: date | None = None) -> di
     rows = result.all()
     analyses = []
     reason_counts: dict[str, int] = {}
-    for selection, match, prediction in rows:
+    for selection, match, prediction, pricing in rows:
         reasons = []
         probability = selection.probability_snapshot
+        market_priced = pricing == "market"
         if probability >= 0.70:
             reasons.append("high_confidence_miss")
         if selection.odds_snapshot >= 3.0:
             reasons.append("high_price_variance")
-        if selection.q_score_snapshot < 70:
+        # Q-score and edge are model judgements; a market-priced leg was
+        # neither chosen nor priced on them, and its "edge" is just the margin.
+        if not market_priced and selection.q_score_snapshot < 70:
             reasons.append("low_quality_signal")
-        if selection.edge_snapshot is not None and selection.edge_snapshot < 0.05:
+        if not market_priced and selection.edge_snapshot is not None and selection.edge_snapshot < 0.05:
             reasons.append("thin_edge")
         if match.data_quality_score is not None and match.data_quality_score < 60:
             reasons.append("weak_match_data")
@@ -53,6 +57,7 @@ async def review_losses(db: AsyncSession, target_date: date | None = None) -> di
             "selection": selection.selection,
             "actual_score": f"{match.home_goals}-{match.away_goals}",
             "probability": probability,
+            "pricing": pricing or "model",
             "odds": selection.odds_snapshot,
             "q_score": selection.q_score_snapshot,
             "edge": selection.edge_snapshot,

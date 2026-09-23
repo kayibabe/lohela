@@ -88,12 +88,25 @@ async def performance_summary(db: AsyncSession, date_from: date | None = None, d
         max_drawdown = max(max_drawdown, peak - cumulative)
 
     outcomes: list[tuple[float, float]] = []
+    outcomes_by_pricing: dict[str, list[tuple[float, float]]] = {}
     for ticket, _ in settled:
         for selection in ticket.selections:
             if selection.result in (SelectionResult.WON, SelectionResult.LOST):
-                outcomes.append((selection.probability_snapshot, 1.0 if selection.result == SelectionResult.WON else 0.0))
+                pair = (selection.probability_snapshot, 1.0 if selection.result == SelectionResult.WON else 0.0)
+                outcomes.append(pair)
+                outcomes_by_pricing.setdefault(ticket.pricing or "model", []).append(pair)
     brier = sum((probability - outcome) ** 2 for probability, outcome in outcomes) / len(outcomes) if outcomes else None
     calibration_error = _calibration_error(outcomes)
+    # Published probabilities mean different things by pricing (model estimate
+    # vs de-vigged market), so report each era's calibration separately too.
+    calibration_by_pricing = {
+        pricing: {
+            "selections": len(items),
+            "brier_score": round(sum((p - y) ** 2 for p, y in items) / len(items), 6),
+            "calibration_error": _calibration_error(items),
+        }
+        for pricing, items in outcomes_by_pricing.items()
+    }
 
     by_type: dict[str, dict] = {}
     for ticket, item in settled:
@@ -173,6 +186,7 @@ async def performance_summary(db: AsyncSession, date_from: date | None = None, d
         "max_drawdown_units": max_drawdown,
         "brier_score": brier,
         "calibration_error": calibration_error,
+        "calibration_by_pricing": calibration_by_pricing,
         "selection_sample_size": len(outcomes),
         "by_ticket_type": breakdown,
         "ticket_overlap": overlap,
@@ -319,12 +333,15 @@ async def totals_calibration_review(
     date_from: date | None = None,
     date_to: date | None = None,
     model_version: str | None = None,
+    pricing: str = "model",
 ) -> dict:
     """Review settled published totals by line, competition, probability band, and type.
 
     Only the latest unique published match/market/selection is counted. Rows
     without a settled outcome or probability are excluded from calibration
-    metrics rather than being guessed or regenerated.
+    metrics rather than being guessed or regenerated. `pricing` picks which
+    tickets' published probabilities are reviewed: "model" (default — this
+    review diagnoses the model's totals calibration) or "market".
     """
     result = await db.execute(
         select(AccumulatorTicket)
@@ -339,6 +356,8 @@ async def totals_calibration_review(
     unique: dict[tuple[date, int, str, str], TicketSelection] = {}
     for ticket in result.scalars().all():
         if model_version and ticket.model_version != model_version:
+            continue
+        if (ticket.pricing or "model") != pricing:
             continue
         for selection in ticket.selections:
             match = selection.match
@@ -397,6 +416,7 @@ async def totals_calibration_review(
     } for (competition, line, band, kind), items in sorted(groups.items())]
     return {
         "model_version": model_version or CURRENT_MODEL_VERSION,
+        "pricing": pricing,
         "unique_totals_selections": len(unique),
         "settled_with_probability": sum(len(items) for items in groups.values()),
         "excluded": excluded,
@@ -409,6 +429,11 @@ async def market_reliability_matrix(db: AsyncSession, date_from: date | None = N
     unique: dict[tuple, TicketSelection] = {}
     for ticket in result.scalars().all():
         if model_version and ticket.model_version != model_version:
+            continue
+        # Buckets are Q-score/model-spread bands: model concepts. Market-priced
+        # tickets weren't selected on them (Q often < 75), so they'd only
+        # pollute the lowest band.
+        if (ticket.pricing or "model") != "model":
             continue
         for selection in ticket.selections:
             match_date = selection.match.kickoff_at.date() if selection.match else ticket.target_date

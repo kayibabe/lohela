@@ -39,7 +39,7 @@ export default function TicketCard({ ticket, tierName, tierDesc, color, research
           <div className="empty-title">No ticket found</div>
           <div className="empty-body">
             No combination satisfied every {tierName.toLowerCase()} rule ({tierDesc}),
-            including distinct-match, grade-mix, odds, and correlation limits.
+            including distinct-match, odds, and correlation limits.
           </div>
           <span className="empty-hint">Review strongest selections or try another date</span>
         </div>
@@ -135,7 +135,8 @@ export default function TicketCard({ ticket, tierName, tierDesc, color, research
           {marketPriced ? (
             <div className="stat" title="Average long-run return per unit staked at these odds. Negative means the bookmaker's margin outweighs any price advantage.">
               <span className="stat-label">Expected return</span>
-              <span className={`stat-value ${evPositive ? 'positive' : 'neutral'}`}>
+              {/* Never styled as a win: any small positive figure is price noise, not claimed value. */}
+              <span className="stat-value neutral">
                 {ticket.expected_value == null ? 'Pro only' : PCT(ticket.expected_value)}
               </span>
             </div>
@@ -185,7 +186,7 @@ export default function TicketCard({ ticket, tierName, tierDesc, color, research
               : 'Probability evidence can enter future offline challenger windows; ROI learning is excluded where pre-kickoff odds provenance is incomplete.'}</span>
           </div>
         )}
-        {suggestedStake != null && <div className="ticket-stake-suggestion"><div><span>What-if · half Kelly</span><strong>{suggestedStake > 0 && ticket.combined_odds != null ? `${fmt(suggestedStake)} stake` : 'No positive edge'}</strong></div>{suggestedStake > 0 && ticket.combined_odds != null && <div className="ticket-stake-outcomes"><span>Potential return <b>{fmt(suggestedStake * ticket.combined_odds)}</b></span><span>Potential P&amp;L <b className="positive">+{fmt(suggestedStake * (ticket.combined_odds - 1))}</b></span></div>}</div>}
+        {suggestedStake != null && !marketPriced && <div className="ticket-stake-suggestion"><div><span>What-if · half Kelly</span><strong>{suggestedStake > 0 && ticket.combined_odds != null ? `${fmt(suggestedStake)} stake` : 'No positive edge'}</strong></div>{suggestedStake > 0 && ticket.combined_odds != null && <div className="ticket-stake-outcomes"><span>Potential return <b>{fmt(suggestedStake * ticket.combined_odds)}</b></span><span>Potential P&amp;L <b className="positive">+{fmt(suggestedStake * (ticket.combined_odds - 1))}</b></span></div>}</div>}
       </div>
 
       <ul className="leg-list">

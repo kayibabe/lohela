@@ -191,7 +191,7 @@ export default function SelectionDetail({ selection, modelVersion, publishedAt, 
           <div className="decision-strength-grid">
             <Metric label={label.prob} value={pct(selection.model_probability)} />
             <Metric label={label.edge} value={pct(selection.edge, true)} />
-            <Metric label="Model spread" value={selection.model_agreement == null ? '—' : `${(selection.model_agreement * 100).toFixed(1)} pp`} note={spreadLabel(selection.model_agreement)} />
+            {!market && <Metric label="Model spread" value={selection.model_agreement == null ? '—' : `${(selection.model_agreement * 100).toFixed(1)} pp`} note={spreadLabel(selection.model_agreement)} />}
             <Metric label="Historical evidence" value="Analytics" note="Use settled market/Q-score samples; not an individual-match guarantee." />
           </div>
           {strength.cautions.length > 0 && <p className="decision-strength-note"><strong>Review before including:</strong> {strength.cautions.join(' · ')}.</p>}
@@ -225,9 +225,9 @@ export default function SelectionDetail({ selection, modelVersion, publishedAt, 
         {activeTab === 'odds' && <OddsComparison quotes={quotes} loading={quotesLoading} failed={quotesError} />}
 
         {activeTab === 'probability' && <section className="detail-metrics">
-          <Metric label="Q score" value={selection.q_score == null ? 'Pro only' : selection.q_score.toFixed(1)} />
+          {!market && <Metric label="Q score" value={selection.q_score == null ? 'Pro only' : selection.q_score.toFixed(1)} />}
           <Metric label="Expected value" value={pct(selection.expected_value, true)} hint={label.ev} />
-          <Metric label="Model spread" value={selection.model_agreement == null ? '—' : `${(selection.model_agreement * 100).toFixed(1)} pp`} note={spreadLabel(selection.model_agreement)} hint="Standard deviation between the active model probabilities. Up to 5 pp is strong alignment; above 15 pp triggers a confidence downgrade." />
+          {!market && <Metric label="Model spread" value={selection.model_agreement == null ? '—' : `${(selection.model_agreement * 100).toFixed(1)} pp`} note={spreadLabel(selection.model_agreement)} hint="Standard deviation between the active model probabilities. Up to 5 pp is strong alignment; above 15 pp triggers a confidence downgrade." />}
           <Metric label="Bookmakers" value={(quotes.length || selection.bookmaker_count)?.toString() ?? 'Snapshot'} />
         </section>}
 

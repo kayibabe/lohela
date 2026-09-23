@@ -236,6 +236,10 @@ class AccumulatorTicket(Base):
     # >0 when the rolling-horizon fallback admitted legs kicking off this many
     # CAT days after target_date (thin/international-break slates).
     horizon_days: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    # "market": legs priced at the de-vigged bookmaker probability (probability,
+    # edge and EV snapshots describe the market, not the model); "model": the
+    # original ensemble pricing. Model-quality metrics must filter on this.
+    pricing: Mapped[str] = mapped_column(String(16), default="model", server_default="model", nullable=False)
     publication_hash: Mapped[str] = mapped_column(String(64), nullable=False, unique=True)
     published_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

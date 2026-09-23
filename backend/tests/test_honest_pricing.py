@@ -2,6 +2,7 @@
 
 import asyncio
 import math
+from dataclasses import replace
 from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 
@@ -71,6 +72,8 @@ def test_market_gates_judge_price_and_data_not_the_model():
     assert "LEG_ODDS_OUT_OF_TIER_BAND" in _market_rejection_reasons(market_priced(_leg(2, odds=2.10, fair=0.46)), safe)
     heavy_margin = market_priced(_leg(3, odds=1.30, fair=0.70))  # EV = -9%
     assert "MARGIN_TOO_HIGH" in _market_rejection_reasons(heavy_margin, safe)
+    too_good = market_priced(_leg(6, odds=1.45, fair=0.74))  # +7.3%: stale/out-of-line quote
+    assert "PRICE_OUT_OF_LINE" in _market_rejection_reasons(too_good, safe)
     no_fair = _leg(4, fair=None)
     assert "MISSING_FAIR_PRICE" in _market_rejection_reasons(no_fair, safe)
     stale = market_priced(_leg(5))
@@ -158,12 +161,56 @@ def test_market_relaxation_widens_bands_but_never_below_two_legs():
     assert _relax_spec(TICKET_SPECS[1], 3).min_q_score == 65.0
 
 
-def test_ticket_api_reports_pricing_from_generation():
+def test_ticket_api_reports_pricing_from_the_ticket():
     from app.api.v1.tickets import _ticket_pricing
 
-    market = SimpleNamespace(generation=SimpleNamespace(config_snapshot={"pricing": "market"}))
-    legacy = SimpleNamespace(generation=SimpleNamespace(config_snapshot={}))
-    unloaded = SimpleNamespace()
-    assert _ticket_pricing(market) == "market"
-    assert _ticket_pricing(legacy) == "model"
-    assert _ticket_pricing(unloaded) == "model"
+    assert _ticket_pricing(SimpleNamespace(pricing="market")) == "market"
+    assert _ticket_pricing(SimpleNamespace(pricing=None)) == "model"
+    assert _ticket_pricing(SimpleNamespace()) == "model"
+
+
+def test_consensus_devigs_each_bookmaker_within_its_own_book():
+    """Pairing best prices across books can 'remove' more than the margin
+    (here over 2.10 at A with under 2.05 at B sums below 1); per-book de-vig
+    then averaging can't, and it prices over_1.5 from under_1.5 quotes the
+    model never predicts."""
+    rows = [
+        (7, "A", "over_2.5", 2.10), (7, "A", "under_2.5", 1.72),
+        (7, "B", "over_2.5", 1.80), (7, "B", "under_2.5", 2.05),
+        (7, "A", "over_1.5", 1.30), (7, "A", "under_1.5", 3.40),
+    ]
+
+    class _DB:
+        async def execute(self, statement):
+            return SimpleNamespace(all=lambda: rows)
+
+    builder = AccumulatorBuilder(db=_DB())
+    fair = asyncio.run(builder._consensus_fair_probabilities({7}))[7]
+    book_a = (1 / 2.10) / (1 / 2.10 + 1 / 1.72)
+    book_b = (1 / 1.80) / (1 / 1.80 + 1 / 2.05)
+    assert fair["over_2.5"] == pytest.approx((book_a + book_b) / 2)
+    assert fair["over_2.5"] + fair["under_2.5"] == pytest.approx(1.0)
+    assert fair["over_1.5"] == pytest.approx((1 / 1.30) / (1 / 1.30 + 1 / 3.40))
+
+
+def test_fair_priced_ticket_chance_is_not_haircut_by_correlation_heuristics():
+    from app.services.accumulator_builder import _evaluate_combo
+
+    legs = tuple(market_priced(_leg(i, match_id=i, odds=1.30, fair=0.75)) for i in (1, 2, 3))
+    for leg in legs:
+        leg.competition_id = 1 if leg.match_id < 3 else 2  # same-league pair
+    # Same-league pairs carry a heuristic 0.03 coefficient: allowed by the
+    # pair gate here, but it must not reduce the published chance.
+    spec = replace(SPEC[TicketType.SAFE], max_pair_correlation=0.10)
+    ticket = _evaluate_combo(legs, spec, {})
+    assert ticket is not None
+    assert ticket.adjusted_probability == pytest.approx(0.75 ** 3)
+    assert ticket.correlation_penalty == 0.0
+
+
+def test_unpriced_legs_are_counted_not_silently_dropped():
+    legs = _slate()
+    legs.append(_leg(9999, match_id=99, market="dnb_home", odds=1.40, fair=None))
+    built = asyncio.run(_builder(legs).build(TARGET))
+    counts = built.selection_diagnostics["safe"]["rejection_counts"]
+    assert counts.get("MISSING_FAIR_PRICE") == 1

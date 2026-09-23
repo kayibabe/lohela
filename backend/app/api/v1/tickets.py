@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import func, select
 from sqlalchemy.orm import selectinload
 
-from app.config import cat_today
+from app.config import cat_today, settings
 from app.api.security import get_optional_current_user, require_pro_access, require_research_access
 from app.database import get_db
 from app.models import (
@@ -125,6 +125,9 @@ class DailyTicketsOut(BaseModel):
     generation_status: Optional[str] = None
     generated_ticket_count: int = 0
     missing_public_ticket_types: list[str] = Field(default_factory=list)
+    # How this day's generation priced legs ("market"/"model"); lets the UI
+    # describe an empty tier by the rules actually applied.
+    pricing: str = "model"
     selection_diagnostics: dict[str, dict] = Field(default_factory=dict)
     pipeline_run_id: Optional[int] = None
     pipeline_status: Optional[str] = None
@@ -157,6 +160,7 @@ class TicketHistoryOut(BaseModel):
     published_at: str
     publication_hash: str
     relaxed_tier: bool
+    pricing: str = "model"
     internal_only: bool
     result: Optional[str]
     stake: Optional[float]
@@ -279,6 +283,11 @@ async def get_daily_tickets(
         else (0 if publication_blocked else len(rows)),
         missing_public_ticket_types=list(
             publication_summary.get("missing_public_ticket_types", [])
+        ),
+        pricing=(
+            (latest_generation.config_snapshot or {}).get("pricing") or "model"
+            if latest_generation is not None
+            else settings.leg_probability_source
         ),
         selection_diagnostics=(
             (latest_generation.config_snapshot or {}).get("selection_diagnostics", {})
@@ -429,7 +438,9 @@ async def get_match_history(
             if ticket.ticket_type.value not in item["ticket_types"]: item["ticket_types"].append(ticket.ticket_type.value)
             if selection.selection not in item["selections"]: item["selections"].append(selection.selection)
             if not any(row["market"] == selection.market and row["selection"] == selection.selection for row in item["selection_evidence"]):
-                item["selection_evidence"].append({"market": selection.market, "selection": selection.selection, "model_probability": selection.probability_snapshot, "model_spread": selection.prediction.model_agreement if selection.prediction else None, "odds": selection.odds_snapshot, "q_score": selection.q_score_snapshot, "edge": selection.edge_snapshot, "odds_captured_at": selection.source_odds_at.isoformat() if selection.source_odds_at else None, "result": selection.result.value})
+                # "probability" is what was published; "pricing" says whether it
+                # is the model's estimate or the de-vigged market price.
+                item["selection_evidence"].append({"market": selection.market, "selection": selection.selection, "model_probability": selection.probability_snapshot, "pricing": _ticket_pricing(ticket), "model_spread": selection.prediction.model_agreement if selection.prediction else None, "odds": selection.odds_snapshot, "q_score": selection.q_score_snapshot, "edge": selection.edge_snapshot, "odds_captured_at": selection.source_odds_at.isoformat() if selection.source_odds_at else None, "result": selection.result.value})
             if selection.result is not None:
                 if item["outcome"] is None:
                     item["outcome"] = selection.result.value
@@ -498,9 +509,8 @@ def _ticket(ticket: AccumulatorTicket, *, reveal: bool = True) -> TicketOut:
 
 
 def _ticket_pricing(ticket: AccumulatorTicket) -> str:
-    """Pricing recorded on the ticket's generation; older generations are model-priced."""
-    generation = ticket.__dict__.get("generation")  # never lazy-load in async context
-    return ((generation.config_snapshot or {}).get("pricing") if generation else None) or "model"
+    """How the ticket's legs were priced; tickets before the column are model-priced."""
+    return getattr(ticket, "pricing", None) or "model"
 
 
 def _history_ticket(ticket: AccumulatorTicket, *, reveal: bool = True) -> TicketHistoryOut:
@@ -527,6 +537,7 @@ def _history_ticket(ticket: AccumulatorTicket, *, reveal: bool = True) -> Ticket
         published_at=ticket.published_at.isoformat(),
         publication_hash=ticket.publication_hash,
         relaxed_tier=ticket.relaxed_tier,
+        pricing=_ticket_pricing(ticket),
         internal_only=ticket.ticket_type == TicketType.BEST_VALUE,
         result=latest_result.result.value if latest_result else None,
         stake=latest_result.stake if latest_result else None,

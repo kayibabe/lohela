@@ -137,7 +137,7 @@ describe('audited ticket surfaces', () => {
     )
     expect(html).toContain('No ticket found')
     expect(html).toContain('No combination satisfied every conservative rule')
-    expect(html).toContain('distinct-match, grade-mix, odds, and correlation limits')
+    expect(html).toContain('distinct-match, odds, and correlation limits')
   })
 
   it('shows rejected-selection reason codes', () => {
@@ -209,6 +209,15 @@ describe('audited ticket surfaces', () => {
     expect(html).toContain('Price vs fair')
     expect(html).not.toContain('Lohela model')
     expect(html).not.toContain('No positive edge')
+    expect(html).not.toContain('Model spread')
+  })
+
+  it('never shows a stake suggestion or green return on a fair-priced ticket', () => {
+    const html = renderToStaticMarkup(
+      <TicketCard ticket={{ ...ticket, pricing: 'market', expected_value: 0.012 }} tierName="Balanced" tierDesc="" color="blue" suggestedStake={5} />,
+    )
+    expect(html).not.toContain('half Kelly')
+    expect(html).not.toContain('stat-value positive')
   })
 
   it('explains when individual-bet confirmation is unavailable', () => {

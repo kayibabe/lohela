@@ -154,6 +154,7 @@ def market_priced(leg: Leg) -> Leg:
 _BINARY_PAIRS = {
     "over_0.5": "under_0.5", "over_1.5": "under_1.5", "over_2.5": "under_2.5",
     "over_3.5": "under_3.5", "over_4.5": "under_4.5", "btts_yes": "btts_no",
+    "dnb_home": "dnb_away",
 }
 _BINARY_PAIRS.update({value: key for key, value in list(_BINARY_PAIRS.items())})
 _RESULT_MARKETS = ("home_win", "draw", "away_win")
@@ -491,10 +492,12 @@ class AccumulatorBuilder:
     ) -> list[Leg]:
         legs = await self._load_all_legs(target_date, model_run_id)
         if pricing == "market":
+            # Unpriceable legs stay in the pool so diagnostics count them as
+            # MISSING_FAIR_PRICE; that gate keeps them out of every ticket.
             return [
-                market_priced(leg)
+                market_priced(leg) if leg.fair_probability is not None else leg
                 for leg in legs
-                if leg.fair_probability is not None and leg.best_odds >= _MIN_LEG_ODDS
+                if leg.best_odds >= _MIN_LEG_ODDS
             ]
         return [
             leg
@@ -612,19 +615,50 @@ class AccumulatorBuilder:
                     float((prediction.data_quality_snapshot or {}).get("score", 0.0)),
                 )
             )
-        # Fair (de-vigged) market probability per selection, from the same
-        # run's quotes for every market on the match.
+        consensus = await self._consensus_fair_probabilities({leg.match_id for leg in legs})
+        # Fallback: the run's own best-price snapshots (older data, or a
+        # fixture with no stored bookmaker book).
         implied_by_match: dict[int, dict[str, float]] = {}
         for leg in legs:
             if leg.best_odds > 1.0:
                 implied_by_match.setdefault(leg.match_id, {})[leg.market] = 1.0 / leg.best_odds
-        fair_by_match = {
+        snapshot_fair = {
             match_id: fair_market_probabilities(implied)
             for match_id, implied in implied_by_match.items()
         }
         for leg in legs:
-            leg.fair_probability = fair_by_match.get(leg.match_id, {}).get(leg.market)
+            leg.fair_probability = consensus.get(leg.match_id, {}).get(leg.market)
+            if leg.fair_probability is None:
+                leg.fair_probability = snapshot_fair.get(leg.match_id, {}).get(leg.market)
         return legs
+
+    async def _consensus_fair_probabilities(self, match_ids: set[int]) -> dict[int, dict[str, float]]:
+        """Consensus fair probability per match/market from stored bookmaker books.
+
+        Each bookmaker's margin is removed within its own book (one fetch, one
+        price set), then fair probabilities are averaged across bookmakers.
+        Pairing best prices from different bookmakers instead can "remove" more
+        than the real margin — on the frozen archive 63 legs came out at up to
+        +9% EV that way — and misses complements the model doesn't predict
+        (e.g. under_1.5, so over_1.5 could never be priced).
+        """
+        if not match_ids:
+            return {}
+        result = await self.db.execute(
+            select(Odds.match_id, Odds.bookmaker, Odds.market, Odds.decimal_odds)
+            .where(Odds.match_id.in_(match_ids), Odds.decimal_odds > 1.0)
+        )
+        books: dict[tuple[int, str], dict[str, float]] = {}
+        for match_id, bookmaker, market, decimal_odds in result.all():
+            books.setdefault((match_id, bookmaker), {})[market] = 1.0 / decimal_odds
+        sums: dict[int, dict[str, list[float]]] = {}
+        for (match_id, _bookmaker), implied in books.items():
+            for market, value in fair_market_probabilities(implied).items():
+                sums.setdefault(match_id, {}).setdefault(market, []).append(value)
+        return {
+            match_id: {market: sum(values) / len(values) for market, values in markets.items()}
+            for match_id, markets in sums.items()
+        }
 
     async def _load_correlation_coefficients(self) -> dict[tuple[str, str, str, int | None], float]:
         result = await self.db.execute(select(CorrelationCoefficient))
@@ -690,8 +724,14 @@ def _market_rejection_reasons(leg: Leg, spec: TicketSpec) -> list[str]:
         reasons.append("LEG_ODDS_OUT_OF_TIER_BAND")
     if leg.fair_probability is None:
         reasons.append("MISSING_FAIR_PRICE")
-    elif leg.best_odds > 0 and leg.fair_probability * leg.best_odds - 1.0 < -settings.max_leg_margin:
-        reasons.append("MARGIN_TOO_HIGH")
+    elif leg.best_odds > 0:
+        value = leg.fair_probability * leg.best_odds - 1.0
+        if value < -settings.max_leg_margin:
+            reasons.append("MARGIN_TOO_HIGH")
+        elif value > settings.max_leg_price_advantage:
+            # A quote this far above the consensus fair price is far more
+            # likely stale or mis-mapped than a genuine gift.
+            reasons.append("PRICE_OUT_OF_LINE")
     if leg.data_quality_score < settings.min_data_quality_score:
         reasons.append("DATA_QUALITY_BELOW_THRESHOLD")
     if leg.source_odds_at is None:
@@ -843,6 +883,12 @@ def _evaluate_combo(
                 return None
             details.append(detail)
             survival *= 1.0 - detail.coefficient
+    if spec.pricing == "market":
+        # The correlation heuristics still gate *which* legs may combine
+        # (above), but a fair-priced ticket's chance is the product of fair
+        # leg probabilities: distinct matches, each priced by the market. The
+        # heuristic haircut would understate the chance shown to users.
+        survival = 1.0
     correlation_penalty = 1.0 - survival
     adjusted_probability = combined_probability * survival
     if adjusted_probability + 1e-12 < spec.min_adjusted_probability:
@@ -917,7 +963,8 @@ def _market_leg_score(leg: Leg, target: float) -> float:
     whose combinations never reach the Balanced/Aggressive odds bands; the
     final choice among valid tickets is still the most likely one
     (_objective)."""
-    return (leg.expected_value or -1.0) - 0.05 * abs(math.log(leg.best_odds / target))
+    value = -1.0 if leg.expected_value is None else leg.expected_value
+    return value - 0.05 * abs(math.log(leg.best_odds / target))
 
 
 def _market_candidates(pool: list[Leg], spec: TicketSpec) -> list[Leg]:

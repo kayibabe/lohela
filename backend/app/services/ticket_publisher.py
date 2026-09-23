@@ -23,7 +23,13 @@ from app.models import (
     PipelineRun,
     PipelineStageRun,
 )
-from app.services.accumulator_builder import AccumulatorBuilder, DailyTickets, Ticket, active_ticket_specs
+from app.services.accumulator_builder import (
+    TICKET_SPECS,
+    AccumulatorBuilder,
+    DailyTickets,
+    Ticket,
+    active_ticket_specs,
+)
 
 
 class TicketPublisher:
@@ -75,7 +81,10 @@ class TicketPublisher:
             model_run_id=built.model_run_id,
             status=RunStatus.RUNNING,
             config_snapshot={
-                "ticket_specs": [_spec_snapshot(spec) for spec in active_ticket_specs()],
+                "ticket_specs": [
+                    _spec_snapshot(spec)
+                    for spec in (TICKET_SPECS if research_min_qscore is not None else active_ticket_specs())
+                ],
                 "pricing": (built.selection_diagnostics.get("pricing") or {}).get("source", "model"),
                 "research_min_qscore": research_min_qscore,
                 "publication_mode": "immutable_paper_trading",
@@ -210,6 +219,7 @@ class TicketPublisher:
             relaxed_tier=candidate.relaxed,
             relaxation_level=candidate.relaxation_level,
             horizon_days=candidate.horizon_days,
+            pricing=candidate.pricing,
             publication_hash=publication_hash,
             published_at=now,
         )

@@ -298,23 +298,25 @@ export default function DailyTicketsPage({ date }: DailyTicketsPageProps) {
       ? "Pipeline incomplete"
       : "Pipeline not run";
 
+  // Describe each tier by the rules its generation actually applied.
+  const fairPriced = data?.pricing === "market";
   const publicTiers = [
     {
       key: "conservative" as const,
       name: "Conservative",
-      desc: "Q ≥85 · 3–6 legs · 3–5×",
+      desc: fairPriced ? "Most likely ticket · 3–4 legs · 1.8–3.2×" : "Q ≥85 · 3–6 legs · 3–5×",
       color: "var(--conservative)",
     },
     {
       key: "balanced" as const,
       name: "Balanced",
-      desc: "Q ≥80 · 60% Grade A/A+",
+      desc: fairPriced ? "Most likely ticket · 3–5 legs · 3.2–6.5×" : "Q ≥80 · 60% Grade A/A+",
       color: "var(--balanced)",
     },
     {
       key: "aggressive" as const,
       name: "Aggressive",
-      desc: "Q ≥75 · adjusted probability ≥5%",
+      desc: fairPriced ? "Most likely ticket · 4–6 legs · 6.5–16×" : "Q ≥75 · adjusted probability ≥5%",
       color: "var(--aggressive)",
     },
   ];

@@ -183,6 +183,12 @@ def analyze(data):
         t=tickets[s['ticket_id']]; p=predictions[s['prediction_id']]; m=matches[s['match_id']]
         if t['status'] not in ('PUBLISHED','SETTLED','VOID'):
             continue
+        # Market-priced tickets publish the de-vigged bookmaker probability,
+        # not the model's: counting them would make the model's published
+        # calibration gap look closed when the model hasn't changed.
+        if t.get('pricing', 'model') == 'market':
+            pub_exclusions['market_priced_publication'] += 1
+            continue
         if p['as_of_at'] is not None or not dt(p['created_at']) <= dt(t['published_at']) < dt(m['kickoff_at']):
             pub_exclusions['invalid_timing_or_replay'] += 1
             continue
