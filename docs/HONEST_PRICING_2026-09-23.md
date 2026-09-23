@@ -74,8 +74,22 @@ Tickets were rebuilt per day with the production builder, then settled
   switching back to model pricing.
 
 ## Known limitations
-- On a very thin day, tiers can share the same 1–2 matches in different
-  markets (the existing 2-shared-matches rule). That is honest but poorly
-  diversified.
+- Market-priced public tiers may now share at most one match pairwise, and a
+  match may appear in at most two tiers. On a thin slate, a tier stays empty
+  if these limits cannot be met, including after relaxation and horizon search.
+
+## Prospective check (from 2026-09-23)
+
+Run `python -m scripts.prospective_market_report --since 2026-09-23` from
+`backend` against a database with read access. The script starts a read-only
+transaction. It counts each published prediction once, uses the probability
+and odds frozen in the market-priced ticket, compares the raw model probability
+on the same settled selection, and reports Brier score, log loss, signed
+calibration gap, and entry-versus-close price movement. Pending, void, late,
+and missing-close rows are counted separately. It never fits or promotes a
+model. Keep the first date and method fixed; inspect results periodically only
+after enough genuinely new settled fixtures accrue. Ticket win rates remain a
+separate, noisier outcome; neither short-run hit rate nor positive CLV alone
+proves a profitable edge.
 - Other surfaces still show model edges: the strongest-selections list,
   singles research and recommendation picks.

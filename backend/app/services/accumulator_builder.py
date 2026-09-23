@@ -312,8 +312,11 @@ class AccumulatorBuilder:
                 effective_spec,
                 coefficients,
                 prior_tickets=prior_public if not spec.internal_only else [],
-                max_shared_matches=settings.max_shared_matches_between_tickets,
+                max_shared_matches=(settings.max_shared_matches_between_market_tickets
+                    if pricing == "market" else settings.max_shared_matches_between_tickets),
                 max_match_market_exposure=settings.max_public_ticket_exposure_per_match_market,
+                max_match_exposure=(settings.max_market_ticket_exposure_per_match
+                    if pricing == "market" else None),
             )
 
         used_horizon: list[date] = []
@@ -363,8 +366,8 @@ class AccumulatorBuilder:
         first_level: int = 1,
         target_date: date | None = None,
     ) -> None:
-        """Guarantee `settings.min_daily_public_tickets` public tickets when the
-        qualified pool can support it, by loosening the tightest gates (only) for
+        """Seek `settings.min_daily_public_tickets` public tickets when the
+        qualified pool and portfolio exposure limits can support them, by loosening the tightest gates (only) for
         public tiers that produced nothing at full strength. Never touches a tier
         that already has a full-strength ticket, and never invents a combination
         the beam search can't actually build from real, edge-qualified legs.
@@ -439,8 +442,11 @@ class AccumulatorBuilder:
                     relaxed_spec,
                     coefficients,
                     prior_tickets=prior_public,
-                    max_shared_matches=settings.max_shared_matches_between_tickets,
+                    max_shared_matches=(settings.max_shared_matches_between_market_tickets
+                        if relaxed_spec.pricing == "market" else settings.max_shared_matches_between_tickets),
                     max_match_market_exposure=settings.max_public_ticket_exposure_per_match_market,
+                    max_match_exposure=(settings.max_market_ticket_exposure_per_match
+                        if relaxed_spec.pricing == "market" else None),
                 )
                 if ticket is not None:
                     ticket.relaxed = level > 0
@@ -991,6 +997,7 @@ def _find_best_ticket(
     prior_tickets: list[Ticket] | None = None,
     max_shared_matches: int | None = None,
     max_match_market_exposure: int | None = None,
+    max_match_exposure: int | None = None,
 ) -> Optional[Ticket]:
     # Deterministic tie-break on prediction_id rather than model_probability,
     # for exact (q_score, expected_value) ties only. Not a calibration fix:
@@ -1011,6 +1018,9 @@ def _find_best_ticket(
             leg for leg in pool
             if exposed[(leg.match_id, leg.market)] < max_match_market_exposure
         ]
+    if max_match_exposure is not None and prior_tickets:
+        exposed_matches = Counter(leg.match_id for prior in prior_tickets for leg in prior.legs)
+        pool = [leg for leg in pool if exposed_matches[leg.match_id] < max_match_exposure]
     if spec.pricing == "market":
         candidates = _market_candidates(pool, spec)[:_CANDIDATE_LIMIT]
         target = _market_leg_target(spec)
@@ -1054,6 +1064,7 @@ def _find_best_ticket(
                 prior_tickets or [],
                 max_shared_matches,
                 max_match_market_exposure,
+                max_match_exposure,
             ) and _objective(ticket) > best_score:
                 best, best_score = ticket, _objective(ticket)
     return best
@@ -1069,9 +1080,14 @@ def _within_ticket_overlap_limit(
     prior_tickets: list[Ticket],
     limit: int | None,
     max_match_market_exposure: int | None = None,
+    max_match_exposure: int | None = None,
 ) -> bool:
     if limit is not None and not all(shared_match_count(ticket, prior) <= limit for prior in prior_tickets):
         return False
+    if max_match_exposure is not None:
+        prior_matches = Counter(leg.match_id for prior in prior_tickets for leg in prior.legs)
+        if any(prior_matches[leg.match_id] >= max_match_exposure for leg in ticket.legs):
+            return False
     if max_match_market_exposure is None:
         return True
     prior_exposure: dict[tuple[int, str], int] = {}

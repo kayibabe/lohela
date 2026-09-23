@@ -153,6 +153,10 @@ class Settings(BaseSettings):
     # Published public tiers are alternatives, not duplicate exposure. A
     # later tier may share at most this many matches with an earlier tier.
     max_shared_matches_between_tickets: int = 2
+    # Market-priced public tiers may share one fixture pairwise, and no
+    # fixture may appear in all three tiers. Thin slates can leave a tier empty.
+    max_shared_matches_between_market_tickets: int = 1
+    max_market_ticket_exposure_per_match: int = 2
     # A public portfolio may expose one match/market once across its tiers.
     # This is stricter than pairwise ticket overlap and prevents repeated
     # failures such as the same totals line appearing in every accumulator.

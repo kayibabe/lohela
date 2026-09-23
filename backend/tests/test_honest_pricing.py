@@ -134,6 +134,27 @@ def test_market_build_produces_three_tiers_inside_their_bands_with_honest_number
     assert (tickets[TicketType.SAFE].adjusted_probability
             > tickets[TicketType.BALANCED].adjusted_probability
             > tickets[TicketType.AGGRESSIVE].adjusted_probability)
+    match_sets = [{leg.match_id for leg in ticket.legs} for ticket in tickets.values()]
+    assert all(len(left & right) <= 1 for i, left in enumerate(match_sets)
+               for right in match_sets[i + 1:])
+    assert not set.intersection(*match_sets)
+
+
+def test_market_overlap_limit_keeps_unbuildable_tier_empty():
+    from app.services.accumulator_builder import _evaluate_combo, _find_best_ticket
+
+    # The only three distinct fixtures are already exposed twice. Different
+    # markets cannot make a third public ticket sufficiently diversified.
+    pool = [market_priced(_leg(i + 10 * j, match_id=i,
+                              market=("double_chance_1x", "over_1.5", "home_win")[j],
+                              odds=1.30, fair=0.74))
+            for j in range(3) for i in (1, 2, 3)]
+    prior = [_evaluate_combo(tuple(pool[j * 3:(j + 1) * 3]),
+                             replace(SPEC[TicketType.SAFE], max_pair_correlation=1.0), {})
+             for j in (0, 1)]
+    assert all(prior)
+    assert _find_best_ticket(pool, SPEC[TicketType.SAFE], {}, prior_tickets=prior,
+                             max_shared_matches=1, max_match_exposure=2) is None
 
 
 def test_research_qscore_builds_stay_model_priced():
