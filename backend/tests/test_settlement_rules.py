@@ -197,6 +197,15 @@ def test_settle_finished_matches_accepts_a_kickoff_window():
     assert signature.parameters["since"].default is None
 
 
+def test_settlement_scan_includes_voidable_match_states():
+    """Automatic reconciliation must be able to close postponed fixtures as void."""
+    import inspect
+
+    source = inspect.getsource(SettlementService.settle_finished_matches)
+    assert "MatchStatus.POSTPONED" in source
+    assert "MatchStatus.CANCELLED" in source
+
+
 def datetime_now_utc():
     from datetime import datetime, timezone
 

@@ -227,7 +227,20 @@ class FixtureIngestor:
                 Match.kickoff_at >= start_utc,
                 Match.kickoff_at < end_utc,
                 Match.kickoff_at <= now_utc,
-                Match.status.in_((MatchStatus.SCHEDULED, MatchStatus.LIVE)),
+                # A previous response can mark a fixture finished before the
+                # provider exposes its goals. Keep retrying those rows until
+                # the score is authoritative; otherwise settlement can stay
+                # pending forever.
+                (
+                    Match.status.in_((MatchStatus.SCHEDULED, MatchStatus.LIVE))
+                    | (
+                        (Match.status == MatchStatus.FINISHED)
+                        & (
+                            Match.home_goals.is_(None)
+                            | Match.away_goals.is_(None)
+                        )
+                    )
+                ),
             )
             .order_by(Match.kickoff_at, Match.id)
         )

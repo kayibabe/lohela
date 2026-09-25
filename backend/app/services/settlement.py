@@ -122,9 +122,7 @@ class SettlementService:
         leave it as None.
         """
         filters = [
-            Match.status == MatchStatus.FINISHED,
-            Match.home_goals.is_not(None),
-            Match.away_goals.is_not(None),
+            Match.status.in_((MatchStatus.FINISHED, MatchStatus.POSTPONED, MatchStatus.CANCELLED)),
         ]
         if since is not None:
             start_utc, _ = cat_day_bounds_utc(since)
@@ -151,18 +149,23 @@ class SettlementService:
         now = datetime.now(timezone.utc)
         for selection in selections:
             match = selection.match
-            try:
-                outcome = evaluate_selection(selection.market, match.home_goals, match.away_goals)
-            except ValueError as exc:
-                self.db.add(
-                    AuditEvent(
-                        entity_type="ticket_selection",
-                        entity_id=str(selection.id),
-                        event_type="settlement_failed",
-                        actor=source,
-                        reason=str(exc),
+            if match.status in (MatchStatus.POSTPONED, MatchStatus.CANCELLED):
+                outcome = SelectionResult.VOID
+            elif match.home_goals is not None and match.away_goals is not None:
+                try:
+                    outcome = evaluate_selection(selection.market, match.home_goals, match.away_goals)
+                except ValueError as exc:
+                    self.db.add(
+                        AuditEvent(
+                            entity_type="ticket_selection",
+                            entity_id=str(selection.id),
+                            event_type="settlement_failed",
+                            actor=source,
+                            reason=str(exc),
+                        )
                     )
-                )
+                    continue
+            else:
                 continue
             previous = selection.result
             if previous == outcome:
@@ -222,23 +225,27 @@ class SettlementService:
             outcomes = []
             for leg in accumulator.legs:
                 match = await self.db.get(Match, leg.match_id)
-                if not match or match.status != MatchStatus.FINISHED or match.home_goals is None or match.away_goals is None:
+                if not match:
                     outcomes.append(SelectionResult.PENDING)
                     continue
-                try:
-                    outcome = evaluate_selection(leg.market, match.home_goals, match.away_goals)
-                except ValueError as exc:
-                    # One unsupported leg must not abort the whole settlement
-                    # run; leave it pending with an auditable failure record.
-                    self.db.add(
-                        AuditEvent(
-                            entity_type="custom_accumulator_leg",
-                            entity_id=str(leg.id),
-                            event_type="settlement_failed",
-                            actor=source,
-                            reason=str(exc),
+                if match.status in (MatchStatus.POSTPONED, MatchStatus.CANCELLED):
+                    outcome = SelectionResult.VOID
+                elif match.status == MatchStatus.FINISHED and match.home_goals is not None and match.away_goals is not None:
+                    try:
+                        outcome = evaluate_selection(leg.market, match.home_goals, match.away_goals)
+                    except ValueError as exc:
+                        self.db.add(
+                            AuditEvent(
+                                entity_type="custom_accumulator_leg",
+                                entity_id=str(leg.id),
+                                event_type="settlement_failed",
+                                actor=source,
+                                reason=str(exc),
+                            )
                         )
-                    )
+                        outcomes.append(SelectionResult.PENDING)
+                        continue
+                else:
                     outcomes.append(SelectionResult.PENDING)
                     continue
                 if leg.result != outcome:
@@ -304,25 +311,25 @@ class SettlementService:
         changed = 0
         for bet in bets:
             match = matches.get(bet.match_id)
-            if (
-                match is None
-                or match.status != MatchStatus.FINISHED
-                or match.home_goals is None
-                or match.away_goals is None
-            ):
+            if match is None:
                 continue
-            try:
-                outcome = evaluate_selection(bet.market, match.home_goals, match.away_goals)
-            except ValueError as exc:
-                self.db.add(
-                    AuditEvent(
-                        entity_type="bet",
-                        entity_id=str(bet.id),
-                        event_type="settlement_failed",
-                        actor=source,
-                        reason=str(exc),
+            if match.status in (MatchStatus.POSTPONED, MatchStatus.CANCELLED):
+                outcome = SelectionResult.VOID
+            elif match.status == MatchStatus.FINISHED and match.home_goals is not None and match.away_goals is not None:
+                try:
+                    outcome = evaluate_selection(bet.market, match.home_goals, match.away_goals)
+                except ValueError as exc:
+                    self.db.add(
+                        AuditEvent(
+                            entity_type="bet",
+                            entity_id=str(bet.id),
+                            event_type="settlement_failed",
+                            actor=source,
+                            reason=str(exc),
+                        )
                     )
-                )
+                    continue
+            else:
                 continue
 
             status = {
