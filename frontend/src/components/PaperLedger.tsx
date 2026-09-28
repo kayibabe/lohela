@@ -83,11 +83,25 @@ export default function PaperLedger() {
   ), [scopeRows, typeFilter, resultFilter])
 
   const groupedRows = useMemo(() => {
-    const byDate = new Map<string, TicketHistoryItem[]>()
-    for (const row of filtered) byDate.set(row.target_date, [...(byDate.get(row.target_date) ?? []), row])
-    return [...byDate.entries()].sort(([a], [b]) => b.localeCompare(a)).map(([date, dateRows]) => {
-      const parsed = new Date(`${date}T00:00:00`)
-      return { date, year: parsed.getFullYear(), month: parsed.toLocaleDateString(undefined, { month: 'long' }), label: parsed.toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'short' }), rows: dateRows }
+    const years = new Map<string, Map<string, Map<string, TicketHistoryItem[]>>>()
+    for (const row of filtered) {
+      const [year, month, day] = row.target_date.split('-')
+      if (!year || !month || !day) continue
+      const months = years.get(year) ?? new Map<string, Map<string, TicketHistoryItem[]>>()
+      const dates = months.get(month) ?? new Map<string, TicketHistoryItem[]>()
+      dates.set(day, [...(dates.get(day) ?? []), row])
+      months.set(month, dates)
+      years.set(year, months)
+    }
+    return [...years.entries()].sort(([a], [b]) => b.localeCompare(a)).map(([year, months]) => {
+      const monthGroups = [...months.entries()].sort(([a], [b]) => b.localeCompare(a)).map(([month, dates]) => {
+        const dateGroups = [...dates.entries()].sort(([a], [b]) => b.localeCompare(a)).map(([day, rows]) => {
+          const date = `${year}-${month}-${day}`
+          return { date, label: new Date(`${date}T00:00:00`).toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'short' }), rows }
+        })
+        return { month, monthLabel: new Date(`${year}-${month}-01T00:00:00`).toLocaleDateString(undefined, { month: 'long' }), dates: dateGroups }
+      })
+      return { year, months: monthGroups }
     })
   }, [filtered])
 
@@ -171,14 +185,16 @@ export default function PaperLedger() {
       <label>From<input aria-label="Tickets from date" type="date" value={dateFrom} onChange={event => setDateFrom(event.target.value)} /></label><label>To<input aria-label="Tickets to date" type="date" value={dateTo} onChange={event => setDateTo(event.target.value)} /></label>
     </div>
 
-    {filtered.length === 0 ? <div className="analytics-empty"><strong>No tickets match these filters</strong><span>Try another tier, outcome, model version or date range.</span></div> : <div className="paper-ledger-list">{groupedRows.map((group, groupIndex) => <section className="paper-date-group" key={group.date}>
-      {(groupIndex === 0 || groupedRows[groupIndex - 1].year !== group.year) && <h2 className="paper-year-heading">{group.year}</h2>}
-      {(groupIndex === 0 || groupedRows[groupIndex - 1].month !== group.month || groupedRows[groupIndex - 1].year !== group.year) && <h3 className="paper-month-heading">{group.month}</h3>}
-      <div className="paper-date-heading"><strong>{group.label}</strong><span>{group.rows.length} latest cohort{group.rows.length === 1 ? '' : 's'}</span></div>
-      {group.rows.map(row => {
+    {filtered.length === 0 ? <div className="analytics-empty"><strong>No tickets match these filters</strong><span>Try another tier, outcome, model version or date range.</span></div> : <div className="paper-ledger-list">{groupedRows.map(yearGroup => <details className="paper-year-group" key={yearGroup.year} open>
+      <summary className="paper-year-heading">{yearGroup.year}</summary>
+      <div className="paper-year-body">{yearGroup.months.map(monthGroup => <details className="paper-month-group" key={`${yearGroup.year}-${monthGroup.month}`} open>
+        <summary className="paper-month-heading">{monthGroup.monthLabel}</summary>
+        <div className="paper-month-body">{monthGroup.dates.map(dayGroup => <section className="paper-date-group" key={dayGroup.date}>
+          <div className="paper-date-heading"><strong>{dayGroup.label}</strong><span>{dayGroup.rows.length} latest cohort{dayGroup.rows.length === 1 ? '' : 's'}</span></div>
+          {dayGroup.rows.map(row => {
         const versions = allVersions.filter(item => cohortKey(item) === cohortKey(row)).sort((a, b) => b.version - a.version)
         return <article className={`paper-ledger-row${expandedId === row.ticket_id ? ' expanded' : ''}`} key={row.ticket_id}>
-          <button className="paper-ticket-summary" onClick={() => toggleTicket(row)} aria-expanded={expandedId === row.ticket_id} aria-label={`${row.name} ticket for ${group.label}`}>
+          <button className="paper-ticket-summary" onClick={() => toggleTicket(row)} aria-expanded={expandedId === row.ticket_id} aria-label={`${row.name} ticket for ${dayGroup.label}`}>
             <div className="paper-ticket-identity"><span className={`portfolio-tier ${row.ticket_type}`}>{row.name}</span><small>latest v{row.version} · model {row.model_version}{row.internal_only ? ' · internal' : ''}</small></div>
             <div><span>Odds</span><strong>{row.combined_odds == null ? 'Pro only' : `${row.combined_odds.toFixed(2)}×`}</strong></div><div><span>Legs</span><strong>{row.leg_count}</strong></div><div><span>Adjusted P</span><strong>{pct(row.adjusted_probability)}</strong></div><div><span>Risk</span><strong>{row.risk_score == null ? 'Pro only' : `${row.risk_score.toFixed(0)}/100`}</strong></div>
             <div className="paper-outcome"><span className={`settlement-pill ${row.result ?? 'pending'}`}>{row.result ?? 'pending'}</span>{row.profit_loss != null && <strong className={row.profit_loss >= 0 ? 'positive' : 'negative'}>{fmtPnl(row.profit_loss)}</strong>}</div><span className="paper-chevron" aria-hidden="true">{expandedId === row.ticket_id ? '⌃' : '⌄'}</span>
@@ -188,8 +204,10 @@ export default function PaperLedger() {
             {ticket && <><ul>{ticket.legs.map(leg => <li key={leg.selection_id}><div><strong>{leg.home_team} <span>vs</span> {leg.away_team}</strong><small>{leg.competition} · {formatKickoff(leg.kickoff_at)}</small><b className="paper-market-badge">{formatMarket(leg.market)}</b></div><div><strong>{leg.best_odds == null ? 'Pro only' : leg.best_odds.toFixed(2)}</strong><small>Q {leg.q_score == null ? 'Pro only' : leg.q_score.toFixed(1)} · {leg.q_grade && <GradeBadge grade={leg.q_grade} />} · <b className={`paper-leg-result ${leg.result}`}>{leg.result}</b></small></div></li>)}</ul><div className="paper-audit"><code title={ticket.publication_hash}>Hash {ticket.publication_hash}</code><span>Published {new Date(ticket.published_at).toLocaleString()}</span></div>{compareTicket ? <div className="paper-version-compare"><strong>Compared with v{compareTicket.version}:</strong> {ticket.legs.filter(a => !compareTicket.legs.some(b => b.match_id === a.match_id && b.market === a.market && b.selection === a.selection)).length} added · {compareTicket.legs.filter(a => !ticket.legs.some(b => b.match_id === a.match_id && b.market === a.market && b.selection === a.selection)).length} removed</div> : <div className="paper-version-compare"><strong>Original publication:</strong> no predecessor exists for this cohort.</div>}</>}
           </div>}
         </article>
-      })}
-    </section>)}</div>}
+          })}
+        </section>)}</div>
+      </details>)}</div>
+    </details>)}</div>}
   </>
 }
 

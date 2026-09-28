@@ -487,11 +487,11 @@ function RecommendationPickTable({ rows, stake }: { rows: RecommendationPick[]; 
   return <section className="analytics-card pick-ledger-table-card">
     <div className="section-header"><div><span className="eyebrow">Pick-level evidence</span><h2 className="section-title">Recommendation ledger</h2></div><span className="section-subtitle">Year → month → exact date · one deduplicated row per selection</span></div>
     {sorted.length === 0 ? <AnalyticsEmpty title="No picks match these filters" body="Reset the filters or choose another source." compact /> : <div className="pick-period-tree">
-      {grouped.map(year => <details className="pick-period-group pick-year-group" key={year.key} open>
+      {grouped.map(year => <details className="pick-period-group pick-year-group" key={year.key}>
         <summary><PickPeriodSummary level="year" label={year.label} metrics={year.metrics} /></summary>
-        <div className="pick-year-body">{year.months.map(month => <details className="pick-period-group pick-month-group" key={month.key} open>
+        <div className="pick-year-body">{year.months.map(month => <details className="pick-period-group pick-month-group" key={month.key}>
           <summary><PickPeriodSummary level="month" label={month.label} metrics={month.metrics} /></summary>
-          <div className="pick-month-body">{month.dates.map(date => <details className="pick-period-group pick-date-group" key={date.key} open>
+          <div className="pick-month-body">{month.dates.map(date => <details className="pick-period-group pick-date-group" key={date.key}>
             <summary><PickPeriodSummary level="date" label={date.label} metrics={date.metrics} /></summary>
             {table(date.rows)}
           </details>)}</div>

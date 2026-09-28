@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import type { CustomAccumulator as ApiCustomAccumulator, DailyTickets, Leg, SelectionSummary, Ticket } from "../../lib/api";
 import {
   createCustomAccumulator,
@@ -6,7 +6,6 @@ import {
   fetchDailyTickets,
   fetchQualifiedSelections,
   fetchRejectedSelections,
-  fetchStrongestSelections,
   fetchCustomAccumulators,
   formatDate,
   updateCustomAccumulator,
@@ -17,10 +16,8 @@ import SelectionDetail, {
   type DetailSelection,
 } from "../../components/SelectionDetail";
 import { addDays } from "../../utils";
-import { AllMatches } from "./AllMatches";
 import { BandMixPicks } from "./BandMixPicks";
 import { CustomAccumulatorPanel } from "./CustomAccumulatorPanel";
-import { SelectionPanel } from "./SelectionPanel";
 import { TicketGridSkeleton } from "./TicketGridSkeleton";
 import {
   accumulatorBlockers,
@@ -34,11 +31,9 @@ import type { CustomAccumulator, DailyTab, DailyTicketsPageProps } from "./types
 
 export default function DailyTicketsPage({ date }: DailyTicketsPageProps) {
   const [data, setData] = useState<DailyTickets | null>(null);
-  const [strongest, setStrongest] = useState<SelectionSummary[]>([]);
   const [rejected, setRejected] = useState<SelectionSummary[]>([]);
   const [matches, setMatches] = useState<SelectionSummary[]>([]);
   const [tab, setTab] = useState<DailyTab>("tickets");
-  const [qualityFilter, setQualityFilter] = useState<string | null>(null);
   const [custom, setCustom] = useState<CustomAccumulator[]>(() => {
     return [];
   });
@@ -71,18 +66,15 @@ export default function DailyTicketsPage({ date }: DailyTicketsPageProps) {
     setLoading(true);
     setError(null);
     try {
-      const [tickets, allRows, strongRows, rejectedRows, customRows] = await Promise.all([
+      const [tickets, allRows, rejectedRows, customRows] = await Promise.all([
         fetchDailyTickets(targetDate),
         fetchQualifiedSelections(targetDate),
-        fetchStrongestSelections(targetDate),
         fetchRejectedSelections(targetDate),
         fetchCustomAccumulators(targetDate),
       ]);
       const evidencedRows = withRejectionEvidence(allRows, rejectedRows);
-      const evidencedStrongest = withRejectionEvidence(strongRows, rejectedRows);
       setData(tickets);
       setMatches(evidencedRows);
-      setStrongest(evidencedStrongest.slice(0, 8));
       setRejected(rejectedRows);
       setCustom(customRows.map(apiAccumulatorToUi));
     } catch (e) {
@@ -125,23 +117,6 @@ export default function DailyTicketsPage({ date }: DailyTicketsPageProps) {
     return apiAccumulatorToUi(saved);
   };
 
-  const filteredMatches = useMemo(() => qualityFilter
-    ? matches.filter((row) => row.q_grade === qualityFilter)
-    : matches, [matches, qualityFilter]);
-  const matchGroups = useMemo(
-    () =>
-      Array.from(
-        filteredMatches
-          .reduce((map, row) => {
-            const list = map.get(row.match_id) ?? [];
-            list.push(row);
-            map.set(row.match_id, list);
-            return map;
-          }, new Map<number, SelectionSummary[]>())
-          .entries(),
-      ),
-    [filteredMatches],
-  );
   const addToAccumulator = async (row: SelectionSummary) => {
     const blockers = accumulatorBlockers(row);
     if (blockers.length > 0) {
@@ -419,10 +394,7 @@ export default function DailyTicketsPage({ date }: DailyTicketsPageProps) {
               [
                 ["tickets", "Recommendations"],
                 ["best-mix", "Best-mix picks"],
-                ["matches", "All matches"],
-                ["strongest", "Strongest picks"],
                 ["my-accumulators", "My accumulators"],
-                ["rejected", "Rejected"],
               ] as [DailyTab, string][]
             ).map(([key, label]) => (
               <button
@@ -431,13 +403,10 @@ export default function DailyTicketsPage({ date }: DailyTicketsPageProps) {
                 onClick={() => setTab(key)}
               >
                 {label}
-                {key === "matches" && matches.length > 0
-                  ? ` · ${new Set(matches.map((row) => row.match_id)).size}`
-                  : ""}
               </button>
             ))}
           </nav>
-          {(tab === "matches" || tab === "strongest" || tab === "rejected") && (
+          {/* Legacy candidate tabs intentionally removed from the ticket workspace.
             <div className="quality-legend" aria-label="Quality legend">
               <span className="legend-title">Quality guide</span>
               <button className={`quality-guide-item${qualityFilter === "A+" ? " active" : ""}`} onClick={() => { setQualityFilter(qualityFilter === "A+" ? null : "A+"); setTab("matches") }}>
@@ -456,9 +425,8 @@ export default function DailyTicketsPage({ date }: DailyTicketsPageProps) {
                 <b className="spread-dot high" /> &gt;15 pp downgrade
               </span>
             </div>
-          )}
-          {(tab === "tickets" || tab === "matches") && <div className="settlement-legend" aria-label="Settlement legend"><span><b>Score</b> = match result</span><span><b>Market</b> = selected outcome</span><span><b>Ticket</b> = accumulator result</span></div>}
-          {qualityFilter && tab === "matches" && <div className="filter-summary quality-filter-summary">Showing matches with <strong>Grade {qualityFilter}</strong> selections <button className="btn-ghost btn-sm" onClick={() => setQualityFilter(null)}>Clear quality filter</button></div>}
+          */}
+          {tab === "tickets" && <div className="settlement-legend" aria-label="Settlement legend"><span><b>Score</b> = match result</span><span><b>Market</b> = selected outcome</span><span><b>Ticket</b> = accumulator result</span></div>}
           {tab === "tickets" && (
             <div className="view-intro">
               <div>
@@ -467,8 +435,7 @@ export default function DailyTicketsPage({ date }: DailyTicketsPageProps) {
               </div>
               <p>
                 Start with a ticket tier. Open any leg for the supporting model
-                evidence; use All matches to compare Q-score candidates before
-                the final Acca eligibility and combination checks.
+                evidence before making a manual tracker decision.
               </p>
             </div>
           )}
@@ -476,13 +443,6 @@ export default function DailyTicketsPage({ date }: DailyTicketsPageProps) {
             <BandMixPicks
               date={date}
               rejectedRows={rejected}
-              onSelect={openSelection}
-              onAdd={addToAccumulator}
-            />
-          )}
-          {tab === "matches" && (
-            <AllMatches
-              rows={matchGroups}
               onSelect={openSelection}
               onAdd={addToAccumulator}
             />
@@ -539,7 +499,7 @@ export default function DailyTicketsPage({ date }: DailyTicketsPageProps) {
                       ))}
                     </div>
                   )}
-                  <p>Open All matches for candidate evidence or Rejected for the complete rule-level audit. Personal drafts cannot accept stale, invalid, or already-started selections.</p>
+                  <p>Personal drafts cannot accept stale, invalid, or already-started selections.</p>
                 </section>
               )}
               {(data?.superseded_versions?.length ?? 0) > 0 && (
@@ -572,24 +532,6 @@ export default function DailyTicketsPage({ date }: DailyTicketsPageProps) {
             </>
           )}
 
-          {tab === "strongest" && (
-            <SelectionPanel
-              title="Strongest selections"
-              rows={strongest}
-              empty="No Grade A model candidates are available for this date."
-              onSelect={openSelection}
-              onAdd={addToAccumulator}
-            />
-          )}
-          {tab === "rejected" && (
-            <SelectionPanel
-              title="Rejected matches"
-              rows={rejected}
-              empty="No rejected selections are recorded for this date."
-              rejected
-              onSelect={openSelection}
-            />
-          )}
           {tab === "my-accumulators" && (
             <CustomAccumulatorPanel
               date={date}

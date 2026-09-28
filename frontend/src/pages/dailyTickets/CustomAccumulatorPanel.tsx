@@ -74,10 +74,9 @@ export function CustomAccumulatorPanel({
       {tickets.length === 0 ? (
         <div className="custom-empty-state">
           <strong>No drafts yet</strong>
-          <p>Create a draft, then add selections from the research views.</p>
+          <p>Create a draft, then add selections from qualifying Best-mix picks.</p>
           <div className="custom-empty-actions">
-            <button className="btn-ghost btn-sm" onClick={() => onNavigate("strongest")}>View strongest picks</button>
-            <button className="btn-ghost btn-sm" onClick={() => onNavigate("matches")}>Browse all matches</button>
+            <button className="btn-ghost btn-sm" onClick={() => onNavigate("best-mix")}>View qualifying picks</button>
           </div>
         </div>
       ) : (
@@ -111,8 +110,7 @@ export function CustomAccumulatorPanel({
                     <strong>No selections yet</strong>
                     <span>Add at least two selections before marking this accumulator placed.</span>
                     <div className="custom-empty-actions">
-                      <button className="btn-ghost btn-sm" onClick={() => onNavigate("strongest")}>Add from strongest</button>
-                      <button className="btn-ghost btn-sm" onClick={() => onNavigate("matches")}>Browse all matches</button>
+                      <button className="btn-ghost btn-sm" onClick={() => onNavigate("best-mix")}>Add qualifying picks</button>
                     </div>
                   </div>
                 ) : (

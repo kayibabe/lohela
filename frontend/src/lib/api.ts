@@ -249,15 +249,20 @@ export async function fetchQualifiedSelections(date: string, minQScore = 75): Pr
 export interface BandMix {
   lohela_band: string
   market_band: string
-  source: 'watchlist' | 'discovered'
+  source: 'dynamic' | 'watchlist' | 'discovered'
   best_rank: number | null
   active: boolean
-  reason: 'NO_HISTORY' | 'INSUFFICIENT_SAMPLE' | 'NON_POSITIVE_ROI' | 'OUTSIDE_TOP_MIXES' | null
+  reason: 'NO_HISTORY' | 'INSUFFICIENT_SAMPLE' | 'NON_POSITIVE_ROI' | 'OUTSIDE_TOP_MIXES' | 'ROI_BELOW_THRESHOLD' | null
+  research_status: 'research_qualified' | 'not_qualified'
+  provisional: boolean
   sample_size: number
   wins: number
   losses: number
   hit_rate: number | null
   roi: number | null
+  recent_sample_size?: number
+  recent_hit_rate?: number | null
+  recent_roi?: number | null
 }
 
 export interface BandMixScan {
@@ -266,10 +271,12 @@ export interface BandMixScan {
   captured_at: string | null
   capture_source: string
   provisional: boolean
-  rules: { min_sample: number; best_mix_limit: number; requires_positive_roi: boolean; evidence: string }
+  reconstructed?: boolean
+  rules: { min_sample: number; min_roi?: number; provisional_below_sample?: number; recent_window_days?: number; one_selection_per_match?: boolean; best_mix_limit?: number; requires_positive_roi?: boolean; evidence: string }
   evidence_sample_size: number
   watchlist: BandMix[]
   discovered: BandMix[]
+  monitored?: BandMix[]
 }
 
 export interface BandMixPick {
@@ -289,7 +296,7 @@ export interface BandMixPick {
   q_grade: string
   lohela_band: string
   market_band: string
-  mix_source: 'watchlist' | 'discovered'
+  mix_source: 'dynamic' | 'watchlist' | 'discovered'
   mix_rank: number | null
   mix_sample_size: number
   mix_hit_rate: number | null

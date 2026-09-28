@@ -12,6 +12,7 @@ const MIX_REASON: Record<NonNullable<BandMix["reason"]>, string> = {
   INSUFFICIENT_SAMPLE: "Sample too small",
   NON_POSITIVE_ROI: "ROI not positive",
   OUTSIDE_TOP_MIXES: "Not a top mix",
+  ROI_BELOW_THRESHOLD: "Below ROI threshold",
 };
 
 function toSelection(row: BandMixPick): SelectionSummary {
@@ -37,7 +38,6 @@ export function BandMixPicks({
   const [data, setData] = useState<BandMixSelections | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [includeDiscovered, setIncludeDiscovered] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -53,15 +53,12 @@ export function BandMixPicks({
   }, [date]);
 
   const scan = data?.scan;
-  const mixes = useMemo(
-    () => (scan ? [...scan.watchlist, ...(includeDiscovered ? scan.discovered : [])] : []),
-    [scan, includeDiscovered],
-  );
+  const mixes = useMemo(() => scan?.watchlist ?? [], [scan]);
   const picks = useMemo(() => {
-    const rows = (data?.rows ?? []).filter((row) => includeDiscovered || row.mix_source === "watchlist");
+    const rows = data?.rows ?? [];
     const evidence = new Map(withRejectionEvidence(rows.map(toSelection), rejectedRows).map((row) => [row.prediction_id, row]));
     return rows.map((row) => ({ row, selection: evidence.get(row.prediction_id) ?? toSelection(row) }));
-  }, [data, includeDiscovered, rejectedRows]);
+  }, [data, rejectedRows]);
 
   const activeWatch = scan?.watchlist.filter((mix) => mix.active).length ?? 0;
   const settled = picks.filter(({ row }) => row.result === "won" || row.result === "lost");
@@ -74,13 +71,13 @@ export function BandMixPicks({
         <div>
           <h2>Best-mix picks</h2>
           <span className="section-note">
-            Selections whose Lohela and market probability bands fall in a mix that is
-            still a top performer on Analytics → Probability calibration
+            One qualifying selection per match, chosen only when its Lohela and market band pair meets frozen research criteria.
+            Historical performance is not a promise of profit.
           </span>
         </div>
         {data && (
           <span className="section-note match-count-summary">
-            <b>{picks.length}</b> picks · <b>{new Set(picks.map(({ row }) => row.match_id)).size}</b> matches
+            <b>{picks.length}</b> qualifying matches
           </span>
         )}
       </div>
@@ -93,39 +90,32 @@ export function BandMixPicks({
       {scan && (
         <>
           <div className={`band-mix-scan${scan.provisional ? " provisional" : ""}`} role="status">
-            <strong>{scan.provisional ? "Provisional scan" : "Daily scan frozen"}</strong>
+            <strong>{scan.reconstructed ? "Historical reconstruction" : scan.provisional ? "Provisional scan" : "Daily scan frozen"}</strong>
             <span>
-              {scan.provisional
+              {scan.reconstructed
+                ? "This past date has no frozen scan, so it is shown only as a reconstruction and is not prospective evidence."
+                : scan.provisional
                 ? "This date is in the future, so its evidence window is still open. The scan freezes on the day."
                 : `Captured ${scan.captured_at ? new Date(scan.captured_at).toLocaleString([], { dateStyle: "medium", timeStyle: "short" }) : "—"} (${scan.capture_source.replace(/_/g, " ")}).`}
               {" "}Evidence: {scan.evidence_sample_size.toLocaleString()} settled predictions through {scan.evidence_through}.
-              A mix qualifies when it has at least {scan.rules.min_sample} results, positive ROI and ranks in the top {scan.rules.best_mix_limit} by ROI.
+              {scan.rules.min_roi == null
+                ? " This is a legacy frozen scan using its original criteria."
+                : <> A pair joins with at least {scan.rules.min_sample} results and ROI of at least {pct(scan.rules.min_roi)}. Recent ROI covers the last {scan.rules.recent_window_days} days. One qualifying selection is shown per match.</>}
             </span>
           </div>
 
           <MixTable mixes={mixes} />
 
-          <label className="band-mix-toggle">
-            <input
-              type="checkbox"
-              checked={includeDiscovered}
-              onChange={(event) => setIncludeDiscovered(event.target.checked)}
-              disabled={scan.discovered.length === 0}
-            />
-            Also include other top-performing mixes ({scan.discovered.length})
-          </label>
-
-          {activeWatch === 0 && !includeDiscovered && (
+          {activeWatch === 0 && (
             <p className="panel-empty">
-              None of your criteria mixes currently qualify as a best-performing mix, so no picks are listed for this date.
-              {scan.discovered.length > 0 && " You can include the other top-performing mixes above."}
+              No band pair currently meets the dynamic evidence and ROI threshold, so no picks are listed for this date.
             </p>
           )}
 
-          {(activeWatch > 0 || includeDiscovered) && (
+          {activeWatch > 0 && (
             <>
               <div className="band-mix-kpis" aria-label="Best-mix picks summary">
-                <span><small>Picks</small><b>{picks.length}</b></span>
+                <span><small>Qualifying matches</small><b>{picks.length}</b></span>
                 <span><small>Settled</small><b>{settled.length}</b></span>
                 <span><small>Won / lost</small><b>{wins} / {settled.length - wins}</b></span>
                 <span><small>Hit rate</small><b>{settled.length ? pct(wins / settled.length) : "—"}</b></span>
@@ -140,8 +130,8 @@ export function BandMixPicks({
             </>
           )}
           <p className="matrix-note">
-            Mix history is whole-system research evidence, not a promise of profit. Small samples are directional;
-            several picks from one match are correlated, not independent.
+            Mix history is whole-system research evidence, not a promise of profit. Each fixture appears once;
+            when several selections qualify, the most established band is retained.
           </p>
         </>
       )}
@@ -153,11 +143,11 @@ function MixTable({ mixes }: { mixes: BandMix[] }) {
   const { sorted, header } = useSortableRows(mixes, {
     lohela: (mix) => bandSortValue(mix.lohela_band),
     market: (mix) => bandSortValue(mix.market_band),
-    source: (mix) => mix.source,
     n: (mix) => mix.sample_size,
     wins: (mix) => mix.wins,
     hit: (mix) => mix.hit_rate,
     roi: (mix) => mix.roi,
+    recentRoi: (mix) => mix.recent_roi,
     rank: (mix) => mix.best_rank,
     status: (mix) => (mix.active ? "Active" : MIX_REASON[mix.reason ?? "NO_HISTORY"]),
   });
@@ -169,27 +159,27 @@ function MixTable({ mixes }: { mixes: BandMix[] }) {
           <tr>
             {header("lohela", "Lohela band")}
             {header("market", "Market band")}
-            {header("source", "Source")}
             {header("n", "N")}
             {header("wins", "Won / lost")}
             {header("hit", "Hit rate")}
             {header("roi", "ROI")}
+            {header("recentRoi", "Recent ROI")}
             {header("rank", "Top-mix rank")}
             {header("status", "Status")}
           </tr>
         </thead>
         <tbody>
           {sorted.map((mix) => (
-            <tr key={`${mix.source}-${mix.lohela_band}-${mix.market_band}`}>
+            <tr key={`${mix.lohela_band}-${mix.market_band}`}>
               <td><strong>{mix.lohela_band}%</strong></td>
               <td>{mix.market_band}%</td>
-              <td>{mix.source === "watchlist" ? "Your criteria" : "Top mix"}</td>
               <td>{mix.sample_size}</td>
               <td>{mix.wins} / {mix.losses}</td>
               <td>{pct(mix.hit_rate)}</td>
               <td className={mix.roi != null && mix.roi > 0 ? "positive" : "negative"}>{pct(mix.roi)}</td>
+              <td className={mix.recent_roi != null && mix.recent_roi >= 0 ? "positive" : "negative"}>{pct(mix.recent_roi)}<small>N {mix.recent_sample_size ?? 0}</small></td>
               <td>{mix.best_rank ?? "—"}</td>
-              <td><span className={`band-mix-status ${mix.active ? "active" : "inactive"}`}>{mix.active ? "Active" : MIX_REASON[mix.reason ?? "NO_HISTORY"]}</span></td>
+              <td><span className={`band-mix-status ${mix.active ? "active" : "inactive"}`}>{mix.active ? (mix.provisional ? "Provisional research" : "Research qualified") : MIX_REASON[mix.reason ?? "NO_HISTORY"]}</span></td>
             </tr>
           ))}
         </tbody>
@@ -255,7 +245,7 @@ function PickTable({
                 <td>{pct(row.model_probability)}</td>
                 <td>{pct(row.market_probability)}{!row.pre_kickoff_quote && <small>Post-kickoff quote</small>}</td>
                 <td>{row.odds.toFixed(2)}</td>
-                <td><strong>{row.lohela_band} × {row.market_band}</strong><small>{row.mix_source === "watchlist" ? "Your criteria" : "Top mix"}{row.mix_rank ? ` · #${row.mix_rank}` : ""}</small></td>
+                <td><strong>{row.lohela_band} × {row.market_band}</strong><small>Dynamic group{row.mix_rank ? ` · ROI rank #${row.mix_rank}` : ""}</small></td>
                 <td className={row.mix_roi != null && row.mix_roi > 0 ? "positive" : "negative"}>{pct(row.mix_roi)}<small>N {row.mix_sample_size} · {pct(row.mix_hit_rate)} hit</small></td>
                 <td><b className={`grade-badge grade-${gradeTone(row.q_grade)}`}>{row.q_grade}</b> {row.q_score.toFixed(1)}</td>
                 <td>
