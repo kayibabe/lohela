@@ -38,6 +38,11 @@ WATCHLIST_BAND_MIXES: tuple[tuple[str, str], ...] = (
     ("80-85", "65-70"),
     ("70-75", "60-65"),
 )
+# Mixes the operator never wants picked, even when they rank as a top mix
+# (65-70 × <50 is a long-odds mix whose ROI rests on a sub-50% hit rate).
+EXCLUDED_BAND_MIXES: tuple[tuple[str, str], ...] = (
+    ("65-70", "<50"),
+)
 # Mirrors the Analytics best-performing-mixes table: sample size >= 8, top 15 by ROI.
 MIN_MIX_SAMPLE = 8
 BEST_MIX_LIMIT = 15
@@ -51,6 +56,7 @@ def evaluate_band_mixes(
     combined_matrix: list[dict],
     best_combinations: list[dict],
     watchlist: tuple[tuple[str, str], ...] = WATCHLIST_BAND_MIXES,
+    excluded: tuple[tuple[str, str], ...] = EXCLUDED_BAND_MIXES,
 ) -> dict:
     """Decide which mixes are active from one calibration snapshot.
 
@@ -91,11 +97,16 @@ def evaluate_band_mixes(
         }
 
     watch_keys = {_mix_key(*pair) for pair in watchlist}
-    watch_rows = [describe(lohela, market, "watchlist") for lohela, market in watchlist]
+    excluded_keys = {_mix_key(*pair) for pair in excluded}
+    watch_rows = [
+        describe(lohela, market, "watchlist")
+        for lohela, market in watchlist
+        if _mix_key(lohela, market) not in excluded_keys
+    ]
     discovered = [
         describe(r["lohela_band"], r["market_band"], "discovered")
         for r in best_combinations
-        if _mix_key(r["lohela_band"], r["market_band"]) not in watch_keys
+        if _mix_key(r["lohela_band"], r["market_band"]) not in watch_keys | excluded_keys
     ]
     return {
         "watchlist": watch_rows,

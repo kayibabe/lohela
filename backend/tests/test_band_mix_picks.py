@@ -60,6 +60,29 @@ def test_discovered_mixes_exclude_watchlist_and_non_positive_roi():
     assert result["discovered"][0]["best_rank"] == 2
 
 
+def test_live_top_mixes_activate_all_criteria_and_exclude_65_70_under_50():
+    # Live "Top combined bands by ROI" rows as of 2026-09-28.
+    best = [
+        _row("70-75", "55-60", 15, 0.418, wins=12),
+        _row("85-90", "75-80", 13, 0.327, wins=13),
+        _row("65-70", "<50", 30, 0.296, wins=14),
+        _row("80-85", "50-55", 11, 0.236, wins=7),
+        _row("80-85", "65-70", 16, 0.233, wins=13),
+        _row("70-75", "60-65", 26, 0.200, wins=19),
+    ]
+    result = evaluate_band_mixes(best, best)
+    assert all(row["active"] for row in result["watchlist"])
+    assert len(result["watchlist"]) == 5
+    assert ("65-70", "<50") not in {(r["lohela_band"], r["market_band"]) for r in result["discovered"]}
+
+
+def test_excluded_mix_is_dropped_even_from_the_watchlist():
+    top = _row("85-90", "75-80", 20, 0.12)
+    result = evaluate_band_mixes([top], [top], watchlist=(("85-90", "75-80"),), excluded=(("85-90", "75-80"),))
+    assert result["watchlist"] == []
+    assert result["discovered"] == []
+
+
 def test_summary_uses_flat_stake_at_pick_odds_and_ignores_pending():
     rows = [
         {"match_id": 1, "result": "won", "odds": 1.5},
