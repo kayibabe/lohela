@@ -2,8 +2,10 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { formatMarket, formatSelection, formatTicketType } from '../lib/api'
 import { fmt, fmtPnl } from '../utils/currency'
 import PaperLedger from '../components/PaperLedger'
+import BestValueResearch from '../components/BestValueResearch'
 import MatchHistory from '../components/MatchHistory'
 import { groupJournalBets, type Bet } from '../lib/trackerGrouping'
+import { useAuth } from '../auth'
 
 interface BetPeriod {
   label: string; bets: number; settled: number; wins: number; losses: number; staked: number; returned: number
@@ -24,7 +26,9 @@ async function responseError(response: Response) {
 }
 
 export default function TrackerPage({ onOpenTickets }: { onOpenTickets?: (date?: string) => void }) {
-  const [view, setView] = useState<'paper' | 'matches' | 'manual'>('paper')
+  const { user } = useAuth()
+  const canViewBestValue = user?.role === 'admin' || user?.plan === 'pro'
+  const [view, setView] = useState<'paper' | 'best-value' | 'matches' | 'manual'>('paper')
   const [bets, setBets] = useState<Bet[]>([])
   const [summary, setSummary] = useState<BetSummary | null>(null)
   const [loading, setLoading] = useState(true)
@@ -75,17 +79,18 @@ export default function TrackerPage({ onOpenTickets }: { onOpenTickets?: (date?:
     setMessage({ tone: 'success', text: 'Journal entry deleted.' }); await load()
   }
 
-  const badge = view === 'paper' ? 'Production paper evidence' : view === 'matches' ? 'Published selection evidence' : 'Confirmed and manual journal'
+  const badge = view === 'paper' ? 'Production paper evidence' : view === 'best-value' ? 'Protected internal research' : view === 'matches' ? 'Published selection evidence' : 'Confirmed and manual journal'
 
   return <div className="page-content tracker-page">
     <div className="analytics-hero tracker-hero"><div><span className="eyebrow">Auditable portfolio</span><h1>Tracker</h1><p>Keep production paper evidence, published match outcomes and personal journal records in clearly separated views.</p></div><span className={`ledger-chip tracker-chip ${view}`}><span /> {badge}</span></div>
     <div className="analytics-tabs tracker-view-tabs" role="tablist" aria-label="Tracker views">
       <button role="tab" aria-selected={view === 'paper'} className={view === 'paper' ? 'active' : ''} onClick={() => setView('paper')}>System paper ledger</button>
+      {canViewBestValue && <button role="tab" aria-selected={view === 'best-value'} className={view === 'best-value' ? 'active' : ''} onClick={() => setView('best-value')}>Best Value research</button>}
       <button role="tab" aria-selected={view === 'matches'} className={view === 'matches' ? 'active' : ''} onClick={() => setView('matches')}>Match history</button>
       <button role="tab" aria-selected={view === 'manual'} className={view === 'manual' ? 'active' : ''} onClick={() => setView('manual')}>Confirmed &amp; manual journal</button>
     </div>
 
-    {view === 'paper' ? <PaperLedger /> : view === 'matches' ? <MatchHistory /> : <>
+    {view === 'paper' ? <PaperLedger /> : view === 'best-value' && canViewBestValue ? <BestValueResearch /> : view === 'matches' ? <MatchHistory /> : <>
       <div className="journal-note"><strong>Personal journal</strong><span>Confirmed selections retain system provenance; free-form entries remain clearly labelled. Neither changes the immutable system paper ledger.</span></div>
       {message && <div className={`tracker-message ${message.tone}`} role={message.tone === 'error' ? 'alert' : 'status'}>{message.text}</div>}
       <div className="journal-summary-heading"><div><span className="eyebrow">All journal records</span><strong>Portfolio totals</strong></div><span>Totals remain stable when the list is filtered.</span></div>

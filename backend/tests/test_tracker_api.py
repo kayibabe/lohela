@@ -64,3 +64,20 @@ async def test_ticket_history_can_return_superseded_versions(monkeypatch):
     monkeypatch.setattr(tickets_api, "_history_ticket", lambda ticket: ticket.id)
     result = await tickets_api.get_ticket_history(limit=200, include_internal=True, include_superseded=True, db=db)
     assert result == [2, 1]
+
+
+@pytest.mark.asyncio
+async def test_pro_user_can_open_an_internal_best_value_ticket_without_a_research_key(monkeypatch):
+    ticket = SimpleNamespace(ticket_type=tickets_api.TicketType.BEST_VALUE)
+    monkeypatch.setattr(tickets_api, "get_ticket_by_id", AsyncMock(return_value=ticket))
+    monkeypatch.setattr(tickets_api, "_ticket", lambda value, reveal: {"ticket": value, "reveal": reveal})
+
+    result = await tickets_api.get_ticket(
+        80,
+        request=SimpleNamespace(),
+        db=SimpleNamespace(),
+        user=SimpleNamespace(role="user", plan="pro"),
+    )
+
+    assert result["ticket"] is ticket
+    assert result["reveal"] is True

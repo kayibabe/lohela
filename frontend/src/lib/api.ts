@@ -105,10 +105,14 @@ export interface TicketHistoryItem {
   settled_at: string | null
 }
 
-export async function fetchTicketHistory(includeSuperseded = false): Promise<TicketHistoryItem[]> {
+export async function fetchTicketHistory(
+  includeSuperseded = false,
+  includeInternal = false,
+): Promise<TicketHistoryItem[]> {
   const params = new URLSearchParams({
     limit: '200',
     include_superseded: String(includeSuperseded),
+    include_internal: String(includeInternal),
   })
   const res = await fetch(`/api/v1/tickets/history?${params}`)
   if (!res.ok) throw new Error(`API error ${res.status}`)

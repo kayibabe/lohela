@@ -463,7 +463,7 @@ async def get_ticket(
     ticket = await get_ticket_by_id(db, ticket_id)
     if ticket is None:
         raise HTTPException(status_code=404, detail="Ticket not found")
-    if ticket.ticket_type == TicketType.BEST_VALUE:
+    if ticket.ticket_type == TicketType.BEST_VALUE and not _can_reveal(user):
         await require_research_access(request, x_research_key)
     reveal = bool(user and (getattr(user, "role", None) == "admin" or getattr(user, "plan", None) == "pro"))
     return _ticket(ticket, reveal=reveal)

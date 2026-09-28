@@ -221,20 +221,22 @@ export default function DailyTicketsPage({ date }: DailyTicketsPageProps) {
     }
   }
 
-  const publishedTickets = data
+  // Best Value is a protected research stream. Keep all public-page status,
+  // publication metadata and cards scoped to the two release tiers even when
+  // an authenticated research response happens to contain that stream.
+  const publicPublishedTickets = data
     ? [
         data.conservative,
         data.balanced,
-        data.best_value,
       ].filter((ticket): ticket is Ticket => ticket != null)
     : [];
-  const publicationTimes = publishedTickets
+  const publicationTimes = publicPublishedTickets
     .map((ticket) => ticket.published_at)
     .filter(Boolean)
     .sort();
   const latestPublication = publicationTimes[publicationTimes.length - 1];
   const modelVersions = [
-    ...new Set(publishedTickets.map((ticket) => ticket.model_version)),
+    ...new Set(publicPublishedTickets.map((ticket) => ticket.model_version)),
   ];
   const qScoreMatchCount = new Set(matches.map((row) => row.match_id)).size;
   const q85Count = matches.filter((row) => row.q_score >= 85).length;
@@ -254,7 +256,7 @@ export default function DailyTicketsPage({ date }: DailyTicketsPageProps) {
       data.generated_ticket_count === 0,
   );
   const generationUnavailable = Boolean(
-    data && data.generation_id == null && publishedTickets.length === 0,
+    data && data.generation_id == null && publicPublishedTickets.length === 0,
   );
   const pipelineActive = Boolean(
     data?.pipeline_run_id != null &&
@@ -507,7 +509,7 @@ export default function DailyTicketsPage({ date }: DailyTicketsPageProps) {
                   <strong>Latest versions shown.</strong> Earlier published tickets remain immutable in history; regenerated tickets may have different legs.
                 </div>
               )}
-              {!((generationFinishedWithoutTickets || generationUnavailable) && publishedTickets.length === 0) && <div className="ticket-grid public-ticket-grid">
+              {!((generationFinishedWithoutTickets || generationUnavailable) && publicPublishedTickets.length === 0) && <div className="ticket-grid public-ticket-grid">
               {publicTiers.map((tier) => (
                 <TicketCard
                   key={tier.key}
@@ -519,15 +521,6 @@ export default function DailyTicketsPage({ date }: DailyTicketsPageProps) {
                   suggestedStake={suggestedStake(data?.[tier.key] ?? null)}
                 />
               ))}
-              <TicketCard
-                ticket={data?.best_value ?? null}
-                tierName="Best Value"
-                tierDesc="Q ≥85"
-                color="var(--purple)"
-                research
-                onSelectLeg={openTicketLeg}
-                suggestedStake={suggestedStake(data?.best_value ?? null)}
-              />
             </div>}
             </>
           )}
