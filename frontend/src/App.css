@@ -2791,6 +2791,7 @@ th[aria-sort="descending"] .table-sort span,
 .kpi-note { margin-top: 7px; color: var(--muted); font-size: 9px; line-height: 1.35; }
 .analytics-insight-grid { display: grid; grid-template-columns: minmax(0, 1.65fr) minmax(280px, .85fr); gap: 14px; }
 .analytics-insight-grid > .analytics-card { margin-top: 0; }
+.analytics-insight-grid--stacked { grid-template-columns: minmax(0, 1fr); }
 .analytics-card {
   padding: 18px;
   border: 1px solid var(--border);

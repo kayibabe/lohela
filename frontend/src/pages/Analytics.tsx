@@ -227,7 +227,7 @@ function ProbabilityCalibration() {
       <MetricCard label="Better calibrated" value={betterModel} note={`Lohela ${score(s.lohela_calibration_error)} vs Market ${score(s.market_calibration_error)} calibration error`} tone={betterModel === 'Lohela' ? 'positive' : 'warning'} />
     </div>
     {s.sample_size < 30 && <div className="sample-warning">Small sample: only {s.sample_size} settled predictions in this scope. Treat bucket results as directional.</div>}
-    <div className="analytics-insight-grid">
+    <div className="analytics-insight-grid analytics-insight-grid--stacked">
       <ProbabilityBucketTable title="Lohela model probability" subtitle="Bucketed by predicted win probability, 5pp bands" rows={data.lohela_buckets} />
       <ProbabilityBucketTable title="Market implied probability" subtitle="Bucketed by 1/odds at pick time, 5pp bands" rows={data.market_buckets} />
     </div>
