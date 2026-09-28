@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field, model_validator
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.security import require_research_access
+from app.api.security import require_admin_access
 from app.config import CURRENT_MODEL_VERSION
 from app.database import get_db
 from app.services.backtesting import Backtester
@@ -27,7 +27,7 @@ class BacktestRequest(BaseModel):
         return self
 
 
-@router.post("/run", dependencies=[Depends(require_research_access)])
+@router.post("/run", dependencies=[Depends(require_admin_access)])
 async def run_backtest(payload: BacktestRequest, db: AsyncSession = Depends(get_db)):
     run = await Backtester(db).run(
         payload.period_start,

@@ -2,7 +2,7 @@ from fastapi.routing import APIRoute
 import inspect
 
 from app.api.security import require_admin_access
-from app.api.v1 import admin, tickets
+from app.api.v1 import admin, backtests, tickets
 
 
 def _route(path: str, method: str, router):
@@ -22,6 +22,14 @@ def test_admin_routes_require_research_access():
                 dependency.call for dependency in route.dependant.dependencies
             }
             assert require_admin_access in dependency_callables, route.path
+
+
+def test_backtest_run_accepts_authenticated_admin_or_research_key():
+    route = _route("/backtests/run", "POST", backtests.router)
+    dependency_callables = {
+        dependency.call for dependency in route.dependant.dependencies
+    }
+    assert require_admin_access in dependency_callables
 
 
 def test_daily_tickets_do_not_publish_internal_best_value():

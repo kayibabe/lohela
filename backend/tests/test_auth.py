@@ -6,7 +6,7 @@ import pytest
 from fastapi import HTTPException
 from starlette.requests import Request
 
-from app.api.security import get_optional_current_user, require_pro_access, require_research_access
+from app.api.security import get_optional_current_user, require_admin_access, require_pro_access, require_research_access
 from app.services.auth import hash_password, session_token_hash, verify_password
 
 
@@ -53,6 +53,12 @@ async def test_pro_and_admin_users_can_use_pro_endpoints():
     admin = SimpleNamespace(role="admin", plan="free")
     assert await require_pro_access(pro) is pro
     assert await require_pro_access(admin) is admin
+
+
+@pytest.mark.asyncio
+async def test_authenticated_admin_can_use_admin_gated_endpoints():
+    admin = SimpleNamespace(role="admin", plan="free")
+    assert await require_admin_access(_request_with_cookie("token"), None, admin) is None
 
 
 @pytest.mark.asyncio
