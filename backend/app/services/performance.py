@@ -65,7 +65,15 @@ async def performance_summary(db: AsyncSession, date_from: date | None = None, d
         previous = latest_by_day_and_type.get(key)
         if previous is None or (ticket.version, ticket.id) > (previous.version, previous.id):
             latest_by_day_and_type[key] = ticket
-    tickets = list(latest_by_day_and_type.values())
+    # Best Value is an internal research tier and is not part of the production
+    # portfolio. Keep it out of every headline and breakdown returned by this
+    # production performance summary; its immutable history remains available
+    # through the protected Best Value research view.
+    tickets = [
+        ticket
+        for ticket in latest_by_day_and_type.values()
+        if ticket.ticket_type != TicketType.BEST_VALUE
+    ]
     settled: list[tuple[AccumulatorTicket, object]] = []
     for ticket in tickets:
         latest = max(ticket.results, key=lambda item: item.version, default=None)
@@ -129,8 +137,8 @@ async def performance_summary(db: AsyncSession, date_from: date | None = None, d
             "profit_loss": type_pnl,
         })
 
-    official_tickets = [ticket for ticket in tickets if ticket.ticket_type != TicketType.BEST_VALUE]
-    official_settled_ids = {ticket.id for ticket, _ in settled if ticket.ticket_type != TicketType.BEST_VALUE}
+    official_tickets = tickets
+    official_settled_ids = {ticket.id for ticket, _ in settled}
     overlap = []
     tickets_by_date: dict[date, list[AccumulatorTicket]] = {}
     for ticket in official_tickets:
