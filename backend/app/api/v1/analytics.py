@@ -54,7 +54,7 @@ async def summary(db: AsyncSession = Depends(get_db)):
 
 @router.get("/by-ticket-type")
 async def by_ticket_type(db: AsyncSession = Depends(get_db)):
-    """P&L breakdown by ticket type (conservative, balanced, aggressive, best_value)."""
+    """P&L breakdown by ticket type (safe, balanced, best_value, custom)."""
     rows = (await db.execute(select(Bet))).scalars().all()
     settled = [b for b in rows if b.status != BetStatus.PENDING]
 

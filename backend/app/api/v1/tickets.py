@@ -24,12 +24,18 @@ from app.models import (
     TicketType,
     RunStatus,
 )
+from app.services.accumulator_builder import PUBLIC_TICKET_TYPES as BUILDER_PUBLIC_TICKET_TYPES
 from app.services.ticket_publisher import get_latest_published_tickets, get_ticket_by_id
 from app.services.pipeline_tracker import infer_pipeline_run_type
 
 router = APIRouter(prefix="/tickets", tags=["tickets"])
 
-PUBLIC_TICKET_TYPES = [TicketType.SAFE, TicketType.BALANCED, TicketType.AGGRESSIVE]
+PUBLIC_TICKET_TYPES = list(BUILDER_PUBLIC_TICKET_TYPES)
+TICKET_NAMES = {
+    TicketType.SAFE: "Conservative",
+    TicketType.BALANCED: "Balanced",
+    TicketType.BEST_VALUE: "Best Value",
+}
 
 
 def _can_reveal(user) -> bool:
@@ -102,7 +108,6 @@ class TicketOut(BaseModel):
     model_version: str
     published_at: str
     publication_hash: str
-    high_risk_label: bool
     relaxed_tier: bool
     relaxation_level: int
     horizon_days: int = 0
@@ -138,7 +143,6 @@ class DailyTicketsOut(BaseModel):
     pipeline_error: Optional[str] = None
     conservative: Optional[TicketOut]
     balanced: Optional[TicketOut]
-    aggressive: Optional[TicketOut]
     best_value: Optional[TicketOut]
     superseded_versions: list[TicketHistoryOut] = Field(default_factory=list)
 
@@ -321,7 +325,6 @@ async def get_daily_tickets(
         ),
         conservative=mapped.get(TicketType.SAFE),
         balanced=mapped.get(TicketType.BALANCED),
-        aggressive=mapped.get(TicketType.AGGRESSIVE),
         best_value=mapped.get(TicketType.BEST_VALUE),
         superseded_versions=superseded,
     )
@@ -472,12 +475,7 @@ def _ticket(ticket: AccumulatorTicket, *, reveal: bool = True) -> TicketOut:
     return TicketOut(
         ticket_id=ticket.id,
         ticket_type=ticket.ticket_type.value,
-        name={
-            TicketType.SAFE: "Conservative",
-            TicketType.BALANCED: "Balanced",
-            TicketType.AGGRESSIVE: "Aggressive",
-            TicketType.BEST_VALUE: "Best Value",
-        }[ticket.ticket_type],
+        name=TICKET_NAMES[ticket.ticket_type],
         status=ticket.status.value,
         version=ticket.version,
         legs=[_leg(selection, reveal=reveal) for selection in ticket.selections],
@@ -493,7 +491,6 @@ def _ticket(ticket: AccumulatorTicket, *, reveal: bool = True) -> TicketOut:
         model_version=ticket.model_version,
         published_at=ticket.published_at.isoformat(),
         publication_hash=ticket.publication_hash,
-        high_risk_label=ticket.high_risk_label,
         relaxed_tier=ticket.relaxed_tier,
         relaxation_level=ticket.relaxation_level,
         horizon_days=ticket.horizon_days or 0,
@@ -515,17 +512,11 @@ def _ticket_pricing(ticket: AccumulatorTicket) -> str:
 
 def _history_ticket(ticket: AccumulatorTicket, *, reveal: bool = True) -> TicketHistoryOut:
     latest_result = max(ticket.results, key=lambda item: item.version, default=None)
-    names = {
-        TicketType.SAFE: "Conservative",
-        TicketType.BALANCED: "Balanced",
-        TicketType.AGGRESSIVE: "Aggressive",
-        TicketType.BEST_VALUE: "Best Value",
-    }
     return TicketHistoryOut(
         ticket_id=ticket.id,
         target_date=ticket.target_date.isoformat(),
         ticket_type=ticket.ticket_type.value,
-        name=names[ticket.ticket_type],
+        name=TICKET_NAMES[ticket.ticket_type],
         status=ticket.status.value,
         version=ticket.version,
         leg_count=len(ticket.selections),

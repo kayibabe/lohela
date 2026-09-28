@@ -82,7 +82,9 @@ FALLBACK_CONTROL_WEIGHTS = {
 # Mirror of TICKET_SPECS in backend/app/services/accumulator_builder.py:55-59
 # (ticket_type -> min_q_score at full strength) and the relaxation floor at
 # accumulator_builder.py:75. Same fallback/verification approach as above.
-FULL_STRENGTH_MIN_Q = {'SAFE': 85.0, 'BALANCED': 80.0, 'AGGRESSIVE': 75.0, 'BEST_VALUE': 85.0}
+FULL_STRENGTH_MIN_Q = {'SAFE': 85.0, 'BALANCED': 80.0, 'BEST_VALUE': 85.0}
+# Tiers retired from the system; their archived tickets are left out of the analysis.
+RETIRED_TICKET_TYPES = {'AGGRESSIVE'}
 RELAXATION_FLOOR_MIN_Q = 60.0
 
 
@@ -202,7 +204,8 @@ def main():
     predictions = {p['id']: p for p in source['predictions']}
     tickets = {t['id']: t for t in source['accumulator_tickets']}
     all_live = analysis['rows']
-    pub = analysis['published_rows']
+    pub = [r for r in analysis['published_rows']
+           if str(tickets[r['ticket_id']]['ticket_type']).upper() not in RETIRED_TICKET_TYPES]
 
     control_weights = predictions[pub[0]['prediction_id']]['q_component_weights']
     assert all(predictions[r['prediction_id']]['q_component_weights'] == control_weights for r in pub), \

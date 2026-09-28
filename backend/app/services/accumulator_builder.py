@@ -64,7 +64,6 @@ class TicketSpec:
 TICKET_SPECS: tuple[TicketSpec, ...] = (
     TicketSpec(TicketType.SAFE, "Conservative", 3, 6, 3.0, 5.0, 85.0, 1.0, 3, 0.0, 0.05),
     TicketSpec(TicketType.BALANCED, "Balanced", 4, 7, 5.0, 10.0, 80.0, 0.60, 1, 0.0, 0.10),
-    TicketSpec(TicketType.AGGRESSIVE, "Aggressive", 5, 10, 10.0, math.inf, 75.0, 0.40, 1, 0.05, 0.15),
     TicketSpec(TicketType.BEST_VALUE, "Best Value", 3, 6, 0.0, math.inf, 85.0, 1.0, 1, 0.0, 0.05, True),
 )
 
@@ -81,11 +80,13 @@ MARKET_TICKET_SPECS: tuple[TicketSpec, ...] = (
                pricing="market", min_leg_odds=1.20, max_leg_odds=1.65),
     TicketSpec(TicketType.BALANCED, "Balanced", 3, 5, 3.2, 6.5, 0.0, 0.0, 1, 0.14, 0.10,
                pricing="market", min_leg_odds=1.25, max_leg_odds=2.30),
-    TicketSpec(TicketType.AGGRESSIVE, "Aggressive", 4, 6, 6.5, 16.0, 0.0, 0.0, 1, 0.05, 0.15,
-               pricing="market", min_leg_odds=1.30, max_leg_odds=3.50),
     TicketSpec(TicketType.BEST_VALUE, "Best Value", 2, 5, 2.0, 12.0, 0.0, 0.0, 1, 0.0, 0.10, True,
                pricing="market", min_leg_odds=1.20, max_leg_odds=4.00),
 )
+
+
+# Tiers published to users; BEST_VALUE is internal research only.
+PUBLIC_TICKET_TYPES: tuple[TicketType, ...] = (TicketType.SAFE, TicketType.BALANCED)
 
 
 def active_ticket_specs() -> tuple[TicketSpec, ...]:
@@ -206,7 +207,6 @@ class Ticket:
     confidence_score: float
     avg_q_score: float
     avg_edge: Optional[float]
-    high_risk_label: bool
     internal_only: bool
     relaxed: bool = False
     relaxation_level: int = 0
@@ -222,14 +222,13 @@ class DailyTickets:
     model_run_id: int | None
     conservative: Optional[Ticket]
     balanced: Optional[Ticket]
-    aggressive: Optional[Ticket]
     best_value: Optional[Ticket]
     qualified_pool: int
     selection_diagnostics: dict[str, dict] = field(default_factory=dict)
     horizon_dates: list[date] = field(default_factory=list)
 
     def public_count(self) -> int:
-        return sum(t is not None for t in (self.conservative, self.balanced, self.aggressive))
+        return sum(t is not None for t in (self.conservative, self.balanced))
 
 
 class AccumulatorBuilder:
@@ -256,7 +255,7 @@ class AccumulatorBuilder:
         td = target_date or cat_today()
         run = await self._resolve_model_run(td, model_run_id)
         if run is None:
-            return DailyTickets(td, None, None, None, None, None, 0, {})
+            return DailyTickets(td, None, None, None, None, 0, {})
 
         # Research Q-score sweeps are model-edge experiments by definition.
         specs = TICKET_SPECS if research_min_qscore is not None else active_ticket_specs()
@@ -305,7 +304,7 @@ class AccumulatorBuilder:
             }
             prior_public = [
                 ticket for ticket_type, ticket in output.items()
-                if ticket is not None and ticket_type in (TicketType.SAFE, TicketType.BALANCED, TicketType.AGGRESSIVE)
+                if ticket is not None and ticket_type in PUBLIC_TICKET_TYPES
             ]
             output[spec.ticket_type] = _find_best_ticket(
                 eligible,
@@ -349,7 +348,6 @@ class AccumulatorBuilder:
             run.id,
             output[TicketType.SAFE],
             output[TicketType.BALANCED],
-            output[TicketType.AGGRESSIVE],
             output[TicketType.BEST_VALUE],
             len(pool),
             diagnostics,
@@ -377,15 +375,15 @@ class AccumulatorBuilder:
         so a wider pool is exhausted at full strength before any gate loosens."""
         if _public_count(output) >= settings.min_daily_public_tickets:
             return
-        # Loosest base spec first (AGGRESSIVE), so relaxation reaches the floor
+        # Loosest base spec first (BALANCED), so relaxation reaches the floor
         # with the fewest, least-invasive concessions. On a thin pool that order
-        # can starve the others: AGGRESSIVE may claim up to 10 legs and the
-        # public one-exposure-per-match/market rule leaves too few for
-        # CONSERVATIVE. So when it falls short, also try smallest-ticket-first
-        # and keep whichever fills more tiers (ties keep the original order).
+        # can starve CONSERVATIVE: the public one-exposure-per-match/market rule
+        # may leave it too few legs. So when it falls short, also try
+        # CONSERVATIVE first and keep whichever fills more tiers (ties keep the
+        # original order).
         orders = (
-            (TicketType.AGGRESSIVE, TicketType.BALANCED, TicketType.SAFE),
-            (TicketType.SAFE, TicketType.BALANCED, TicketType.AGGRESSIVE),
+            (TicketType.BALANCED, TicketType.SAFE),
+            (TicketType.SAFE, TicketType.BALANCED),
         )
         best: dict[TicketType, Ticket | None] | None = None
         for order in orders:
@@ -398,7 +396,7 @@ class AccumulatorBuilder:
             if _public_count(best) >= settings.min_daily_public_tickets:
                 break
         output.update(best)
-        for ticket_type in (TicketType.SAFE, TicketType.BALANCED, TicketType.AGGRESSIVE):
+        for ticket_type in PUBLIC_TICKET_TYPES:
             ticket = output[ticket_type]
             if ticket is not None and (ticket.relaxed or ticket.horizon_days):
                 logger.warning(
@@ -418,7 +416,6 @@ class AccumulatorBuilder:
         first_level: int,
         target_date: date | None,
     ) -> None:
-        public_types = (TicketType.SAFE, TicketType.BALANCED, TicketType.AGGRESSIVE)
         published = _public_count(output)
         for ticket_type in (t for t in order if output[t] is None):
             if published >= settings.min_daily_public_tickets:
@@ -434,7 +431,7 @@ class AccumulatorBuilder:
                 prior_public = [
                     existing for existing_type, existing in output.items()
                     if existing is not None
-                    and existing_type in public_types
+                    and existing_type in PUBLIC_TICKET_TYPES
                     and existing_type != ticket_type
                 ]
                 ticket = _find_best_ticket(
@@ -760,10 +757,7 @@ def _research_market_rejection_reasons(leg: Leg, spec: TicketSpec | None = None)
 
 
 def _public_count(output: dict[TicketType, Ticket | None]) -> int:
-    return sum(
-        output.get(t) is not None
-        for t in (TicketType.SAFE, TicketType.BALANCED, TicketType.AGGRESSIVE)
-    )
+    return sum(output.get(t) is not None for t in PUBLIC_TICKET_TYPES)
 
 
 def _cat_day_offset(kickoff_at: datetime, target_date: date) -> int:
@@ -923,7 +917,6 @@ def _evaluate_combo(
         round(confidence, 2),
         round(average_q, 2),
         round(average_edge, 6) if average_edge is not None else None,
-        spec.ticket_type == TicketType.AGGRESSIVE,
         spec.internal_only,
         pricing=spec.pricing,
     )
@@ -966,7 +959,7 @@ def _market_leg_score(leg: Leg, target: float) -> float:
     """Low margin first, nudged toward the tier's typical leg price.
 
     Ranking (or beam-pruning) on probability alone keeps only 1.2x favourites,
-    whose combinations never reach the Balanced/Aggressive odds bands; the
+    whose combinations never reach the Balanced odds band; the
     final choice among valid tickets is still the most likely one
     (_objective)."""
     value = -1.0 if leg.expected_value is None else leg.expected_value
@@ -975,7 +968,7 @@ def _market_leg_score(leg: Leg, target: float) -> float:
 
 def _market_candidates(pool: list[Leg], spec: TicketSpec) -> list[Leg]:
     """Best-scoring legs for the tier; at most two markets per match so the
-    window spans enough fixtures for three tickets."""
+    window spans enough fixtures for every tier's ticket."""
     target = _market_leg_target(spec)
     ranked = sorted(
         pool, key=lambda leg: (_market_leg_score(leg, target), leg.prediction_id), reverse=True

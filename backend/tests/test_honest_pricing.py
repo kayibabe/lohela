@@ -114,10 +114,11 @@ def _slate():
     return legs
 
 
-def test_market_build_produces_three_tiers_inside_their_bands_with_honest_numbers():
+def test_market_build_produces_public_tiers_inside_their_bands_with_honest_numbers():
     built = asyncio.run(_builder(_slate()).build(TARGET))
     assert built.selection_diagnostics["pricing"]["source"] == "market"
-    tickets = {t.ticket_type: t for t in (built.conservative, built.balanced, built.aggressive)}
+    assert "aggressive" not in built.selection_diagnostics
+    tickets = {t.ticket_type: t for t in (built.conservative, built.balanced)}
     assert all(tickets.values())
     for ticket_type, ticket in tickets.items():
         spec = SPEC[ticket_type]
@@ -132,12 +133,10 @@ def test_market_build_produces_three_tiers_inside_their_bands_with_honest_number
     # Conservative is the most likely ticket: roughly a coin flip or better.
     assert tickets[TicketType.SAFE].adjusted_probability >= 0.40
     assert (tickets[TicketType.SAFE].adjusted_probability
-            > tickets[TicketType.BALANCED].adjusted_probability
-            > tickets[TicketType.AGGRESSIVE].adjusted_probability)
+            > tickets[TicketType.BALANCED].adjusted_probability)
     match_sets = [{leg.match_id for leg in ticket.legs} for ticket in tickets.values()]
     assert all(len(left & right) <= 1 for i, left in enumerate(match_sets)
                for right in match_sets[i + 1:])
-    assert not set.intersection(*match_sets)
 
 
 def test_market_overlap_limit_keeps_unbuildable_tier_empty():

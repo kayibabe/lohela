@@ -24,6 +24,7 @@ from app.models import (
     PipelineStageRun,
 )
 from app.services.accumulator_builder import (
+    PUBLIC_TICKET_TYPES,
     TICKET_SPECS,
     AccumulatorBuilder,
     DailyTickets,
@@ -54,13 +55,10 @@ class TicketPublisher:
             raise ValueError("No completed model run exists for the requested date")
         await self._validate_pipeline_context(pipeline_run_id, target_date, built.model_run_id)
 
-        public_tickets = [built.conservative, built.balanced, built.aggressive]
+        public_tickets = [built.conservative, built.balanced]
         missing_public_types = [
             ticket_type.value
-            for ticket_type, candidate in zip(
-                (TicketType.SAFE, TicketType.BALANCED, TicketType.AGGRESSIVE),
-                public_tickets,
-            )
+            for ticket_type, candidate in zip(PUBLIC_TICKET_TYPES, public_tickets)
             if candidate is None
         ]
         existing_result = await self.db.execute(
@@ -215,7 +213,6 @@ class TicketPublisher:
             average_q_score=candidate.avg_q_score,
             average_edge=candidate.avg_edge,
             model_version=model_version,
-            high_risk_label=candidate.high_risk_label,
             relaxed_tier=candidate.relaxed,
             relaxation_level=candidate.relaxation_level,
             horizon_days=candidate.horizon_days,
@@ -257,11 +254,7 @@ class TicketPublisher:
 async def get_latest_published_tickets(
     db: AsyncSession, target_date: date, include_internal: bool = True
 ) -> list[AccumulatorTicket]:
-    ticket_types = list(TicketType) if include_internal else [
-        TicketType.SAFE,
-        TicketType.BALANCED,
-        TicketType.AGGRESSIVE,
-    ]
+    ticket_types = list(TicketType) if include_internal else list(PUBLIC_TICKET_TYPES)
     latest_versions = (
         select(
             AccumulatorTicket.ticket_type.label("ticket_type"),

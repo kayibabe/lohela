@@ -35,7 +35,6 @@ class RunStatus(str, enum.Enum):
 class TicketType(str, enum.Enum):
     SAFE = "safe"
     BALANCED = "balanced"
-    AGGRESSIVE = "aggressive"
     BEST_VALUE = "best_value"
 
 
@@ -230,7 +229,6 @@ class AccumulatorTicket(Base):
     average_q_score: Mapped[float] = mapped_column(Float, nullable=False)
     average_edge: Mapped[float | None] = mapped_column(Float, nullable=True)
     model_version: Mapped[str] = mapped_column(String(40), nullable=False)
-    high_risk_label: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     relaxed_tier: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     relaxation_level: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     # >0 when the rolling-horizon fallback admitted legs kicking off this many

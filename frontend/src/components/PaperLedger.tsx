@@ -136,7 +136,7 @@ export default function PaperLedger() {
   return <>
     {error && <div className="tracker-message error" role="alert">{error}</div>}
     <div className="paper-scope-heading">
-      <div><span className="eyebrow">Production-tier evidence</span><strong>Conservative, Balanced and Aggressive only</strong><p>Internal Best Value research is reported separately and cannot carry the release headline.</p></div>
+      <div><span className="eyebrow">Production-tier evidence</span><strong>Conservative and Balanced only</strong><p>Internal Best Value research is reported separately and cannot carry the release headline.</p></div>
       <span className="sample-caution">Small sample · {productionWins} wins / {productionSettled.length} settled</span>
     </div>
     <div className="paper-kpis">
@@ -165,7 +165,7 @@ export default function PaperLedger() {
     <section className="stake-simulator"><div><span className="eyebrow">What-if sizing</span><strong>Stake simulator · current filters</strong><p>Replays the settled rows currently shown. This does not change the immutable one-unit ledger.</p></div><label>Stake per ticket<input type="number" min="0" step="0.01" value={stakeSize} onChange={event => setStakeSize(event.target.value)} /></label><div className="stake-simulator-metrics"><div><span>Staked</span><strong>{fmt(simulatedStaked)}</strong></div><div><span>Return</span><strong>{fmt(simulatedReturned)}</strong></div><div><span>P&amp;L</span><strong className={simulatedPnl >= 0 ? 'positive' : 'negative'}>{fmtPnl(simulatedPnl)}</strong></div></div></section>
 
     <div className="paper-toolbar tracker-filter-panel">
-      <div className="filter-tabs" aria-label="Ticket type filter">{['all', 'safe', 'balanced', 'aggressive', 'best_value'].map(value => <button key={value} className={`filter-tab${typeFilter === value ? ' active' : ''}`} onClick={() => setTypeFilter(value)}>{value === 'all' ? 'All tickets' : formatTicketType(value)}</button>)}</div>
+      <div className="filter-tabs" aria-label="Ticket type filter">{['all', 'safe', 'balanced', 'best_value'].map(value => <button key={value} className={`filter-tab${typeFilter === value ? ' active' : ''}`} onClick={() => setTypeFilter(value)}>{value === 'all' ? 'All tickets' : formatTicketType(value)}</button>)}</div>
       <label>Outcome<select aria-label="Settlement filter" value={resultFilter} onChange={event => setResultFilter(event.target.value)}><option value="all">All outcomes</option><option value="pending">Pending</option><option value="won">Won</option><option value="lost">Lost</option><option value="void">Void</option></select></label>
       <label>Model<select aria-label="Model version filter" value={modelFilter} onChange={event => setModelFilter(event.target.value)}><option value="current">Current · {currentModel ?? 'loading'}</option><option value="all">All model versions</option>{modelVersions.filter(version => version !== currentModel).map(version => <option key={version} value={version}>{version}</option>)}</select></label>
       <label>From<input aria-label="Tickets from date" type="date" value={dateFrom} onChange={event => setDateFrom(event.target.value)} /></label><label>To<input aria-label="Tickets to date" type="date" value={dateTo} onChange={event => setDateTo(event.target.value)} /></label>

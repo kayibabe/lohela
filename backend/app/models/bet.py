@@ -25,7 +25,7 @@ class Bet(Base):
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
     # Which system ticket this was placed from (optional)
-    ticket_type = Column(String(32))   # conservative | balanced | aggressive | best_value | custom
+    ticket_type = Column(String(32))   # safe | balanced | best_value | custom
     ticket_date = Column(String(10))   # YYYY-MM-DD of the fixtures
 
     # Human-readable label, e.g. "Man City / Arsenal / Barcelona - 3-leg acca"

@@ -23,10 +23,10 @@ READ THIS BEFORE READING THE OUTPUT
    exclusion), via the exact same _find_best_ticket search the pipeline
    uses. It does NOT replay: the bounded relaxation ladder
    (AccumulatorBuilder._apply_minimum_ticket_relaxation), or the
-   cross-tier overlap constraints against that day's BALANCED/AGGRESSIVE
-   tickets (irrelevant to the SAFE-vs-SAFE question this script asks, but
+   cross-tier overlap constraints against that day's BALANCED
+   ticket (irrelevant to the SAFE-vs-SAFE question this script asks, but
    it means a day where the real SAFE ticket was relaxed, or displaced by
-   a BALANCED/AGGRESSIVE overlap veto, can differ here from history). It
+   a BALANCED overlap veto, can differ here from history). It
    also excludes the STALE_ODDS and Q_SCORE_BELOW_TIER gate reasons from
    the raw eligibility check (re-applying min_q_score explicitly instead),
    because STALE_ODDS compares a leg's odds timestamp to wall-clock

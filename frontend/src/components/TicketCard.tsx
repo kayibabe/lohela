@@ -106,7 +106,6 @@ export default function TicketCard({ ticket, tierName, tierDesc, color, research
             <div className="tier-dot" style={{ background: color }} />
             <span className="ticket-name" style={{ color }}>{tierName}</span>
             {research && <span className="research-badge">Research</span>}
-            {ticket.high_risk_label && <span className="risk-badge">High Risk / Low Hit Rate</span>}
             {ticket.relaxed_tier && (
               <span
                 className="relaxed-badge"

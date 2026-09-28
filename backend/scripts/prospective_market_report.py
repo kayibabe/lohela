@@ -118,8 +118,7 @@ async def run(since: date) -> dict:
             .join(Match, Match.id == TicketSelection.match_id)
             .where(AccumulatorTicket.pricing == "market",
                    AccumulatorTicket.target_date >= since,
-                   AccumulatorTicket.ticket_type.in_((TicketType.SAFE, TicketType.BALANCED,
-                                                      TicketType.AGGRESSIVE)),
+                   AccumulatorTicket.ticket_type.in_((TicketType.SAFE, TicketType.BALANCED)),
                    AccumulatorTicket.status.in_((TicketStatus.PUBLISHED, TicketStatus.SETTLED,
                                                  TicketStatus.VOID)))
             .order_by(AccumulatorTicket.published_at, TicketSelection.id)

@@ -45,7 +45,6 @@ export interface Ticket {
   model_version: string
   published_at: string
   publication_hash: string
-  high_risk_label: boolean
   relaxed_tier: boolean
   relaxation_level: number
   /** >0 when a thin day's ticket includes fixtures up to this many days later. */
@@ -78,7 +77,6 @@ export interface DailyTickets {
   pipeline_error: string | null
   conservative: Ticket | null
   balanced: Ticket | null
-  aggressive: Ticket | null
   best_value: Ticket | null
   superseded_versions: TicketHistoryItem[]
 }

@@ -155,7 +155,7 @@ def ticket_replay(days):
                 rows = []
                 for d, (legs, results) in days.items():
                     built = asyncio.run(_Replay(legs).build(datetime.fromisoformat(d).date()))
-                    for t in (built.conservative, built.balanced, built.aggressive):
+                    for t in (built.conservative, built.balanced):
                         if t is None:
                             continue
                         won = all(results[l.prediction_id] for l in t.legs)

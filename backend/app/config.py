@@ -153,8 +153,9 @@ class Settings(BaseSettings):
     # Published public tiers are alternatives, not duplicate exposure. A
     # later tier may share at most this many matches with an earlier tier.
     max_shared_matches_between_tickets: int = 2
-    # Market-priced public tiers may share one fixture pairwise, and no
-    # fixture may appear in all three tiers. Thin slates can leave a tier empty.
+    # Market-priced public tiers may share one fixture pairwise, and a fixture
+    # may appear on at most this many public tickets. Thin slates can leave a
+    # tier empty.
     max_shared_matches_between_market_tickets: int = 1
     max_market_ticket_exposure_per_match: int = 2
     # A public portfolio may expose one match/market once across its tiers.
@@ -168,9 +169,10 @@ class Settings(BaseSettings):
     # public tiers, in bounded steps, until this floor is met or the relaxation
     # ladder is exhausted — see accumulator_builder._RELAXATION_STEPS.
     ticket_relaxation_enabled: bool = True
-    # The public daily portfolio targets all three tiers. Missing tiers remain
-    # visible as PARTIAL rather than being fabricated or replaced by history.
-    min_daily_public_tickets: int = 3
+    # The public daily portfolio targets both public tiers (Conservative and
+    # Balanced). Missing tiers remain visible as PARTIAL rather than being
+    # fabricated or replaced by history.
+    min_daily_public_tickets: int = 2
     # How ticket legs are priced. "market" (default since 2026-09-23): the
     # bookmaker's de-vigged probability — on both the frozen production
     # archive and the local DB it beat the ensemble, and the model's ">=3%

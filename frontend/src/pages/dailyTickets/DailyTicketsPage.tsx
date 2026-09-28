@@ -250,7 +250,6 @@ export default function DailyTicketsPage({ date }: DailyTicketsPageProps) {
     ? [
         data.conservative,
         data.balanced,
-        data.aggressive,
         data.best_value,
       ].filter((ticket): ticket is Ticket => ticket != null)
     : [];
@@ -313,12 +312,6 @@ export default function DailyTicketsPage({ date }: DailyTicketsPageProps) {
       name: "Balanced",
       desc: fairPriced ? "Most likely ticket · 3–5 legs · 3.2–6.5×" : "Q ≥80 · 60% Grade A/A+",
       color: "var(--balanced)",
-    },
-    {
-      key: "aggressive" as const,
-      name: "Aggressive",
-      desc: fairPriced ? "Most likely ticket · 4–6 legs · 6.5–16×" : "Q ≥75 · adjusted probability ≥5%",
-      color: "var(--aggressive)",
     },
   ];
 

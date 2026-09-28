@@ -126,14 +126,12 @@ def test_later_tier_is_found_when_prior_tiers_hold_the_top_legs():
     spec = {s.ticket_type: s for s in TICKET_SPECS}
     top = [_leg(i, q=95.0) for i in range(1, 12)]  # outrank everything below
     prior = _evaluate_combo(tuple(top[:4]), spec[TicketType.BALANCED], {})
-    prior_2 = _evaluate_combo(tuple(top[4:11]), spec[TicketType.BALANCED], {}) or _evaluate_combo(
-        tuple(top[4:9]), spec[TicketType.AGGRESSIVE], {}
-    )
+    prior_2 = _evaluate_combo(tuple(top[4:8]), spec[TicketType.BALANCED], {})
     assert prior is not None and prior_2 is not None
     rest = [_leg(i, q=88.0) for i in range(20, 25)]
     ticket = _find_best_ticket(
         top + rest,
-        spec[TicketType.AGGRESSIVE],
+        spec[TicketType.SAFE],
         {},
         prior_tickets=[prior, prior_2],
         max_shared_matches=settings.max_shared_matches_between_tickets,
@@ -150,10 +148,10 @@ def test_build_uses_horizon_only_when_target_day_is_short():
     today_only = {TARGET: [_leg(i) for i in range(1, 16)]}
     builder = _fake_builder({**today_only, TARGET + timedelta(days=1): [_leg(100 + i, day_offset=1) for i in range(15)]})
     built = asyncio.run(builder.build(TARGET, horizon_dates=[TARGET + timedelta(days=1)]))
-    assert built.public_count() == 3
+    assert built.public_count() == 2
     assert built.horizon_dates == []  # never consulted
     assert builder.resolved_dates == [TARGET]
-    assert all(t.horizon_days == 0 for t in (built.conservative, built.balanced, built.aggressive))
+    assert all(t.horizon_days == 0 for t in (built.conservative, built.balanced))
 
 
 def test_build_fills_every_public_tier_from_the_horizon_on_an_empty_day():
@@ -165,8 +163,8 @@ def test_build_fills_every_public_tier_from_the_horizon_on_an_empty_day():
         d2: [_leg(20 + i, day_offset=2) for i in range(12)],
     }
     built = asyncio.run(_fake_builder(pools).build(TARGET, horizon_dates=[d1, d2]))
-    tickets = (built.conservative, built.balanced, built.aggressive)
-    assert built.public_count() == 3
+    tickets = (built.conservative, built.balanced)
+    assert built.public_count() == 2
     assert built.horizon_dates == [d1, d2]
     for ticket in tickets:
         assert 1 <= ticket.horizon_days <= 2
@@ -204,13 +202,13 @@ async def _null_session():
 
 
 def test_resolve_horizon_dates_extends_until_floor_then_stops(monkeypatch):
-    counts = {0: 0, 1: 1, 2: 3}  # public tickets available by horizon length
+    counts = {0: 0, 1: 1, 2: 2}  # public tickets available by horizon length
     builds = []
 
     async def fake_build(self, target_date, model_run_id=None, research_min_qscore=None, horizon_dates=None):
         n = len(horizon_dates or [])
         builds.append(n)
-        tickets = [object() if i < counts[n] else None for i in range(3)]
+        tickets = [object() if i < counts[n] else None for i in range(2)]
         return DailyTickets(target_date, 7, *tickets, None, 0)
 
     prepared, ingested = [], []
@@ -237,7 +235,7 @@ def test_resolve_horizon_dates_extends_until_floor_then_stops(monkeypatch):
 def test_resolve_horizon_dates_skips_a_failed_day_and_noops_on_full_day(monkeypatch):
     async def fake_build(self, target_date, model_run_id=None, research_min_qscore=None, horizon_dates=None):
         n = len(horizon_dates or [])
-        tickets = [object() if n >= 1 else None for _ in range(3)]
+        tickets = [object() if n >= 1 else None for _ in range(2)]
         return DailyTickets(target_date, 7, *tickets, None, 0)
 
     async def prepare(factory, day):
@@ -256,7 +254,7 @@ def test_resolve_horizon_dates_skips_a_failed_day_and_noops_on_full_day(monkeypa
     assert any(r.get("error") == "odds API down" for r in reports)
 
     async def full_build(self, target_date, model_run_id=None, research_min_qscore=None, horizon_dates=None):
-        return DailyTickets(target_date, 7, object(), object(), object(), None, 0)
+        return DailyTickets(target_date, 7, object(), object(), None, 0)
 
     async def must_not_run(*args, **kwargs):
         raise AssertionError("horizon work on a full day")

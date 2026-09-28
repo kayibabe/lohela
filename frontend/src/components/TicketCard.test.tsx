@@ -7,8 +7,8 @@ import { accumulatorBlockers, SelectionPanel } from '../pages/DailyTickets'
 
 const ticket: Ticket = {
   ticket_id: 42,
-  ticket_type: 'aggressive',
-  name: 'Aggressive',
+  ticket_type: 'balanced',
+  name: 'Balanced',
   status: 'published',
   version: 3,
   combined_odds: 12.4,
@@ -23,7 +23,6 @@ const ticket: Ticket = {
   model_version: '0.2.0',
   published_at: '2026-08-28T09:00:00Z',
   publication_hash: 'a'.repeat(64),
-  high_risk_label: true,
   relaxed_tier: false,
   relaxation_level: 0,
   internal_only: false,
@@ -51,11 +50,11 @@ const ticket: Ticket = {
 }
 
 describe('audited ticket surfaces', () => {
-  it('renders the mandatory aggressive risk label and publication audit data', () => {
+  it('renders publication audit data', () => {
     const html = renderToStaticMarkup(
-      <TicketCard ticket={ticket} tierName="Aggressive" tierDesc="Q ≥75" color="red" />,
+      <TicketCard ticket={ticket} tierName="Balanced" tierDesc="Q ≥80" color="blue" />,
     )
-    expect(html).toContain('High Risk / Low Hit Rate')
+    expect(html).not.toContain('High Risk')
     expect(html).toContain('Hit probability')
     expect(html).toContain('Risk score')
     expect(html).toContain('Open · 1 pending')
@@ -115,7 +114,7 @@ describe('audited ticket surfaces', () => {
 
   it('keeps model-priced (historical) tickets unchanged', () => {
     const html = renderToStaticMarkup(
-      <TicketCard ticket={ticket} tierName="Aggressive" tierDesc="Q ≥75" color="red" />,
+      <TicketCard ticket={ticket} tierName="Balanced" tierDesc="Q ≥80" color="blue" />,
     )
     expect(html).toContain('Hit probability')
     expect(html).toContain('Avg Q-score')
@@ -195,7 +194,7 @@ describe('audited ticket surfaces', () => {
       home_team: `Home ${index + 1}`,
     }))
     const html = renderToStaticMarkup(
-      <TicketCard ticket={{ ...ticket, legs }} tierName="Aggressive" tierDesc="Q ≥75" color="red" onSelectLeg={() => undefined} />,
+      <TicketCard ticket={{ ...ticket, legs }} tierName="Balanced" tierDesc="Q ≥80" color="blue" onSelectLeg={() => undefined} />,
     )
     expect(html).toContain('View all 5 legs')
     expect(html).toContain('Home 4')

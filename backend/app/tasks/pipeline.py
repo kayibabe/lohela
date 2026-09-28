@@ -271,6 +271,7 @@ def generate_tickets(
         record_automation_alert,
         resolve_automation_alert_by_dedupe_key,
     )
+    from app.services.accumulator_builder import PUBLIC_TICKET_TYPES
     from app.services.ticket_publisher import TicketPublisher
 
     stages = ["correlation_analysis", "accumulator_generation", "risk_validation", "publication"]
@@ -300,7 +301,7 @@ def generate_tickets(
             )
             publication_summary = generation.config_snapshot.get("publication_summary", {})
             missing_public_types = publication_summary.get("missing_public_ticket_types", [])
-            public_published = 3 - len(missing_public_types)
+            public_published = len(PUBLIC_TICKET_TYPES) - len(missing_public_types)
             dedupe_key = f"min_daily_tickets:{target_date}"
             if public_published < settings.min_daily_public_tickets:
                 await record_automation_alert(
