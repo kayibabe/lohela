@@ -68,11 +68,11 @@ describe('Tracker evidence helpers', () => {
     expect(groups[0].months[0].dates).toHaveLength(2)
   })
 
-  it('does not repeat year and month headings for each match date', () => {
+  it('groups match history by newest year, month and date without repeated headings', () => {
     const row = (id: number, date: string) => ({ match_id: id, target_date: date, kickoff_at: `${date}T12:00:00Z`, home_team: 'A', away_team: 'B', competition: 'League', status: 'finished', live_phase: null, elapsed_minutes: null, home_goals: 1, away_goals: 0, outcome: 'won', ticket_types: ['safe'], selections: ['home_win'], selection_evidence: [] })
-    const groups = groupMatchHistory([row(1, '2026-08-30'), row(2, '2026-08-29')])
-    expect(groups).toHaveLength(1)
-    expect(groups[0].months).toHaveLength(1)
-    expect(groups[0].months[0].matchesByDate).toHaveLength(2)
+    const groups = groupMatchHistory([row(1, '2025-12-31'), row(2, '2026-08-29'), row(3, '2026-09-01'), row(4, '2026-08-30')])
+    expect(groups.map(group => group.year)).toEqual([2026, 2025])
+    expect(groups[0].months.map(month => month.month)).toEqual(['2026-09', '2026-08'])
+    expect(groups[0].months[1].matchesByDate.map(date => date.date)).toEqual(['2026-08-30', '2026-08-29'])
   })
 })

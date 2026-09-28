@@ -74,6 +74,7 @@ export interface MatchHistoryRow {
 }
 
 interface MatchHistoryMonthGroup {
+  month: string
   label: string
   matchesByDate: Array<{ date: string; label: string; matches: MatchHistoryRow[] }>
 }
@@ -85,7 +86,7 @@ export function groupMatchHistory(rows: MatchHistoryRow[]): MatchHistoryYearGrou
   for (const row of rows) {
     const parsed = new Date(`${row.target_date}T00:00:00`)
     const year = parsed.getFullYear()
-    const month = parsed.toLocaleDateString(undefined, { month: 'long' })
+    const month = row.target_date.slice(0, 7)
     if (!years.has(year)) years.set(year, new Map())
     const months = years.get(year)!
     if (!months.has(month)) months.set(month, new Map())
@@ -94,8 +95,9 @@ export function groupMatchHistory(rows: MatchHistoryRow[]): MatchHistoryYearGrou
   }
   return [...years.entries()].sort(([a], [b]) => b - a).map(([year, months]) => ({
     year,
-    months: [...months.entries()].map(([label, dates]) => ({
-      label,
+    months: [...months.entries()].sort(([a], [b]) => b.localeCompare(a)).map(([month, dates]) => ({
+      month,
+      label: new Date(`${month}-01T00:00:00`).toLocaleDateString(undefined, { month: 'long' }),
       matchesByDate: [...dates.entries()].sort(([a], [b]) => b.localeCompare(a)).map(([date, matches]) => ({
         date,
         label: new Date(`${date}T00:00:00`).toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'short' }),
