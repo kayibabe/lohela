@@ -165,8 +165,9 @@ export default function AdminPage() {
 
   return (
     <div className="page-content">
-      <div className="section-header">
-        <h2 className="section-title">System Administration</h2>
+      <div className="page-intro admin-page-intro">
+        <div><span className="eyebrow">System area</span><h1>Administration</h1><p>Monitor publication, recover missed runs, and manage access.</p></div>
+        <span className="ledger-chip"><span /> Restricted</span>
       </div>
 
       {triggerMsg && (

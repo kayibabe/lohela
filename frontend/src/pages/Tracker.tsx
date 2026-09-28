@@ -84,10 +84,10 @@ export default function TrackerPage({ onOpenTickets }: { onOpenTickets?: (date?:
   return <div className="page-content tracker-page">
     <div className="analytics-hero tracker-hero"><div><span className="eyebrow">Auditable portfolio</span><h1>Tracker</h1><p>Keep production paper evidence, published match outcomes and personal journal records in clearly separated views.</p></div><span className={`ledger-chip tracker-chip ${view}`}><span /> {badge}</span></div>
     <div className="analytics-tabs tracker-view-tabs" role="tablist" aria-label="Tracker views">
-      <button role="tab" aria-selected={view === 'paper'} className={view === 'paper' ? 'active' : ''} onClick={() => setView('paper')}>System paper ledger</button>
-      {canViewBestValue && <button role="tab" aria-selected={view === 'best-value'} className={view === 'best-value' ? 'active' : ''} onClick={() => setView('best-value')}>Best Value research</button>}
+      <button role="tab" aria-selected={view === 'paper'} className={view === 'paper' ? 'active' : ''} onClick={() => setView('paper')}>Paper ledger</button>
+      {canViewBestValue && <button role="tab" aria-selected={view === 'best-value'} className={view === 'best-value' ? 'active' : ''} onClick={() => setView('best-value')}>Best Value</button>}
       <button role="tab" aria-selected={view === 'matches'} className={view === 'matches' ? 'active' : ''} onClick={() => setView('matches')}>Match history</button>
-      <button role="tab" aria-selected={view === 'manual'} className={view === 'manual' ? 'active' : ''} onClick={() => setView('manual')}>Confirmed &amp; manual journal</button>
+      <button role="tab" aria-selected={view === 'manual'} className={view === 'manual' ? 'active' : ''} onClick={() => setView('manual')}>My journal</button>
     </div>
 
     {view === 'paper' ? <PaperLedger /> : view === 'best-value' && canViewBestValue ? <BestValueResearch /> : view === 'matches' ? <MatchHistory /> : <>

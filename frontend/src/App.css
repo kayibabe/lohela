@@ -2944,6 +2944,8 @@ th[aria-sort="descending"] .table-sort span,
 }
 
 @media (max-width: 800px) {
+  .page-intro { align-items: flex-start; }
+  .page-intro .ledger-chip { display: none; }
   .analytics-hero { align-items: flex-start; }
   .ledger-chip { display: none; }
   .analytics-tabs { display: flex; overflow-x: auto; }
@@ -2962,6 +2964,7 @@ th[aria-sort="descending"] .table-sort span,
 }
 
 @media (max-width: 520px) {
+  .page-intro h1 { font-size: 22px; }
   .analytics-hero h1 { font-size: 22px; }
   .validation-strip { align-items: flex-start; flex-direction: column; gap: 4px; }
   .research-kpis { grid-template-columns: 1fr 1fr; }
@@ -3283,6 +3286,11 @@ th[aria-sort="descending"] .table-sort span,
 .global-refresh:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-bg); }
 .global-updated { margin-left: auto; color: var(--muted); font-size: 10px; white-space: nowrap; }
 .nav-svg { width: 18px; height: 18px; display: block; stroke: currentColor; }
+.page-intro { display: flex; align-items: flex-end; justify-content: space-between; gap: 24px; margin-bottom: 18px; }
+.page-intro h1 { font-size: 25px; letter-spacing: -.6px; line-height: 1.15; }
+.page-intro p { margin-top: 6px; color: var(--muted); font-size: 12px; }
+.page-intro .ledger-chip { flex: 0 0 auto; }
+.admin-page-intro { margin-bottom: 18px; }
 .sidebar-footer { display: flex; align-items: center; gap: 8px; margin-top: auto; padding: 14px 9px 0; border-top: 1px solid var(--border); }
 .sidebar-footer .research-status { flex: 1; font-size: 10px; }
 

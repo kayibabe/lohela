@@ -15,18 +15,17 @@ type ModulePage = 'tickets' | 'tracker' | 'analytics' | 'tools' | 'admin'
 type Page = ModulePage | 'login' | 'upgrade'
 
 const NAV: { id: ModulePage; label: string }[] = [
-  { id: 'tickets',   label: 'Tickets'   },
-  { id: 'tracker',   label: 'Tracker'   },
-  { id: 'analytics', label: 'Analytics' },
-  { id: 'tools',     label: 'Tools'     },
-  { id: 'admin',     label: 'Admin'     },
+  { id: 'tickets',   label: 'Today'     },
+  { id: 'tracker',   label: 'Evidence'  },
+  { id: 'analytics', label: 'Validation'},
+  { id: 'tools',     label: 'Utilities' },
 ]
 
 const NAV_META: Record<ModulePage, { icon: string; hint: string }> = {
-  tickets: { icon: 'sparkles', hint: 'Daily published research' },
-  tracker: { icon: 'list', hint: 'System evidence and confirmed journal' },
-  analytics: { icon: 'chart', hint: 'Performance and calibration' },
-  tools: { icon: 'wrench', hint: 'Research utilities' },
+  tickets: { icon: 'sparkles', hint: 'Today’s published research' },
+  tracker: { icon: 'list', hint: 'Evidence and personal journal' },
+  analytics: { icon: 'chart', hint: 'Performance and model validation' },
+  tools: { icon: 'wrench', hint: 'Calculators and research utilities' },
   admin: { icon: 'shield', hint: 'System administration' },
 }
 
@@ -135,7 +134,7 @@ export default function App() {
             <span className="theme-auto">{theme === 'system' ? 'Auto' : theme}</span>
           </button>
         </div>
-        {isModulePage(page) && page !== 'tickets' && <div className="global-page-context"><strong>{NAV.find(item => item.id === page)?.label}</strong><span>{NAV_META[page].hint}</span></div>}
+        {isModulePage(page) && page !== 'tickets' && <div className="global-page-context"><strong>{NAV.find(item => item.id === page)?.label ?? 'System'}</strong><span>{NAV_META[page].hint}</span></div>}
         <span className="global-updated">Updated {lastUpdated.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
         <button className="global-refresh" onClick={() => { setLastUpdated(new Date()); window.location.reload() }} title="Refresh current page" aria-label="Refresh current page">↻ <span>Refresh</span></button>
         {page === 'tickets' && (

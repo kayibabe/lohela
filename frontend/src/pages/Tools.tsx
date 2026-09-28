@@ -269,11 +269,11 @@ function EVCalculator() {
 export default function ToolsPage() {
   return (
     <div className="page-content">
-      <div className="section-header">
-        <h2 className="section-title">Betting Tools</h2>
-        <span className="section-subtitle">Staking calculators and utilities</span>
+      <div className="page-intro">
+        <div><span className="eyebrow">Independent analysis</span><h1>Utilities</h1><p>Answer a specific pricing or staking question without changing the paper ledger.</p></div>
+        <span className="ledger-chip"><span /> No records changed</span>
       </div>
-      <div className="tools-note"><strong>What-if calculators</strong><span>These tools are for independent analysis only and do not create, edit, or settle paper-ledger records.</span></div>
+      <div className="tools-note"><strong>What-if calculators</strong><span>Use these for scenario analysis only. They do not create, edit, or settle paper-ledger records.</span></div>
       <div className="tools-grid">
         <KellyCalculator />
         <AccaBuilder />
