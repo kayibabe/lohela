@@ -1,6 +1,8 @@
 from app.services.band_mix_picks import (
     MIN_MIX_SAMPLE,
-    WATCHLIST_BAND_MIXES,
+    MIN_MIX_ROI,
+    PROVISIONAL_MIX_SAMPLE,
+    _choose_one_per_match,
     evaluate_band_mixes,
     summarize_picks,
 )
@@ -14,73 +16,40 @@ def _row(lohela, market, n, roi, wins=None):
     }
 
 
-def test_watchlist_matches_requested_criteria():
-    assert WATCHLIST_BAND_MIXES == (
-        ("85-90", "75-80"),
-        ("70-75", "55-60"),
-        ("80-85", "50-55"),
-        ("80-85", "65-70"),
-        ("70-75", "60-65"),
-    )
+def test_any_band_joins_after_the_dynamic_evidence_and_roi_thresholds():
+    qualifying = _row("65-70", "<50", MIN_MIX_SAMPLE, MIN_MIX_ROI, wins=16)
+    small = _row("80-85", "50-55", MIN_MIX_SAMPLE - 1, 0.80)
+    below_roi = _row("70-75", "60-65", MIN_MIX_SAMPLE, MIN_MIX_ROI - 0.0001)
+
+    result = evaluate_band_mixes([qualifying, small, below_roi])
+
+    assert [(r["lohela_band"], r["market_band"]) for r in result["watchlist"]] == [("65-70", "<50")]
+    monitored = {(r["lohela_band"], r["market_band"]): r for r in result["monitored"]}
+    assert monitored[("80-85", "50-55")]["reason"] == "INSUFFICIENT_SAMPLE"
+    assert monitored[("70-75", "60-65")]["reason"] == "ROI_BELOW_THRESHOLD"
 
 
-def test_watchlist_mix_is_active_only_when_it_is_a_positive_best_mix():
-    top = _row("85-90", "75-80", 20, 0.12)
-    negative = _row("70-75", "55-60", 30, -0.05)
-    small = _row("80-85", "50-55", MIN_MIX_SAMPLE - 1, 0.40)
-    matrix = [top, negative, small]
-    # best_combinations is already filtered to sample >= 8 and sorted by ROI.
-    result = evaluate_band_mixes(matrix, [top, negative])
-    by_pair = {(r["lohela_band"], r["market_band"]): r for r in result["watchlist"]}
+def test_dynamic_group_marks_30_to_49_results_provisional_and_exposes_recent_roi():
+    current = _row("70-75", "60-65", PROVISIONAL_MIX_SAMPLE - 1, 0.25, wins=30)
+    recent = _row("70-75", "60-65", 12, 0.10, wins=7)
 
-    assert by_pair[("85-90", "75-80")]["active"] is True
-    assert by_pair[("85-90", "75-80")]["best_rank"] == 1
-    assert by_pair[("70-75", "55-60")]["reason"] == "NON_POSITIVE_ROI"
-    assert by_pair[("80-85", "50-55")]["reason"] == "INSUFFICIENT_SAMPLE"
-    assert by_pair[("80-85", "65-70")]["reason"] == "NO_HISTORY"
-    assert by_pair[("80-85", "65-70")]["sample_size"] == 0
-    assert sum(r["active"] for r in result["watchlist"]) == 1
+    row = evaluate_band_mixes([current], [recent])["watchlist"][0]
+
+    assert row["source"] == "dynamic"
+    assert row["provisional"] is True
+    assert row["recent_sample_size"] == 12
+    assert row["recent_roi"] == 0.10
 
 
-def test_positive_mix_outside_top_list_is_not_active():
-    outside = _row("70-75", "60-65", 40, 0.03)
-    result = evaluate_band_mixes([outside], [])
-    row = next(r for r in result["watchlist"] if r["lohela_band"] == "70-75" and r["market_band"] == "60-65")
-    assert row["active"] is False
-    assert row["reason"] == "OUTSIDE_TOP_MIXES"
+def test_one_qualified_selection_is_retained_per_match_by_evidence_then_roi():
+    rows = _choose_one_per_match([
+        ({"match_id": 1, "prediction_id": 1}, {"provisional": True, "sample_size": 40, "roi": 0.9}),
+        ({"match_id": 1, "prediction_id": 2}, {"provisional": False, "sample_size": 30, "roi": 0.2}),
+        ({"match_id": 2, "prediction_id": 3}, {"provisional": False, "sample_size": 50, "roi": 0.2}),
+        ({"match_id": 2, "prediction_id": 4}, {"provisional": False, "sample_size": 50, "roi": 0.3}),
+    ])
 
-
-def test_discovered_mixes_exclude_watchlist_and_non_positive_roi():
-    watch = _row("85-90", "75-80", 20, 0.12)
-    extra = _row("60-65", "55-60", 25, 0.08)
-    losing = _row("55-60", "50-55", 25, -0.02)
-    result = evaluate_band_mixes([watch, extra, losing], [watch, extra, losing])
-    assert [(r["lohela_band"], r["market_band"]) for r in result["discovered"]] == [("60-65", "55-60")]
-    assert result["discovered"][0]["source"] == "discovered"
-    assert result["discovered"][0]["best_rank"] == 2
-
-
-def test_live_top_mixes_activate_all_criteria_and_exclude_65_70_under_50():
-    # Live "Top combined bands by ROI" rows as of 2026-09-28.
-    best = [
-        _row("70-75", "55-60", 15, 0.418, wins=12),
-        _row("85-90", "75-80", 13, 0.327, wins=13),
-        _row("65-70", "<50", 30, 0.296, wins=14),
-        _row("80-85", "50-55", 11, 0.236, wins=7),
-        _row("80-85", "65-70", 16, 0.233, wins=13),
-        _row("70-75", "60-65", 26, 0.200, wins=19),
-    ]
-    result = evaluate_band_mixes(best, best)
-    assert all(row["active"] for row in result["watchlist"])
-    assert len(result["watchlist"]) == 5
-    assert ("65-70", "<50") not in {(r["lohela_band"], r["market_band"]) for r in result["discovered"]}
-
-
-def test_excluded_mix_is_dropped_even_from_the_watchlist():
-    top = _row("85-90", "75-80", 20, 0.12)
-    result = evaluate_band_mixes([top], [top], watchlist=(("85-90", "75-80"),), excluded=(("85-90", "75-80"),))
-    assert result["watchlist"] == []
-    assert result["discovered"] == []
+    assert {row["match_id"]: row["prediction_id"] for row in rows} == {1: 2, 2: 4}
 
 
 def test_summary_uses_flat_stake_at_pick_odds_and_ignores_pending():

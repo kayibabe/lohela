@@ -1,15 +1,14 @@
-"""Daily band-mix picks: today's selections whose Lohela and market probability
-bands fall in a mix that is currently among the best performers.
+"""Daily dynamic Lohela-band × market-band monitoring and candidate picks.
 
 Each day works in two steps:
 
-1. Scan: before listing candidates, run the whole-system probability
-   calibration (the Analytics "Top combined bands by ROI" view) over settled
-   evidence dated strictly before the target day, and freeze the result in
-   ``band_mix_scans``. A watchlist mix is active for the day only if the scan
-   still ranks it among the best-performing mixes with a positive ROI.
+1. Scan: before listing candidates, calculate every Lohela × market pair from
+   settled evidence dated strictly before the target day and freeze the active
+   pairs in ``band_mix_scans``. A pair qualifies only at the configured
+   minimum evidence and ROI threshold.
 2. Match: band every latest prediction for the target day by model probability
-   and pick-time market-implied probability, and keep those in an active mix.
+   and pick-time market-implied probability. Keep only active-mix selections,
+   then retain one deterministic selection per fixture.
 
 The scan is captured once per day (first writer wins) so the criteria cannot
 drift as that day's own results arrive.
@@ -26,26 +25,21 @@ from sqlalchemy.orm import selectinload
 
 from app.config import cat_day_bounds_utc, cat_today
 from app.models import BandMixScan, Match, MatchStatus, ModelRun, Prediction, RunStatus
-from app.services.performance import _probability_band, probability_calibration_analysis
+from app.services.performance import (
+    _has_pre_kickoff_information,
+    _has_pre_kickoff_quote,
+    _probability_band,
+    probability_calibration_analysis,
+)
 from app.services.settlement import evaluate_selection
 
-# Lohela band × market band pairs the operator asked to follow (percent bands,
-# matching the Analytics combined-matrix labels).
-WATCHLIST_BAND_MIXES: tuple[tuple[str, str], ...] = (
-    ("85-90", "75-80"),
-    ("70-75", "55-60"),
-    ("80-85", "50-55"),
-    ("80-85", "65-70"),
-    ("70-75", "60-65"),
-)
-# Mixes the operator never wants picked, even when they rank as a top mix
-# (65-70 × <50 is a long-odds mix whose ROI rests on a sub-50% hit rate).
-EXCLUDED_BAND_MIXES: tuple[tuple[str, str], ...] = (
-    ("65-70", "<50"),
-)
-# Mirrors the Analytics best-performing-mixes table: sample size >= 8, top 15 by ROI.
-MIN_MIX_SAMPLE = 8
-BEST_MIX_LIMIT = 15
+# Dynamic research-monitoring criteria. An active pair is never a guarantee of
+# future profit; the daily evidence cutoff is frozen before candidates appear.
+MIN_MIX_SAMPLE = 30
+PROVISIONAL_MIX_SAMPLE = 50
+MIN_MIX_ROI = 0.20
+RECENT_WINDOW_DAYS = 60
+POLICY_VERSION = "dynamic-roi-v1"
 
 
 def _mix_key(lohela_band: str, market_band: str) -> str:
@@ -54,77 +48,64 @@ def _mix_key(lohela_band: str, market_band: str) -> str:
 
 def evaluate_band_mixes(
     combined_matrix: list[dict],
-    best_combinations: list[dict],
-    watchlist: tuple[tuple[str, str], ...] = WATCHLIST_BAND_MIXES,
-    excluded: tuple[tuple[str, str], ...] = EXCLUDED_BAND_MIXES,
+    recent_matrix: list[dict] | None = None,
 ) -> dict:
-    """Decide which mixes are active from one calibration snapshot.
-
-    A watchlist mix is active only when it appears in the best-performing list
-    (sample >= MIN_MIX_SAMPLE, top BEST_MIX_LIMIT by ROI) with ROI above zero.
-    Other best-performing mixes with positive ROI are returned as "discovered"
-    so they can be followed optionally, never silently.
-    """
-    matrix = {_mix_key(r["lohela_band"], r["market_band"]): r for r in combined_matrix}
-    ranks = {
-        _mix_key(r["lohela_band"], r["market_band"]): index + 1
-        for index, r in enumerate(best_combinations)
-    }
+    """Return every currently qualifying pair from one frozen evidence set."""
+    recent = {_mix_key(r["lohela_band"], r["market_band"]): r for r in (recent_matrix or [])}
+    ranked = sorted(combined_matrix, key=lambda row: (row["roi"] is not None, row["roi"] or float("-inf")), reverse=True)
+    ranks = {_mix_key(r["lohela_band"], r["market_band"]): index + 1 for index, r in enumerate(ranked)}
     stats_keys = ("sample_size", "wins", "losses", "hit_rate", "roi")
 
-    def describe(lohela_band: str, market_band: str, source: str) -> dict:
+    def describe(row: dict) -> dict:
+        lohela_band, market_band = row["lohela_band"], row["market_band"]
         key = _mix_key(lohela_band, market_band)
-        row = matrix.get(key)
+        recent_row = recent.get(key)
         rank = ranks.get(key)
-        if row is None:
-            reason = "NO_HISTORY"
-        elif row["sample_size"] < MIN_MIX_SAMPLE:
+        if row["sample_size"] < MIN_MIX_SAMPLE:
             reason = "INSUFFICIENT_SAMPLE"
-        elif row["roi"] is None or row["roi"] <= 0:
-            reason = "NON_POSITIVE_ROI"
-        elif rank is None:
-            reason = "OUTSIDE_TOP_MIXES"
+        elif row["roi"] is None or row["roi"] < MIN_MIX_ROI:
+            reason = "ROI_BELOW_THRESHOLD"
         else:
             reason = None
         return {
             "lohela_band": lohela_band,
             "market_band": market_band,
-            "source": source,
+            "source": "dynamic",
             "best_rank": rank,
             "active": reason is None,
             "reason": reason,
-            **{k: (row[k] if row else (0 if k in ("sample_size", "wins", "losses") else None)) for k in stats_keys},
+            "research_status": "research_qualified" if reason is None else "not_qualified",
+            "provisional": reason is None and row["sample_size"] < PROVISIONAL_MIX_SAMPLE,
+            "recent_sample_size": recent_row["sample_size"] if recent_row else 0,
+            "recent_hit_rate": recent_row["hit_rate"] if recent_row else None,
+            "recent_roi": recent_row["roi"] if recent_row else None,
+            **{k: row[k] for k in stats_keys},
         }
 
-    watch_keys = {_mix_key(*pair) for pair in watchlist}
-    excluded_keys = {_mix_key(*pair) for pair in excluded}
-    watch_rows = [
-        describe(lohela, market, "watchlist")
-        for lohela, market in watchlist
-        if _mix_key(lohela, market) not in excluded_keys
-    ]
-    discovered = [
-        describe(r["lohela_band"], r["market_band"], "discovered")
-        for r in best_combinations
-        if _mix_key(r["lohela_band"], r["market_band"]) not in watch_keys | excluded_keys
-    ]
+    monitored = [describe(row) for row in ranked]
     return {
-        "watchlist": watch_rows,
-        "discovered": [row for row in discovered if row["active"]],
+        "watchlist": [row for row in monitored if row["active"]],
+        "discovered": [],
+        "monitored": monitored,
     }
 
 
 async def _compute_scan_payload(db: AsyncSession, target_date: date) -> tuple[date, dict]:
     evidence_through = target_date - timedelta(days=1)
     analysis = await probability_calibration_analysis(db, date_to=evidence_through)
-    decision = evaluate_band_mixes(analysis["combined_matrix"], analysis["best_combinations"])
+    recent_start = evidence_through - timedelta(days=RECENT_WINDOW_DAYS - 1)
+    recent = await probability_calibration_analysis(db, date_from=recent_start, date_to=evidence_through)
+    decision = evaluate_band_mixes(analysis["combined_matrix"], recent["combined_matrix"])
     payload = {
         "rules": {
             "min_sample": MIN_MIX_SAMPLE,
-            "best_mix_limit": BEST_MIX_LIMIT,
-            "requires_positive_roi": True,
+            "min_roi": MIN_MIX_ROI,
+            "provisional_below_sample": PROVISIONAL_MIX_SAMPLE,
+            "recent_window_days": RECENT_WINDOW_DAYS,
+            "one_selection_per_match": True,
             "evidence": "settled predictions with pre-kickoff odds, kickoff before target date",
         },
+        "policy_version": POLICY_VERSION,
         "evidence_sample_size": analysis["summary"]["sample_size"],
         "best_combinations": analysis["best_combinations"],
         **decision,
@@ -132,13 +113,17 @@ async def _compute_scan_payload(db: AsyncSession, target_date: date) -> tuple[da
     return evidence_through, payload
 
 
-def _scan_out(scan: BandMixScan | None, *, target_date: date, evidence_through: date, payload: dict, provisional: bool) -> dict:
+def _scan_out(
+    scan: BandMixScan | None, *, target_date: date, evidence_through: date,
+    payload: dict, provisional: bool, reconstructed: bool = False,
+) -> dict:
     return {
         "target_date": target_date.isoformat(),
         "evidence_through": evidence_through.isoformat(),
         "captured_at": scan.captured_at.isoformat() if scan and scan.captured_at else None,
         "capture_source": scan.capture_source if scan else "provisional",
         "provisional": provisional,
+        "reconstructed": reconstructed,
         **payload,
     }
 
@@ -158,6 +143,13 @@ async def get_or_capture_scan(db: AsyncSession, target_date: date, capture_sourc
     evidence_through, payload = await _compute_scan_payload(db, target_date)
     if target_date > cat_today():
         return _scan_out(None, target_date=target_date, evidence_through=evidence_through, payload=payload, provisional=True)
+    if target_date < cat_today():
+        # Historical views remain read-only reconstructions. Persisting a new
+        # old-date scan would make a post-hoc candidate set look prospective.
+        return _scan_out(
+            None, target_date=target_date, evidence_through=evidence_through,
+            payload=payload, provisional=False, reconstructed=True,
+        )
 
     scan = BandMixScan(
         target_date=target_date,
@@ -168,6 +160,19 @@ async def get_or_capture_scan(db: AsyncSession, target_date: date, capture_sourc
     )
     db.add(scan)
     try:
+        # Persist the exact candidate set before results exist. Never backfill
+        # old scans: that would turn a forward audit into a reconstruction.
+        rows = await band_mix_candidates(db, target_date, payload)
+        payload["candidate_manifest_version"] = 1
+        payload["candidate_manifest"] = [{
+            key: row[key] for key in (
+                "prediction_id", "match_id", "home_team", "away_team", "competition",
+                "kickoff_at", "market", "selection", "model_probability",
+                "market_probability", "odds", "edge", "q_score", "q_grade",
+                "lohela_band", "market_band", "mix_source", "mix_rank",
+                "mix_sample_size", "mix_hit_rate", "mix_roi", "pre_kickoff_quote",
+            )
+        } for row in rows]
         await db.commit()
     except IntegrityError:
         # A concurrent request captured the day first; theirs is authoritative.
@@ -187,8 +192,30 @@ def _selection_result(match: Match, prediction: Prediction) -> str | None:
     return None
 
 
+def _choose_one_per_match(candidates: list[tuple[dict, dict]]) -> list[dict]:
+    """Pick one qualified selection per match using a stable evidence-first order."""
+    def choice_key(candidate: tuple[dict, dict]) -> tuple[bool, int, float, int]:
+        row, mix = candidate
+        # Prefer an established qualifying band, then the larger evidence base,
+        # then ROI. Prediction ID is only the deterministic final tie-break.
+        return (
+            not bool(mix.get("provisional", False)),
+            int(mix["sample_size"]),
+            float(mix["roi"] or float("-inf")),
+            int(row["prediction_id"]),
+        )
+
+    best_by_match: dict[int, tuple[dict, dict]] = {}
+    for candidate in candidates:
+        match_id = candidate[0]["match_id"]
+        existing = best_by_match.get(match_id)
+        if existing is None or choice_key(candidate) > choice_key(existing):
+            best_by_match[match_id] = candidate
+    return [candidate[0] for candidate in best_by_match.values()]
+
+
 async def band_mix_candidates(db: AsyncSession, target_date: date, scan: dict) -> list[dict]:
-    """Latest predictions for target_date that fall in an active band mix."""
+    """One qualifying, pre-kickoff selection per fixture for the target date."""
     mixes = {
         _mix_key(row["lohela_band"], row["market_band"]): row
         for row in [*scan["watchlist"], *scan["discovered"]]
@@ -234,16 +261,15 @@ async def band_mix_candidates(db: AsyncSession, target_date: date, scan: dict) -
         )
     )).scalars().all()
 
-    rows = []
+    candidates: list[tuple[dict, dict]] = []
     for prediction in predictions:
         lohela_band = _probability_band(prediction.model_probability)
         market_band = _probability_band(prediction.source_implied_probability)
         mix = mixes.get(_mix_key(lohela_band, market_band))
-        if mix is None:
+        if mix is None or not _has_pre_kickoff_information(prediction) or not _has_pre_kickoff_quote(prediction):
             continue
         match = prediction.match
-        pre_kickoff_quote = prediction.source_odds_at is None or prediction.source_odds_at <= match.kickoff_at
-        rows.append({
+        candidates.append(({
             "prediction_id": prediction.id,
             "match_id": match.id,
             "home_team": match.home_team.name,
@@ -265,14 +291,16 @@ async def band_mix_candidates(db: AsyncSession, target_date: date, scan: dict) -
             "mix_sample_size": mix["sample_size"],
             "mix_hit_rate": mix["hit_rate"],
             "mix_roi": mix["roi"],
-            "pre_kickoff_quote": pre_kickoff_quote,
+            "pre_kickoff_quote": True,
             "match_status": match.status.value,
             "home_goals": match.home_goals,
             "away_goals": match.away_goals,
             "live_phase": match.live_phase,
             "elapsed_minutes": match.elapsed_minutes,
             "result": _selection_result(match, prediction),
-        })
+        }, mix))
+
+    rows = _choose_one_per_match(candidates)
     rows.sort(key=lambda r: (r["kickoff_at"], r["home_team"], r["market"]))
     return rows
 
