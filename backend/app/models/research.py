@@ -476,6 +476,26 @@ class SinglesLedgerSnapshot(Base):
     )
 
 
+class BandMixScan(Base):
+    """Once-per-day, insert-only scan of the best-performing Lohela × market band mixes.
+
+    Captured before that day's band-mix candidates are listed, from settled
+    evidence dated strictly before target_date, so the criteria used for a day
+    are frozen and auditable rather than drifting as results arrive.
+    """
+
+    __tablename__ = "band_mix_scans"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    target_date: Mapped[date] = mapped_column(Date, nullable=False, unique=True, index=True)
+    evidence_through: Mapped[date] = mapped_column(Date, nullable=False)
+    capture_source: Mapped[str] = mapped_column(String(40), nullable=False)
+    payload: Mapped[dict] = mapped_column(JSON, nullable=False)
+    captured_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+
 class BacktestRun(Base):
     __tablename__ = "backtest_runs"
 

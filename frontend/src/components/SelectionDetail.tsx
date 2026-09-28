@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { fetchSelectionOdds, formatKickoff, formatMarket, formatSelection, type OddsQuote } from '../lib/api'
 import GradeBadge from './GradeBadge'
+import { useSortableRows } from './SortableTable'
 
 export interface DetailSelection {
   selection_id?: number
@@ -280,6 +281,11 @@ function TeamStats({ team }: { team: TeamForm }) { return <div className="team-s
 
 function OddsComparison({ quotes, loading, failed }: { quotes: OddsQuote[]; loading: boolean; failed: boolean }) {
   const spread = quotes.length > 1 ? quotes[0].decimal_odds - quotes[quotes.length - 1].decimal_odds : 0
+  const { sorted, sort, toggle } = useSortableRows(quotes, { source: quote => quote.bookmaker, opening: quote => quote.opening_odds, current: quote => quote.decimal_odds, move: quote => quote.movement })
+  const columnHeader = (key: 'source' | 'opening' | 'current' | 'move', label: string) => {
+    const direction = sort?.key === key ? sort.direction : null
+    return <span role="columnheader" aria-sort={direction === 'asc' ? 'ascending' : direction === 'desc' ? 'descending' : 'none'}><button type="button" className="table-sort" onClick={() => toggle(key)}>{label} <span aria-hidden="true">{direction === 'asc' ? '▲' : direction === 'desc' ? '▼' : '↕'}</span></button></span>
+  }
   return (
     <section className="odds-comparison">
       <div className="evidence-title">
@@ -292,9 +298,9 @@ function OddsComparison({ quotes, loading, failed }: { quotes: OddsQuote[]; load
       {!loading && quotes.length > 0 && (
         <div className="odds-table" role="table" aria-label="Bookmaker odds comparison">
           <div className="odds-table-head" role="row">
-            <span role="columnheader">Source</span><span role="columnheader">Opening</span><span role="columnheader">Current</span><span role="columnheader">Move</span>
+            {columnHeader('source', 'Source')}{columnHeader('opening', 'Opening')}{columnHeader('current', 'Current')}{columnHeader('move', 'Move')}
           </div>
-          {quotes.map(quote => (
+          {sorted.map(quote => (
             <div className={`odds-table-row${quote.is_best ? ' best' : ''}`} role="row" key={`${quote.bookmaker}-${quote.fetched_at}`}>
               <span role="cell"><strong>{quote.bookmaker}</strong>{quote.is_best && <small>Best</small>}{quote.is_fallback && <small>Fallback</small>}</span>
               <span role="cell">{quote.opening_odds?.toFixed(2) ?? '—'}</span>

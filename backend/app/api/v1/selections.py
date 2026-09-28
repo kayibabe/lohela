@@ -13,6 +13,7 @@ from app.api.security import require_pro_access
 from app.models import Prediction, Match, MatchStatus, Team, Competition, Odds, ModelRun, RunStatus, TicketType
 from app.config import cat_day_bounds_utc, cat_today
 from app.services.accumulator_builder import AccumulatorBuilder
+from app.services.band_mix_picks import band_mix_candidates, get_or_capture_scan, summarize_picks
 from app.services.settlement import evaluate_selection
 
 router = APIRouter(
@@ -230,6 +231,23 @@ async def get_qualified_selections(
         ))
 
     return output
+
+
+@router.get("/band-mix")
+async def get_band_mix_selections(
+    date: Optional[date] = Query(default=None, description="Target date (default: today)"),
+    db: AsyncSession = Depends(get_db),
+):
+    """Selections in a currently best-performing Lohela × market band mix.
+
+    The day's mix scan is frozen on first capture (by the pipeline or this
+    endpoint) from evidence dated before the target day; see
+    app.services.band_mix_picks.
+    """
+    target = date or cat_today()
+    scan = await get_or_capture_scan(db, target)
+    rows = await band_mix_candidates(db, target, scan)
+    return {"scan": scan, "summary": summarize_picks(rows), "rows": rows}
 
 
 @router.get("/rejected", response_model=list[RejectedSelectionOut])

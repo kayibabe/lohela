@@ -5,7 +5,7 @@ export interface DailyTicketsPageProps {
 }
 
 export type DailyTab =
-  "matches" | "tickets" | "strongest" | "rejected" | "my-accumulators";
+  "matches" | "tickets" | "best-mix" | "strongest" | "rejected" | "my-accumulators";
 
 export type MatchDisplayState =
   "finished" | "live" | "scheduled" | "postponed" | "cancelled";

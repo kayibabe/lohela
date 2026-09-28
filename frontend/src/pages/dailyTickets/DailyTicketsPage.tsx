@@ -18,6 +18,7 @@ import SelectionDetail, {
 } from "../../components/SelectionDetail";
 import { addDays } from "../../utils";
 import { AllMatches } from "./AllMatches";
+import { BandMixPicks } from "./BandMixPicks";
 import { CustomAccumulatorPanel } from "./CustomAccumulatorPanel";
 import { SelectionPanel } from "./SelectionPanel";
 import { TicketGridSkeleton } from "./TicketGridSkeleton";
@@ -424,6 +425,7 @@ export default function DailyTicketsPage({ date }: DailyTicketsPageProps) {
             {(
               [
                 ["tickets", "Recommendations"],
+                ["best-mix", "Best-mix picks"],
                 ["matches", "All matches"],
                 ["strongest", "Strongest picks"],
                 ["my-accumulators", "My accumulators"],
@@ -476,6 +478,14 @@ export default function DailyTicketsPage({ date }: DailyTicketsPageProps) {
                 the final Acca eligibility and combination checks.
               </p>
             </div>
+          )}
+          {tab === "best-mix" && (
+            <BandMixPicks
+              date={date}
+              rejectedRows={rejected}
+              onSelect={openSelection}
+              onAdd={addToAccumulator}
+            />
           )}
           {tab === "matches" && (
             <AllMatches

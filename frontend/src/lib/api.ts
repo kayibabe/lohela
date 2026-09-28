@@ -248,6 +248,76 @@ export async function fetchQualifiedSelections(date: string, minQScore = 75): Pr
   return res.json()
 }
 
+export interface BandMix {
+  lohela_band: string
+  market_band: string
+  source: 'watchlist' | 'discovered'
+  best_rank: number | null
+  active: boolean
+  reason: 'NO_HISTORY' | 'INSUFFICIENT_SAMPLE' | 'NON_POSITIVE_ROI' | 'OUTSIDE_TOP_MIXES' | null
+  sample_size: number
+  wins: number
+  losses: number
+  hit_rate: number | null
+  roi: number | null
+}
+
+export interface BandMixScan {
+  target_date: string
+  evidence_through: string
+  captured_at: string | null
+  capture_source: string
+  provisional: boolean
+  rules: { min_sample: number; best_mix_limit: number; requires_positive_roi: boolean; evidence: string }
+  evidence_sample_size: number
+  watchlist: BandMix[]
+  discovered: BandMix[]
+}
+
+export interface BandMixPick {
+  prediction_id: number
+  match_id: number
+  home_team: string
+  away_team: string
+  competition: string
+  kickoff_at: string
+  market: string
+  selection: string
+  model_probability: number
+  market_probability: number
+  odds: number
+  edge: number | null
+  q_score: number
+  q_grade: string
+  lohela_band: string
+  market_band: string
+  mix_source: 'watchlist' | 'discovered'
+  mix_rank: number | null
+  mix_sample_size: number
+  mix_hit_rate: number | null
+  mix_roi: number | null
+  pre_kickoff_quote: boolean
+  match_status: string
+  home_goals: number | null
+  away_goals: number | null
+  live_phase: string | null
+  elapsed_minutes: number | null
+  result: 'won' | 'lost' | 'void' | null
+}
+
+export interface BandMixSummary {
+  picks: number; matches: number; settled: number; wins: number; losses: number; voids: number; pending: number
+  profit_loss: number; roi: number | null
+}
+
+export interface BandMixSelections { scan: BandMixScan; summary: BandMixSummary; rows: BandMixPick[] }
+
+export async function fetchBandMixSelections(date: string): Promise<BandMixSelections> {
+  const res = await fetch(`/api/v1/selections/band-mix?${new URLSearchParams({ date })}`)
+  if (!res.ok) throw new Error(`API error ${res.status}`)
+  return res.json()
+}
+
 export async function fetchRejectedSelections(date: string): Promise<SelectionSummary[]> {
   // Load the complete rejection ledger so candidate views can enforce the
   // same hard safety gates as ticket publication. The Rejected view may also

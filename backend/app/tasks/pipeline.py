@@ -278,7 +278,16 @@ def generate_tickets(
     model_run_id = model_result.get("model_run_id") if isinstance(model_result, dict) else None
 
     async def _run():
+        from app.services.band_mix_picks import get_or_capture_scan
         from app.services.ticket_horizon import resolve_horizon_dates_safely
+
+        # Freeze the day's best-performing band-mix scan before any picks are
+        # produced. Best-effort: it must never block ticket publication.
+        try:
+            async with AsyncSessionLocal() as db:
+                await get_or_capture_scan(db, date.fromisoformat(target_date), capture_source="pipeline")
+        except Exception:
+            logger.exception("Band-mix scan capture failed for %s", target_date)
 
         horizon_dates, horizon_reports = await resolve_horizon_dates_safely(
             AsyncSessionLocal, date.fromisoformat(target_date), model_run_id, pipeline_run_id
