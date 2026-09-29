@@ -327,6 +327,79 @@ export async function fetchBandMixSelections(date: string): Promise<BandMixSelec
   return res.json()
 }
 
+export interface ParameterSweepPolicy {
+  version: string
+  min_probability: number
+  min_odds: number
+  price_haircut: number
+  min_ev: number
+  max_quote_age_hours: number
+}
+
+export interface ParameterSweepMetric {
+  selected: number
+  resolved: number
+  wins: number
+  losses: number
+  voids: number
+  profit: number
+  roi: number | null
+  hit_rate: number | null
+  days: number
+}
+
+export interface ParameterSweepPick {
+  prediction_id: number
+  match_id: number
+  home_team: string
+  away_team: string
+  competition: string
+  kickoff_at: string
+  market: string
+  selection: string
+  model_probability: number
+  odds: number
+  q_score: number
+  q_grade: string
+  edge: number | null
+  source_odds_at: string
+  pre_kickoff_quote: boolean
+  result: 'win' | 'loss' | 'void' | null
+  policy_train_roi: number | null
+  policy_validation_roi: number | null
+}
+
+export interface ParameterSweepScan {
+  target_date: string
+  evidence_through: string
+  captured_at: string | null
+  capture_source: string
+  provisional: boolean
+  reconstructed: boolean
+  status: 'qualified' | 'no_qualifying_policy'
+  rules: { grid_size: number; minimum_validation_roi: number; minimum_train_sample: number; minimum_validation_sample: number; selection_rule: string; one_selection_per_match: boolean }
+  chosen_policy: ParameterSweepPolicy | null
+  chosen_train: ParameterSweepMetric | null
+  chosen_validation: ParameterSweepMetric | null
+  qualifying_policy_count: number
+  candidate_database_rows: number
+  adapted_candidates: number
+  parameter_ranges: Record<string, [number, number]>
+  limitations: string[]
+}
+
+export interface ParameterSweepSelections {
+  scan: ParameterSweepScan
+  summary: { picks: number; matches: number; settled: number; wins: number; losses: number; voids: number; pending: number; profit_loss: number; roi: number | null }
+  rows: ParameterSweepPick[]
+}
+
+export async function fetchParameterSweepSelections(date: string): Promise<ParameterSweepSelections> {
+  const res = await fetch(`/api/v1/selections/parameter-sweep?${new URLSearchParams({ date })}`)
+  if (!res.ok) throw new Error(`API error ${res.status}`)
+  return res.json()
+}
+
 export async function fetchRejectedSelections(date: string): Promise<SelectionSummary[]> {
   // Load the complete rejection ledger so candidate views can enforce the
   // same hard safety gates as ticket publication. The Rejected view may also

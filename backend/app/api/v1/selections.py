@@ -14,6 +14,7 @@ from app.models import Prediction, Match, MatchStatus, Team, Competition, Odds, 
 from app.config import cat_day_bounds_utc, cat_today
 from app.services.accumulator_builder import AccumulatorBuilder
 from app.services.band_mix_picks import band_mix_candidates, get_or_capture_scan, summarize_picks
+from app.services.parameter_sweep import get_or_capture_parameter_sweep, parameter_sweep_candidates
 from app.services.settlement import evaluate_selection
 
 router = APIRouter(
@@ -248,6 +249,43 @@ async def get_band_mix_selections(
     scan = await get_or_capture_scan(db, target)
     rows = await band_mix_candidates(db, target, scan)
     return {"scan": scan, "summary": summarize_picks(rows), "rows": rows}
+
+
+@router.get("/parameter-sweep")
+async def get_parameter_sweep_selections(
+    date: Optional[date] = Query(default=None, description="Target date (default: today)"),
+    db: AsyncSession = Depends(get_db),
+):
+    """Return today's matches under the frozen dynamic odds-policy sweep.
+
+    This is internal paper research. A policy is shown only when its
+    pre-target validation ROI and evidence sample clear the stored gates.
+    """
+    target = date or cat_today()
+    scan = await get_or_capture_parameter_sweep(db, target)
+    rows = parameter_sweep_candidates(scan)
+    settled = [row for row in rows if row.get("result") in {"win", "loss", "void"}]
+    wins = sum(row.get("result") == "win" for row in settled)
+    profit = sum(
+        row["odds"] - 1 if row.get("result") == "win" else 0.0
+        if row.get("result") == "void" else -1.0
+        for row in settled
+    )
+    return {
+        "scan": scan,
+        "summary": {
+            "picks": len(rows),
+            "matches": len({row["match_id"] for row in rows}),
+            "settled": len(settled),
+            "wins": wins,
+            "losses": sum(row.get("result") == "loss" for row in settled),
+            "voids": sum(row.get("result") == "void" for row in settled),
+            "pending": sum(row.get("result") is None for row in rows),
+            "profit_loss": round(profit, 4),
+            "roi": round(profit / len(settled), 4) if settled else None,
+        },
+        "rows": rows,
+    }
 
 
 @router.get("/rejected", response_model=list[RejectedSelectionOut])

@@ -10,6 +10,7 @@ from dataclasses import asdict
 from datetime import date, datetime, timezone
 
 from sqlalchemy import func, or_, select
+from sqlalchemy.orm import selectinload
 
 from app.config import cat_day_bounds_utc
 from app.models import Match, MatchStatus, ModelRun, Prediction
@@ -69,6 +70,11 @@ async def load_rows(db, start: date, end: date, model_version: str):
                Match.kickoff_at >= cat_day_bounds_utc(start)[0],
                Match.kickoff_at < cat_day_bounds_utc(end)[1],
                or_(ModelRun.id.is_(None), run_trigger != HORIZON_RUN_TRIGGER))
+        .options(
+            selectinload(Match.home_team),
+            selectinload(Match.away_team),
+            selectinload(Match.competition),
+        )
         .order_by(Prediction.created_at, Prediction.id)
     )
     return result.all()

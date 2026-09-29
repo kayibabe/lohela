@@ -17,6 +17,7 @@ import SelectionDetail, {
 } from "../../components/SelectionDetail";
 import { addDays } from "../../utils";
 import { BandMixPicks } from "./BandMixPicks";
+import { ParameterSweepPicks } from "./ParameterSweepPicks";
 import { CustomAccumulatorPanel } from "./CustomAccumulatorPanel";
 import { TicketGridSkeleton } from "./TicketGridSkeleton";
 import {
@@ -396,6 +397,7 @@ export default function DailyTicketsPage({ date }: DailyTicketsPageProps) {
               [
                 ["tickets", "Recommendations"],
                 ["best-mix", "Best-mix picks"],
+                ["odds-policy", "Dynamic odds policy"],
                 ["my-accumulators", "My accumulators"],
               ] as [DailyTab, string][]
             ).map(([key, label]) => (
@@ -445,6 +447,13 @@ export default function DailyTicketsPage({ date }: DailyTicketsPageProps) {
             <BandMixPicks
               date={date}
               rejectedRows={rejected}
+              onSelect={openSelection}
+              onAdd={addToAccumulator}
+            />
+          )}
+          {tab === "odds-policy" && (
+            <ParameterSweepPicks
+              date={date}
               onSelect={openSelection}
               onAdd={addToAccumulator}
             />

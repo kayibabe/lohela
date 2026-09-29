@@ -750,6 +750,39 @@ def capture_singles_ledger(self):
         raise self.retry(exc=exc, countdown=300)
 
 
+@celery_app.task(name="pipeline.capture_parameter_sweep", bind=True, max_retries=1)
+def capture_parameter_sweep(self):
+    """Freeze today's broad dynamic odds-policy research scan.
+
+    The task is intentionally separate from ticket publication: a slow or
+    unavailable research scan must never block the daily production-paper
+    pipeline.
+    """
+    from app.config import cat_today
+    from app.database import AsyncSessionLocal
+    from app.services.parameter_sweep import get_or_capture_parameter_sweep
+
+    async def _run():
+        async with AsyncSessionLocal() as db:
+            result = await get_or_capture_parameter_sweep(
+                db, cat_today(), capture_source="scheduled"
+            )
+            return {
+                "target_date": result["target_date"],
+                "status": result["status"],
+                "chosen_policy": result.get("chosen_policy"),
+                "picks": len(result.get("candidate_manifest") or []),
+            }
+
+    try:
+        result = _run_async(_run())
+        logger.info("Parameter-policy scan captured: %s", result)
+        return result
+    except Exception as exc:
+        logger.exception("Parameter-policy scan failed")
+        raise self.retry(exc=exc, countdown=600)
+
+
 @celery_app.task(name="pipeline.backup_database", bind=True, max_retries=2)
 def backup_database(self):
     """Daily pg_dump to the Railway Volume mounted on this service (see

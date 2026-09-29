@@ -105,6 +105,18 @@ async def lifespan(app: FastAPI):
             coalesce=True,
             max_instances=1,
         )
+    if settings.parameter_sweep_enabled:
+        scheduler.add_job(
+            _trigger_parameter_sweep,
+            CronTrigger(
+                hour=settings.parameter_sweep_cron_hour,
+                minute=settings.parameter_sweep_cron_minute,
+            ),
+            id="daily_parameter_sweep",
+            replace_existing=True,
+            coalesce=True,
+            max_instances=1,
+        )
     if settings.db_backup_enabled:
         scheduler.add_job(
             _trigger_db_backup,
@@ -305,6 +317,17 @@ async def _queue_singles_ledger_capture():
 
     capture_singles_ledger.delay()
     logger.info("Daily singles ledger capture task queued")
+
+
+async def _trigger_parameter_sweep():
+    """Queue the frozen daily dynamic odds-policy research scan."""
+    async with _scheduler_leadership("parameter_sweep") as leader:
+        if not leader:
+            return
+        from app.tasks.pipeline import capture_parameter_sweep
+
+        capture_parameter_sweep.delay()
+        logger.info("Daily parameter-policy sweep queued")
 
 
 async def _trigger_db_backup():

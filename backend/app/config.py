@@ -102,6 +102,11 @@ class Settings(BaseSettings):
     singles_ledger_capture_enabled: bool = True
     singles_ledger_capture_cron_hour: int = 4
     singles_ledger_capture_cron_minute: int = 10
+    # Daily dynamic odds-policy research runs after the morning model window.
+    # It is paper-only and freezes a no-lookahead parameter scan for the day.
+    parameter_sweep_enabled: bool = True
+    parameter_sweep_cron_hour: int = 6
+    parameter_sweep_cron_minute: int = 0
     learning_train_days: int = 180
     learning_validation_days: int = 30
 

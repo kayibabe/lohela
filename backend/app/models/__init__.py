@@ -29,6 +29,7 @@ from app.models.research import (
     PipelineRun,
     PipelineStageRun,
     BacktestRun,
+    ParameterSweepScan,
     SinglesLedgerSnapshot,
     BandMixScan,
 )
@@ -46,6 +47,6 @@ __all__ = [
     "RunStatus", "TicketType", "TicketStatus", "SelectionResult",
     "ModelRun", "ModelLearningRun", "MarketLearningProfile", "ModelLearningPromotion", "StrongestSelectionSnapshot", "TicketGeneration", "AccumulatorTicket", "TicketSelection", "TicketResult",
     "AuditEvent", "ModelPerformance", "LeaguePerformance", "EdgeBandCalibration", "CorrelationCoefficient",
-    "PipelineRun", "PipelineStageRun", "BacktestRun",
+"PipelineRun", "PipelineStageRun", "BacktestRun", "ParameterSweepScan",
     "SinglesLedgerSnapshot", "BandMixScan",
 ]
