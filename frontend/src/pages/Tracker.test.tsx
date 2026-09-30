@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { latestTicketCohorts, wilsonInterval } from '../components/PaperLedger'
+import { latestTicketCohorts, roiFromTotals, wilsonInterval } from '../components/PaperLedger'
 import type { TicketHistoryItem } from '../lib/api'
 import { groupJournalBets, groupMatchHistory, type Bet } from '../lib/trackerGrouping'
 
@@ -59,6 +59,12 @@ describe('Tracker evidence helpers', () => {
     const [low, high] = wilsonInterval(3, 11)
     expect(low).toBeCloseTo(.0975, 3)
     expect(high).toBeCloseTo(.5656, 3)
+  })
+
+  it('calculates simulator ROI from simulated P&L and stake', () => {
+    expect(roiFromTotals(5.87, 17)).toBeCloseTo(0.345294, 5)
+    expect(roiFromTotals(-2, 10)).toBe(-0.2)
+    expect(roiFromTotals(0, 0)).toBeNull()
   })
 
   it('groups journal rows once by year, month and date', () => {

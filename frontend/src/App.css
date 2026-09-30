@@ -800,7 +800,7 @@ body {
 .stake-simulator label { display: flex; flex-direction: column; gap: 5px; color: var(--muted); font-size: 9px; font-weight: 800; text-transform: uppercase; }
 .stake-simulator input { height: 34px; padding: 0 9px; border: 1px solid var(--border); border-radius: var(--r-sm); background: var(--surface); color: var(--text); outline: none; }
 .stake-simulator input:focus { border-color: var(--accent); }
-.stake-simulator-metrics { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+.stake-simulator-metrics { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
 .stake-simulator > *, .stake-simulator-metrics > div, .stat-card, .metric-card { min-width: 0; }
 .stake-simulator-metrics strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .stake-simulator-metrics div { display: flex; flex-direction: column; gap: 3px; }

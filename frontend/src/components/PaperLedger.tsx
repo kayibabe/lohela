@@ -15,6 +15,10 @@ interface PerformanceSummary {
 const pct = (value: number) => `${(value * 100).toFixed(1)}%`
 const cohortKey = (row: TicketHistoryItem) => `${row.target_date}:${row.ticket_type}`
 
+export function roiFromTotals(profitLoss: number, staked: number): number | null {
+  return staked > 0 ? profitLoss / staked : null
+}
+
 export function latestTicketCohorts(rows: TicketHistoryItem[]) {
   const latest = new Map<string, TicketHistoryItem>()
   for (const row of rows) {
@@ -123,6 +127,7 @@ export default function PaperLedger() {
   const simulatedStaked = simulatedRows.length * stake
   const simulatedReturned = simulatedRows.reduce((sum, row) => sum + (row.return_amount ?? 0) * stake, 0)
   const simulatedPnl = simulatedReturned - simulatedStaked
+  const simulatedRoi = roiFromTotals(simulatedPnl, simulatedStaked)
   const evidence = performance?.evidence_gate
   const pricedCoverage = evidence?.unique_official_selections ? evidence.priced_selections / evidence.unique_official_selections : null
   const preKickoffCoverage = evidence?.unique_official_selections ? evidence.pre_kickoff_odds_selections / evidence.unique_official_selections : null
@@ -176,7 +181,7 @@ export default function PaperLedger() {
       </div>
     </section>
 
-    <section className="stake-simulator"><div><span className="eyebrow">What-if sizing</span><strong>Stake simulator · current filters</strong><p>Replays the settled rows currently shown. This does not change the immutable one-unit ledger.</p></div><label>Stake per ticket<input type="number" min="0" step="0.01" value={stakeSize} onChange={event => setStakeSize(event.target.value)} /></label><div className="stake-simulator-metrics"><div><span>Staked</span><strong>{fmt(simulatedStaked)}</strong></div><div><span>Return</span><strong>{fmt(simulatedReturned)}</strong></div><div><span>P&amp;L</span><strong className={simulatedPnl >= 0 ? 'positive' : 'negative'}>{fmtPnl(simulatedPnl)}</strong></div></div></section>
+    <section className="stake-simulator"><div><span className="eyebrow">What-if sizing</span><strong>Stake simulator · current filters</strong><p>Replays the settled rows currently shown. This does not change the immutable one-unit ledger.</p></div><label>Stake per ticket<input type="number" min="0" step="0.01" value={stakeSize} onChange={event => setStakeSize(event.target.value)} /></label><div className="stake-simulator-metrics"><div><span>Staked</span><strong>{fmt(simulatedStaked)}</strong></div><div><span>Return</span><strong>{fmt(simulatedReturned)}</strong></div><div><span>P&amp;L</span><strong className={simulatedPnl >= 0 ? 'positive' : 'negative'}>{fmtPnl(simulatedPnl)}</strong></div><div><span>ROI</span><strong className={simulatedRoi == null ? '' : simulatedRoi >= 0 ? 'positive' : 'negative'}>{simulatedRoi == null ? '—' : pct(simulatedRoi)}</strong></div></div></section>
 
     <div className="paper-toolbar tracker-filter-panel">
       <div className="filter-tabs" aria-label="Ticket type filter">{['all', 'safe', 'balanced', 'best_value'].map(value => <button key={value} className={`filter-tab${typeFilter === value ? ' active' : ''}`} onClick={() => setTypeFilter(value)}>{value === 'all' ? 'All tickets' : formatTicketType(value)}</button>)}</div>
