@@ -81,6 +81,21 @@ export default function PaperLedger() {
     (modelFilter === 'all' || row.model_version === (modelFilter === 'current' ? currentModel : modelFilter))
     && (!dateFrom || row.target_date >= dateFrom) && (!dateTo || row.target_date <= dateTo)
   ), [latestRows, modelFilter, currentModel, dateFrom, dateTo])
+  const settlementCounts = useMemo(() => {
+    const counts = new Map<string, { won: number; lost: number; void: number }>()
+    for (const row of scopeRows) {
+      const current = counts.get(row.ticket_type) ?? { won: 0, lost: 0, void: 0 }
+      if (row.result === 'won' || row.result === 'lost' || row.result === 'void') current[row.result] += 1
+      counts.set(row.ticket_type, current)
+    }
+    return counts
+  }, [scopeRows])
+  const allSettlementCounts = useMemo(() => {
+    return scopeRows.reduce((counts, row) => {
+      if (row.result === 'won' || row.result === 'lost' || row.result === 'void') counts[row.result] += 1
+      return counts
+    }, { won: 0, lost: 0, void: 0 })
+  }, [scopeRows])
   const filtered = useMemo(() => scopeRows.filter(row =>
     (typeFilter === 'all' || row.ticket_type === typeFilter)
     && (resultFilter === 'all' || (row.result ?? 'pending') === resultFilter)
@@ -184,7 +199,15 @@ export default function PaperLedger() {
     <section className="stake-simulator"><div><span className="eyebrow">What-if sizing</span><strong>Stake simulator · current filters</strong><p>Replays the settled rows currently shown. This does not change the immutable one-unit ledger.</p></div><label>Stake per ticket<input type="number" min="0" step="0.01" value={stakeSize} onChange={event => setStakeSize(event.target.value)} /></label><div className="stake-simulator-metrics"><div><span>Staked</span><strong>{fmt(simulatedStaked)}</strong></div><div><span>Return</span><strong>{fmt(simulatedReturned)}</strong></div><div><span>P&amp;L</span><strong className={simulatedPnl >= 0 ? 'positive' : 'negative'}>{fmtPnl(simulatedPnl)}</strong></div><div><span>ROI</span><strong className={simulatedRoi == null ? '' : simulatedRoi >= 0 ? 'positive' : 'negative'}>{simulatedRoi == null ? '—' : pct(simulatedRoi)}</strong></div></div></section>
 
     <div className="paper-toolbar tracker-filter-panel">
-      <div className="filter-tabs" aria-label="Ticket type filter">{['all', 'safe', 'balanced', 'best_value'].map(value => <button key={value} className={`filter-tab${typeFilter === value ? ' active' : ''}`} onClick={() => setTypeFilter(value)}>{value === 'all' ? 'All tickets' : formatTicketType(value)}</button>)}</div>
+      <div className="filter-tabs" aria-label="Ticket type filter">{['all', 'safe', 'balanced', 'best_value'].map(value => {
+        const counts = value === 'all' ? allSettlementCounts : settlementCounts.get(value) ?? { won: 0, lost: 0, void: 0 }
+        return <button key={value} className={`filter-tab${typeFilter === value ? ' active' : ''}`} onClick={() => setTypeFilter(value)} title={`${value === 'all' ? 'All tickets' : formatTicketType(value)}: ${counts.won} won, ${counts.lost} lost, ${counts.void} void`}>
+          <span>{value === 'all' ? 'All tickets' : formatTicketType(value)}</span>
+          <small className="filter-tab-outcomes" aria-label={`${counts.won} won, ${counts.lost} lost, ${counts.void} void`}>
+            <b className="won">W {counts.won}</b><b className="lost">L {counts.lost}</b><b className="void">V {counts.void}</b>
+          </small>
+        </button>
+      })}</div>
       <label>Outcome<select aria-label="Settlement filter" value={resultFilter} onChange={event => setResultFilter(event.target.value)}><option value="all">All outcomes</option><option value="pending">Pending</option><option value="won">Won</option><option value="lost">Lost</option><option value="void">Void</option></select></label>
       <label>Model<select aria-label="Model version filter" value={modelFilter} onChange={event => setModelFilter(event.target.value)}><option value="current">Current · {currentModel ?? 'loading'}</option><option value="all">All model versions</option>{modelVersions.filter(version => version !== currentModel).map(version => <option key={version} value={version}>{version}</option>)}</select></label>
       <label>From<input aria-label="Tickets from date" type="date" value={dateFrom} onChange={event => setDateFrom(event.target.value)} /></label><label>To<input aria-label="Tickets to date" type="date" value={dateTo} onChange={event => setDateTo(event.target.value)} /></label>

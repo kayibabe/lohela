@@ -3186,6 +3186,12 @@ th[aria-sort="descending"] .table-sort span,
 .paper-toolbar .filter-tabs { overflow-x: auto; scrollbar-width: none; }
 .paper-toolbar .filter-tabs::-webkit-scrollbar { display: none; }
 .paper-toolbar .filter-tab { text-transform: capitalize; }
+.paper-toolbar .filter-tab { display: inline-flex; align-items: center; gap: 7px; }
+.paper-toolbar .filter-tab-outcomes { display: inline-flex; gap: 4px; color: var(--muted); font-size: 10px; font-weight: 700; line-height: 1; }
+.paper-toolbar .filter-tab-outcomes b { font-weight: 800; }
+.paper-toolbar .filter-tab-outcomes .won { color: var(--positive); }
+.paper-toolbar .filter-tab-outcomes .lost { color: var(--negative); }
+.paper-toolbar .filter-tab-outcomes .void { color: var(--warning); }
 .paper-toolbar select { height: 34px; padding: 0 28px 0 10px; border: 1px solid var(--border); border-radius: var(--r-sm); background: var(--surface); color: var(--text2); font-size: 11px; outline: none; }
 .paper-toolbar select:focus { border-color: var(--accent); }
 .paper-ledger-list { display: flex; flex-direction: column; gap: 7px; }
