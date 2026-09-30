@@ -4,6 +4,7 @@ from app.services.band_mix_picks import (
     PROVISIONAL_MIX_SAMPLE,
     _choose_one_per_match,
     evaluate_band_mixes,
+    lifecycle_transition,
     summarize_picks,
 )
 
@@ -14,6 +15,14 @@ def _row(lohela, market, n, roi, wins=None):
         "lohela_band": lohela, "market_band": market, "sample_size": n,
         "wins": wins, "losses": n - wins, "hit_rate": wins / n if n else None, "roi": roi,
     }
+
+
+def test_lifecycle_transitions_are_explicit_and_directional():
+    assert lifecycle_transition(None, True) == "promoted"
+    assert lifecycle_transition("active", False) == "demoted"
+    assert lifecycle_transition("inactive", True) == "promoted"
+    assert lifecycle_transition("active", True) == "unchanged"
+    assert lifecycle_transition(None, False) == "initial_inactive"
 
 
 def test_any_band_joins_after_the_dynamic_evidence_and_roi_thresholds():

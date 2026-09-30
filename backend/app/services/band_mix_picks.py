@@ -24,7 +24,17 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.config import cat_day_bounds_utc, cat_today
-from app.models import BandMixScan, Match, MatchStatus, ModelRun, Prediction, RunStatus
+from app.models import (
+    BandMixDailyPick,
+    BandMixLifecycleEvent,
+    BandMixPairState,
+    BandMixScan,
+    Match,
+    MatchStatus,
+    ModelRun,
+    Prediction,
+    RunStatus,
+)
 from app.services.performance import (
     _has_pre_kickoff_information,
     _has_pre_kickoff_quote,
@@ -44,6 +54,16 @@ POLICY_VERSION = "dynamic-roi-v1"
 
 def _mix_key(lohela_band: str, market_band: str) -> str:
     return f"{lohela_band}|{market_band}"
+
+
+def lifecycle_transition(previous_status: str | None, active: bool) -> str:
+    """Return the auditable status transition for one daily evaluation."""
+    current_status = "active" if active else "inactive"
+    if previous_status is None:
+        return "promoted" if active else "initial_inactive"
+    if previous_status == current_status:
+        return "unchanged"
+    return "promoted" if active else "demoted"
 
 
 def evaluate_band_mixes(
@@ -113,6 +133,181 @@ async def _compute_scan_payload(db: AsyncSession, target_date: date) -> tuple[da
     return evidence_through, payload
 
 
+async def record_band_mix_lifecycle(
+    db: AsyncSession,
+    target_date: date,
+    evidence_through: date,
+    monitored: list[dict],
+) -> list[dict]:
+    """Persist current pair state and one immutable daily event per pair."""
+    now = datetime.now(timezone.utc)
+    events = []
+    states = (await db.execute(select(BandMixPairState).where(
+        BandMixPairState.policy_version == POLICY_VERSION,
+    ))).scalars().all()
+    state_by_key = {_mix_key(state.lohela_band, state.market_band): state for state in states}
+    evaluations = list(monitored)
+    observed_keys = {_mix_key(row["lohela_band"], row["market_band"]) for row in monitored}
+    for state in states:
+        if _mix_key(state.lohela_band, state.market_band) not in observed_keys:
+            evaluations.append({
+                "lohela_band": state.lohela_band,
+                "market_band": state.market_band,
+                "active": False,
+                "reason": "NO_HISTORY",
+                "sample_size": 0,
+                "roi": None,
+            })
+    for row in evaluations:
+        state = state_by_key.get(_mix_key(row["lohela_band"], row["market_band"]))
+        previous_status = state.status if state else None
+        transition = lifecycle_transition(previous_status, bool(row["active"]))
+        status = "active" if row["active"] else "inactive"
+        if state is None:
+            db.add(BandMixPairState(
+                policy_version=POLICY_VERSION,
+                lohela_band=row["lohela_band"],
+                market_band=row["market_band"],
+                status=status,
+                first_promoted_at=now if status == "active" else None,
+                last_evaluated_at=now,
+                last_evidence_through=evidence_through,
+                last_sample_size=row["sample_size"],
+                last_roi=row["roi"],
+                last_reason=row["reason"],
+            ))
+        else:
+            state.status = status
+            if status == "active" and state.first_promoted_at is None:
+                state.first_promoted_at = now
+            state.last_evaluated_at = now
+            state.last_evidence_through = evidence_through
+            state.last_sample_size = row["sample_size"]
+            state.last_roi = row["roi"]
+            state.last_reason = row["reason"]
+        db.add(BandMixLifecycleEvent(
+            target_date=target_date,
+            evidence_through=evidence_through,
+            policy_version=POLICY_VERSION,
+            lohela_band=row["lohela_band"],
+            market_band=row["market_band"],
+            status=status,
+            transition=transition,
+            sample_size=row["sample_size"],
+            roi=row["roi"],
+            reason=row["reason"],
+        ))
+        events.append({
+            "lohela_band": row["lohela_band"],
+            "market_band": row["market_band"],
+            "status": status,
+            "transition": transition,
+            "sample_size": row["sample_size"],
+            "roi": row["roi"],
+            "reason": row["reason"],
+        })
+    return events
+
+
+async def ensure_band_mix_daily_ledger(
+    db: AsyncSession,
+    target_date: date,
+    rows: list[dict],
+) -> int:
+    """Insert pick-time snapshots once; never rewrite their source payload."""
+    if target_date != cat_today() or not rows:
+        return 0
+    prediction_ids = [row["prediction_id"] for row in rows]
+    existing = set((await db.execute(select(BandMixDailyPick.prediction_id).where(
+        BandMixDailyPick.target_date == target_date,
+        BandMixDailyPick.prediction_id.in_(prediction_ids),
+    ))).scalars().all())
+    inserted = 0
+    for row in rows:
+        if row["prediction_id"] in existing:
+            continue
+        db.add(BandMixDailyPick(
+            target_date=target_date,
+            prediction_id=row["prediction_id"],
+            match_id=row["match_id"],
+            lohela_band=row["lohela_band"],
+            market_band=row["market_band"],
+            mix_roi=row["mix_roi"],
+            mix_sample_size=row["mix_sample_size"],
+            result=row.get("result"),
+            payload=dict(row),
+        ))
+        inserted += 1
+    return inserted
+
+
+async def band_mix_ledger_rows(db: AsyncSession, target_date: date) -> list[dict]:
+    rows = (await db.execute(select(BandMixDailyPick).where(
+        BandMixDailyPick.target_date == target_date
+    ))).scalars().all()
+    output = []
+    for row in rows:
+        payload = dict(row.payload)
+        payload["result"] = row.result
+        payload["ledger_id"] = row.id
+        payload["ledger_captured_at"] = row.captured_at.isoformat() if row.captured_at else None
+        payload["ledger_settled_at"] = row.settled_at.isoformat() if row.settled_at else None
+        output.append(payload)
+    return sorted(output, key=lambda item: (item.get("kickoff_at", ""), item.get("prediction_id", 0)))
+
+
+async def band_mix_lifecycle_history(
+    db: AsyncSession,
+    date_from: date | None = None,
+    date_to: date | None = None,
+) -> list[dict]:
+    query = select(BandMixLifecycleEvent).where(
+        BandMixLifecycleEvent.policy_version == POLICY_VERSION,
+    )
+    if date_from is not None:
+        query = query.where(BandMixLifecycleEvent.target_date >= date_from)
+    if date_to is not None:
+        query = query.where(BandMixLifecycleEvent.target_date <= date_to)
+    events = (await db.execute(query.order_by(
+        BandMixLifecycleEvent.target_date.desc(),
+        BandMixLifecycleEvent.lohela_band,
+        BandMixLifecycleEvent.market_band,
+    ))).scalars().all()
+    return [{
+        "target_date": event.target_date.isoformat(),
+        "evidence_through": event.evidence_through.isoformat(),
+        "lohela_band": event.lohela_band,
+        "market_band": event.market_band,
+        "status": event.status,
+        "transition": event.transition,
+        "sample_size": event.sample_size,
+        "roi": event.roi,
+        "reason": event.reason,
+    } for event in events]
+
+
+async def refresh_band_mix_ledger(db: AsyncSession, since: date | None = None) -> int:
+    """Reconcile pending daily research picks after fixture results refresh."""
+    query = select(BandMixDailyPick).where(BandMixDailyPick.result.is_(None))
+    if since is not None:
+        query = query.where(BandMixDailyPick.target_date >= since)
+    picks = (await db.execute(query)).scalars().all()
+    now = datetime.now(timezone.utc)
+    updated = 0
+    for pick in picks:
+        match = await db.get(Match, pick.match_id)
+        prediction = await db.get(Prediction, pick.prediction_id)
+        if match is None or prediction is None:
+            continue
+        result = _selection_result(match, prediction)
+        if result is None:
+            continue
+        pick.result = result
+        pick.settled_at = now
+        updated += 1
+    return updated
+
+
 def _scan_out(
     scan: BandMixScan | None, *, target_date: date, evidence_through: date,
     payload: dict, provisional: bool, reconstructed: bool = False,
@@ -138,6 +333,10 @@ async def get_or_capture_scan(db: AsyncSession, target_date: date, capture_sourc
         select(BandMixScan).where(BandMixScan.target_date == target_date)
     )).scalar_one_or_none()
     if existing is not None:
+        if target_date == cat_today():
+            rows = await band_mix_candidates(db, target_date, existing.payload)
+            await ensure_band_mix_daily_ledger(db, target_date, rows)
+            await db.commit()
         return _scan_out(existing, target_date=target_date, evidence_through=existing.evidence_through, payload=existing.payload, provisional=False)
 
     evidence_through, payload = await _compute_scan_payload(db, target_date)
@@ -163,6 +362,11 @@ async def get_or_capture_scan(db: AsyncSession, target_date: date, capture_sourc
         # Persist the exact candidate set before results exist. Never backfill
         # old scans: that would turn a forward audit into a reconstruction.
         rows = await band_mix_candidates(db, target_date, payload)
+        lifecycle_events = await record_band_mix_lifecycle(
+            db, target_date, evidence_through, payload["monitored"]
+        )
+        payload["lifecycle_events"] = lifecycle_events
+        await ensure_band_mix_daily_ledger(db, target_date, rows)
         payload["candidate_manifest_version"] = 1
         payload["candidate_manifest"] = [{
             key: row[key] for key in (

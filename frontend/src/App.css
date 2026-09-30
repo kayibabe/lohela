@@ -372,12 +372,13 @@ ul { list-style: none; }
 
 /* ─── Tracker evidence integrity and responsive workflow ───── */
 .tracker-view-tabs {
-  display: grid;
-  grid-template-columns: repeat(3, max-content);
+  display: flex;
+  flex-wrap: nowrap;
   width: max-content;
   max-width: 100%;
+  overflow-x: auto;
 }
-.tracker-view-tabs button { white-space: normal; line-height: 1.25; }
+.tracker-view-tabs button { flex: 0 0 auto; white-space: nowrap; line-height: 1.25; }
 .tracker-chip.manual { border-color: color-mix(in srgb, var(--purple) 35%, var(--border)); }
 .paper-scope-heading,
 .journal-summary-heading,
@@ -3556,11 +3557,11 @@ body { line-height: 1.6; }
 
 /* Final cascade guards for Tracker's shared legacy primitives. */
 .analytics-tabs.tracker-view-tabs {
-  display: grid;
-  grid-template-columns: repeat(3, max-content);
+  display: flex;
+  flex-wrap: nowrap;
   width: max-content;
   max-width: 100%;
-  overflow: visible;
+  overflow-x: auto;
 }
 .stat-row.journal-kpis { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); }
 .tracker-page .bet-label { white-space: normal; overflow: visible; text-overflow: clip; overflow-wrap: anywhere; }
@@ -3570,8 +3571,7 @@ body { line-height: 1.6; }
 }
 
 @media (max-width: 620px) {
-  .analytics-tabs.tracker-view-tabs { grid-template-columns: 1fr 1fr; width: 100%; overflow: visible; }
-  .analytics-tabs.tracker-view-tabs button:last-child { grid-column: 1 / -1; }
+  .analytics-tabs.tracker-view-tabs { width: 100%; overflow-x: auto; }
   .stat-row.journal-kpis { grid-template-columns: 1fr 1fr; }
   .tracker-page .bet-form .form-row { display: grid; grid-template-columns: 1fr; gap: 12px; }
   .tracker-page .bet-form .form-group { width: 100%; }

@@ -32,6 +32,9 @@ from app.models.research import (
     ParameterSweepScan,
     SinglesLedgerSnapshot,
     BandMixScan,
+    BandMixPairState,
+    BandMixLifecycleEvent,
+    BandMixDailyPick,
 )
 
 __all__ = [
@@ -48,5 +51,5 @@ __all__ = [
     "ModelRun", "ModelLearningRun", "MarketLearningProfile", "ModelLearningPromotion", "StrongestSelectionSnapshot", "TicketGeneration", "AccumulatorTicket", "TicketSelection", "TicketResult",
     "AuditEvent", "ModelPerformance", "LeaguePerformance", "EdgeBandCalibration", "CorrelationCoefficient",
 "PipelineRun", "PipelineStageRun", "BacktestRun", "ParameterSweepScan",
-    "SinglesLedgerSnapshot", "BandMixScan",
+    "SinglesLedgerSnapshot", "BandMixScan", "BandMixPairState", "BandMixLifecycleEvent", "BandMixDailyPick",
 ]

@@ -494,6 +494,75 @@ class BandMixScan(Base):
     )
 
 
+class BandMixPairState(Base):
+    """Current research status for one Lohela × market band pair."""
+
+    __tablename__ = "band_mix_pair_states"
+    __table_args__ = (
+        UniqueConstraint("policy_version", "lohela_band", "market_band", name="uq_band_mix_pair_state"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    policy_version: Mapped[str] = mapped_column(String(40), nullable=False, index=True)
+    lohela_band: Mapped[str] = mapped_column(String(20), nullable=False)
+    market_band: Mapped[str] = mapped_column(String(20), nullable=False)
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="inactive")
+    first_promoted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_evaluated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    last_evidence_through: Mapped[date] = mapped_column(Date, nullable=False)
+    last_sample_size: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    last_roi: Mapped[float | None] = mapped_column(Float, nullable=True)
+    last_reason: Mapped[str | None] = mapped_column(String(40), nullable=True)
+
+
+class BandMixLifecycleEvent(Base):
+    """Append-only daily status evidence for a band pair."""
+
+    __tablename__ = "band_mix_lifecycle_events"
+    __table_args__ = (
+        UniqueConstraint("target_date", "policy_version", "lohela_band", "market_band", name="uq_band_mix_lifecycle_day"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    target_date: Mapped[date] = mapped_column(Date, nullable=False, index=True)
+    evidence_through: Mapped[date] = mapped_column(Date, nullable=False)
+    policy_version: Mapped[str] = mapped_column(String(40), nullable=False)
+    lohela_band: Mapped[str] = mapped_column(String(20), nullable=False)
+    market_band: Mapped[str] = mapped_column(String(20), nullable=False)
+    status: Mapped[str] = mapped_column(String(20), nullable=False)
+    transition: Mapped[str] = mapped_column(String(24), nullable=False)
+    sample_size: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    roi: Mapped[float | None] = mapped_column(Float, nullable=True)
+    reason: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+
+class BandMixDailyPick(Base):
+    """Immutable pick-time snapshot plus mutable settlement status."""
+
+    __tablename__ = "band_mix_daily_picks"
+    __table_args__ = (
+        UniqueConstraint("target_date", "prediction_id", name="uq_band_mix_daily_pick"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    target_date: Mapped[date] = mapped_column(Date, nullable=False, index=True)
+    prediction_id: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
+    match_id: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
+    lohela_band: Mapped[str] = mapped_column(String(20), nullable=False)
+    market_band: Mapped[str] = mapped_column(String(20), nullable=False)
+    mix_roi: Mapped[float | None] = mapped_column(Float, nullable=True)
+    mix_sample_size: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    result: Mapped[str | None] = mapped_column(String(12), nullable=True)
+    settled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    payload: Mapped[dict] = mapped_column(JSON, nullable=False)
+    captured_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+
 class ParameterSweepScan(Base):
     """Frozen daily result of the dynamic odds-policy research sweep.
 

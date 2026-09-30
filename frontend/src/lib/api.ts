@@ -319,7 +319,23 @@ export interface BandMixSummary {
   profit_loss: number; roi: number | null
 }
 
-export interface BandMixSelections { scan: BandMixScan; summary: BandMixSummary; rows: BandMixPick[] }
+export interface BandMixLifecycleEvent {
+  lohela_band: string
+  market_band: string
+  status: 'active' | 'inactive'
+  transition: 'promoted' | 'demoted' | 'unchanged' | 'initial_inactive'
+  sample_size: number
+  roi: number | null
+  reason: string | null
+}
+
+export interface BandMixSelections {
+  scan: BandMixScan
+  lifecycle_events?: BandMixLifecycleEvent[]
+  ledger_backed?: boolean
+  summary: BandMixSummary
+  rows: BandMixPick[]
+}
 
 export async function fetchBandMixSelections(date: string): Promise<BandMixSelections> {
   const res = await fetch(`/api/v1/selections/band-mix?${new URLSearchParams({ date })}`)

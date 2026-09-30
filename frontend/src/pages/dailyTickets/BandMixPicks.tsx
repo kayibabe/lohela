@@ -61,6 +61,8 @@ export function BandMixPicks({
   }, [data, rejectedRows]);
 
   const activeWatch = scan?.watchlist.filter((mix) => mix.active).length ?? 0;
+  const promoted = data?.lifecycle_events?.filter((event) => event.transition === "promoted").length ?? 0;
+  const demoted = data?.lifecycle_events?.filter((event) => event.transition === "demoted").length ?? 0;
   const settled = picks.filter(({ row }) => row.result === "won" || row.result === "lost");
   const wins = settled.filter(({ row }) => row.result === "won").length;
   const pnl = settled.reduce((sum, { row }) => sum + (row.result === "won" ? row.odds - 1 : -1), 0);
@@ -101,6 +103,7 @@ export function BandMixPicks({
               {scan.rules.min_roi == null
                 ? " This is a legacy frozen scan using its original criteria."
                 : <> A pair joins with at least {scan.rules.min_sample} results and ROI of at least {pct(scan.rules.min_roi)}. Recent ROI covers the last {scan.rules.recent_window_days} days. One qualifying selection is shown per match.</>}
+              {data.ledger_backed && <> Daily match output is recorded in the research ledger. {promoted} promoted, {demoted} demoted today.</>}
             </span>
           </div>
 

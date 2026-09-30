@@ -396,10 +396,14 @@ def settle_results(
                 result = await SettlementService(db).settle_finished_matches(
                     source=f"automatic_{trigger_source}", since=period_start
                 )
+                from app.services.band_mix_picks import refresh_band_mix_ledger
+
+                band_mix_ledger_updated = await refresh_band_mix_ledger(db, since=period_start)
                 await db.commit()
                 report = {
                     **result,
                     "fixtures_refreshed": refreshed,
+                    "band_mix_ledger_updated": band_mix_ledger_updated,
                     "period_start": period_start.isoformat(),
                     "period_end": today.isoformat(),
                     "trigger_source": trigger_source,
