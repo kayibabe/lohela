@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import type { ParameterSweepPick, ParameterSweepSelections, SelectionSummary } from "../../lib/api";
 import { fetchParameterSweepSelections, formatKickoff, formatMarket, formatSelection } from "../../lib/api";
+import { useSortableRows } from "../../components/SortableTable";
 import { accumulatorBlockers, gradeTone, reasonLabel } from "./helpers";
 
 const pct = (value: number | null | undefined) => value == null ? "—" : `${(value * 100).toFixed(1)}%`;
@@ -96,12 +97,21 @@ export function ParameterSweepPicks({
 }
 
 function SweepTable({ rows, onSelect, onAdd }: { rows: ParameterSweepPick[]; onSelect: (row: SelectionSummary) => void; onAdd: (row: SelectionSummary) => void }) {
+  const { sorted, header } = useSortableRows(rows, {
+    kickoff: row => new Date(row.kickoff_at).getTime(),
+    match: row => `${row.home_team} ${row.away_team} ${row.competition}`,
+    market: row => `${formatMarket(row.market)} ${formatSelection(row.selection)}`,
+    probability: row => row.model_probability,
+    odds: row => row.odds,
+    qScore: row => row.q_score,
+  });
+
   return (
     <div className="analytics-table-wrap">
       <table className="analytics-table band-mix-table">
         <caption className="sr-only">Matches selected by the dynamic odds policy</caption>
-        <thead><tr><th>Kickoff</th><th>Match / league</th><th>Market</th><th>Probability</th><th>Odds</th><th>Q-score</th><th>Actions</th></tr></thead>
-        <tbody>{rows.map(row => {
+        <thead><tr>{header('kickoff', 'Kickoff')}{header('match', 'Match / league')}{header('market', 'Market')}{header('probability', 'Probability')}{header('odds', 'Odds')}{header('qScore', 'Q-score')}<th><span className="sr-only">Actions</span></th></tr></thead>
+        <tbody>{sorted.map(row => {
           const selection = toSelection(row);
           const blockers = accumulatorBlockers(selection);
           return <tr key={row.prediction_id}>
