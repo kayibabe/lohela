@@ -14,11 +14,13 @@ type Theme = 'dark' | 'light' | 'system'
 type ModulePage = 'tickets' | 'tracker' | 'analytics' | 'tools' | 'admin'
 type Page = ModulePage | 'login' | 'upgrade'
 
+// Keep primary navigation aligned to the user's decision loop. Utilities
+// remain routable for backwards compatibility, but are not a peer destination
+// to recommendations, evidence, and validation.
 const NAV: { id: ModulePage; label: string }[] = [
   { id: 'tickets',   label: 'Today'     },
-  { id: 'tracker',   label: 'Evidence'  },
-  { id: 'analytics', label: 'Validation'},
-  { id: 'tools',     label: 'Utilities' },
+  { id: 'tracker',   label: 'Track'     },
+  { id: 'analytics', label: 'Validate'  },
 ]
 
 const NAV_META: Record<ModulePage, { icon: string; hint: string }> = {
@@ -128,15 +130,16 @@ export default function App() {
         </div>
       </aside>
       <header className="app-header">
-        <div className="main-header-status">
-          <span className="research-status"><span className="status-dot" /> Paper research</span>
+        <div className="header-page-title">
+          <span className="research-status"><span className="status-dot" /> {page === 'tickets' ? 'Decision workspace' : isModulePage(page) ? NAV_META[page].hint : 'System'}</span>
           <button className="theme-btn" onClick={cycleTheme} title={`Theme: ${theme}`} aria-label={`Theme: ${theme}. Change theme`}>
             <span className="theme-auto">{theme === 'system' ? 'Auto' : theme}</span>
           </button>
         </div>
-        {isModulePage(page) && page !== 'tickets' && <div className="global-page-context"><strong>{NAV.find(item => item.id === page)?.label ?? 'System'}</strong><span>{NAV_META[page].hint}</span></div>}
-        <span className="global-updated">Updated {lastUpdated.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
-        <button className="global-refresh" onClick={() => { setLastUpdated(new Date()); window.location.reload() }} title="Refresh current page" aria-label="Refresh current page">↻ <span>Refresh</span></button>
+        <div className="header-refresh">
+          <span className="global-updated">Refreshed {lastUpdated.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+          <button className="global-refresh" onClick={() => { setLastUpdated(new Date()); window.location.reload() }} title="Refresh current page" aria-label="Refresh current page">↻ <span>Refresh</span></button>
+        </div>
         {page === 'tickets' && (
           <div className="date-nav">
             <button className="date-btn" onClick={() => nav(-1)} title="Previous day" aria-label="Previous day">‹</button>

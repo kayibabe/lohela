@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { useAuth } from "../../auth";
 import type { CustomAccumulator as ApiCustomAccumulator, DailyTickets, Leg, SelectionSummary, Ticket } from "../../lib/api";
 import {
   createCustomAccumulator,
@@ -31,6 +32,8 @@ import {
 import type { CustomAccumulator, DailyTab, DailyTicketsPageProps } from "./types";
 
 export default function DailyTicketsPage({ date }: DailyTicketsPageProps) {
+  const { user } = useAuth();
+  const isAdmin = user?.role === "admin";
   const [data, setData] = useState<DailyTickets | null>(null);
   const [rejected, setRejected] = useState<SelectionSummary[]>([]);
   const [matches, setMatches] = useState<SelectionSummary[]>([]);
@@ -308,14 +311,8 @@ export default function DailyTicketsPage({ date }: DailyTicketsPageProps) {
         {data && (
           <div className="meta-context" aria-label="Publication context">
             <span className="meta-pool">
-              {data.qualified_pool} generation candidate legs
+              {data.qualified_pool} candidates
             </span>
-            {data.generation_status && (
-              <span>Generation {data.generation_status}</span>
-            )}
-            {data.pipeline_status && (
-              <span>Pipeline {data.pipeline_status}</span>
-            )}
             {latestPublication && (
               <span>
                 Published{" "}
@@ -331,8 +328,8 @@ export default function DailyTicketsPage({ date }: DailyTicketsPageProps) {
           </div>
         )}
         <div className="tickets-banner-actions">
-          <div className="ticket-analysis-control">
-            <span className="action-group-label">Stake analysis</span>
+          <details className="ticket-analysis-control">
+            <summary>Plan stake</summary>
             <label className="bankroll-input">
               Bankroll{" "}
               <input
@@ -344,8 +341,8 @@ export default function DailyTicketsPage({ date }: DailyTicketsPageProps) {
                 placeholder="e.g. 1000"
               />
             </label>
-          </div>
-          <div className="ticket-operations-control">
+          </details>
+          {isAdmin && <div className="ticket-operations-control">
             <span className="action-group-label">Operations</span>
             <div>
               <button
@@ -365,7 +362,7 @@ export default function DailyTicketsPage({ date }: DailyTicketsPageProps) {
                 {settlementRunning ? "Queuing…" : "↻ Settle Recent Results"}
               </button>
             </div>
-          </div>
+          </div>}
         </div>
       </div>
       {operationMessage && (
