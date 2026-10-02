@@ -3017,6 +3017,24 @@ th[aria-sort="descending"] .table-sort span,
 }
 .ticket-operations-control > div { display: flex; gap: 8px; }
 
+/* Keep publication context and operations readable when the header gets tight. */
+.meta-bar { align-items: flex-start; }
+.meta-context {
+  flex: 1 1 260px;
+  min-width: 0;
+  flex-wrap: wrap;
+  row-gap: 4px;
+  white-space: normal;
+  line-height: 1.35;
+}
+.tickets-banner-actions {
+  min-width: 0;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: flex-end;
+}
+.ticket-operations-control > div { flex-wrap: wrap; }
+
 .publication-diagnostics {
   margin-bottom: 16px;
   padding: 18px;
@@ -3196,6 +3214,16 @@ th[aria-sort="descending"] .table-sort span,
 .paper-toolbar .filter-tab { text-transform: capitalize; }
 .paper-toolbar .filter-tab { display: inline-flex; align-items: center; gap: 7px; }
 .paper-toolbar .filter-tab-outcomes { display: inline-flex; gap: 4px; color: var(--muted); font-size: 10px; font-weight: 700; line-height: 1; }
+.paper-toolbar .filter-tab {
+  flex: 0 0 auto;
+  min-width: max-content;
+  gap: 8px;
+  padding-inline: 12px;
+}
+.paper-toolbar .filter-tab > span,
+.paper-toolbar .filter-tab-outcomes,
+.paper-toolbar .filter-tab-outcomes b { white-space: nowrap; }
+.paper-toolbar .filter-tab-outcomes { flex: 0 0 auto; gap: 6px; }
 .paper-toolbar .filter-tab-outcomes b { font-weight: 800; }
 .paper-toolbar .filter-tab-outcomes .won { color: var(--positive); }
 .paper-toolbar .filter-tab-outcomes .lost { color: var(--negative); }
