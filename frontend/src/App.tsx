@@ -105,7 +105,7 @@ export default function App() {
     <div className="app">
       <aside className="app-sidebar">
         <a className="brand" href="/" aria-label="Lohela home" onClick={(event) => { event.preventDefault(); goTo('tickets') }}>
-          <img className="brand-logo" src="/lohela-logo.svg" alt="" />
+          <img className="brand-logo" src="/lohela-mark.png" alt="" />
           <span className="brand-copy">
             <span className="brand-name">Lohela</span>
             <span className="brand-tagline">Intelligence beyond numbers</span>

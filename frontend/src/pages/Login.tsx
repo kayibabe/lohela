@@ -33,7 +33,7 @@ export default function LoginPage({ onSuccess }: { onSuccess: () => void }) {
         </div>
         <div className="auth-form-panel">
           <a className="auth-card-brand" href="/" aria-label="Lohela home">
-            <img src="/lohela-logo.svg" alt="" />
+            <img src="/lohela-mark.png" alt="" />
             <span><small>Intelligence beyond numbers</small></span>
           </a>
           <h2 id="auth-page-title">{mode === 'login' ? 'Sign in to Lohela' : 'Create your free account'}</h2>
