@@ -799,9 +799,11 @@ body {
 .stake-simulator strong { display: block; font-size: 15px; }
 .stake-simulator p { margin-top: 4px; color: var(--muted); font-size: 10px; }
 .stake-simulator-copy { grid-column: 1 / -1; min-width: 0; }
-.paper-ticket-type-filter { display: flex; gap: 3px; max-width: 100%; margin-top: 12px; overflow-x: auto; scrollbar-width: none; background: var(--surface2); border: 1px solid var(--border); border-radius: var(--r-sm); padding: 3px; }
+.paper-ticket-type-filter { display: flex; gap: 8px; max-width: 100%; margin-top: 12px; overflow-x: auto; scrollbar-width: none; }
 .paper-ticket-type-filter::-webkit-scrollbar { display: none; }
-.paper-ticket-type-filter .filter-tab { display: inline-flex; align-items: center; flex: 0 0 auto; min-width: max-content; gap: 7px; padding-inline: 12px; }
+.paper-ticket-type-filter .filter-tab { display: inline-flex; align-items: center; flex: 0 0 auto; min-width: max-content; gap: 7px; padding: 7px 12px; border: 1px solid var(--border); border-radius: var(--r-sm); background: var(--surface); box-shadow: var(--shadow-sm); cursor: pointer; }
+.paper-ticket-type-filter .filter-tab:hover { border-color: color-mix(in srgb, var(--accent) 45%, var(--border)); background: var(--surface2); }
+.paper-ticket-type-filter .filter-tab.active { border-color: color-mix(in srgb, var(--accent) 45%, var(--border)); background: var(--accent-bg); color: var(--accent); box-shadow: var(--shadow-sm); }
 .paper-ticket-type-filter .filter-tab > span,
 .paper-ticket-type-filter .filter-tab-outcomes,
 .paper-ticket-type-filter .filter-tab-outcomes b { white-space: nowrap; }
@@ -810,6 +812,13 @@ body {
 .paper-ticket-type-filter .filter-tab-outcomes .won { color: var(--positive); }
 .paper-ticket-type-filter .filter-tab-outcomes .lost { color: var(--negative); }
 .paper-ticket-type-filter .filter-tab-outcomes .void { color: var(--warning); }
+.stake-simulator-filter-controls { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); align-items: end; gap: 14px; min-width: 0; }
+.stake-simulator-filter-controls label { display: grid; gap: 4px; color: var(--muted); font-size: 11px; font-weight: 800; }
+.stake-simulator-filter-controls select,
+.stake-simulator-filter-controls input { width: 100%; min-width: 0; height: 34px; padding: 0 9px; border: 1px solid var(--border); border-radius: var(--r-sm); background: var(--surface); color: var(--text2); font: inherit; outline: none; }
+.stake-simulator-filter-controls select { padding-right: 28px; }
+.stake-simulator-filter-controls select:focus,
+.stake-simulator-filter-controls input:focus { border-color: var(--accent); }
 .stake-simulator label { display: flex; flex-direction: column; gap: 5px; color: var(--muted); font-size: 9px; font-weight: 800; text-transform: uppercase; }
 .stake-simulator input { height: 34px; padding: 0 9px; border: 1px solid var(--border); border-radius: var(--r-sm); background: var(--surface); color: var(--text); outline: none; }
 .stake-simulator input:focus { border-color: var(--accent); }
@@ -820,6 +829,7 @@ body {
 .stake-simulator-metrics span { overflow: hidden; color: var(--muted); font-size: 9px; text-overflow: ellipsis; text-transform: uppercase; letter-spacing: .08em; white-space: nowrap; }
 .stake-simulator-metrics strong { font-size: 15px; }
 @media (max-width: 760px) { .stake-simulator { grid-template-columns: 1fr; gap: 12px; } }
+@media (max-width: 760px) { .stake-simulator-filter-controls { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 520px) { .stake-simulator-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; } }
 
 .leg-outcome {
