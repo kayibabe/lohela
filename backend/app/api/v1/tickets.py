@@ -34,6 +34,7 @@ PUBLIC_TICKET_TYPES = list(BUILDER_PUBLIC_TICKET_TYPES)
 TICKET_NAMES = {
     TicketType.SAFE: "Conservative",
     TicketType.BALANCED: "Balanced",
+    TicketType.HIGH_ODDS: "High Odds",
     TicketType.BEST_VALUE: "Best Value",
 }
 
@@ -143,6 +144,7 @@ class DailyTicketsOut(BaseModel):
     pipeline_error: Optional[str] = None
     conservative: Optional[TicketOut]
     balanced: Optional[TicketOut]
+    high_odds: Optional[TicketOut]
     best_value: Optional[TicketOut]
     superseded_versions: list[TicketHistoryOut] = Field(default_factory=list)
 
@@ -325,6 +327,7 @@ async def get_daily_tickets(
         ),
         conservative=mapped.get(TicketType.SAFE),
         balanced=mapped.get(TicketType.BALANCED),
+        high_odds=mapped.get(TicketType.HIGH_ODDS),
         best_value=mapped.get(TicketType.BEST_VALUE),
         superseded_versions=superseded,
     )

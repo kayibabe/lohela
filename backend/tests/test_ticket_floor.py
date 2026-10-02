@@ -209,7 +209,7 @@ def test_resolve_horizon_dates_extends_until_floor_then_stops(monkeypatch):
         n = len(horizon_dates or [])
         builds.append(n)
         tickets = [object() if i < counts[n] else None for i in range(2)]
-        return DailyTickets(target_date, 7, *tickets, None, 0)
+        return DailyTickets(target_date, 7, *tickets, None, None, 0)
 
     prepared, ingested = [], []
 
@@ -236,7 +236,7 @@ def test_resolve_horizon_dates_skips_a_failed_day_and_noops_on_full_day(monkeypa
     async def fake_build(self, target_date, model_run_id=None, research_min_qscore=None, horizon_dates=None):
         n = len(horizon_dates or [])
         tickets = [object() if n >= 1 else None for _ in range(2)]
-        return DailyTickets(target_date, 7, *tickets, None, 0)
+        return DailyTickets(target_date, 7, *tickets, None, None, 0)
 
     async def prepare(factory, day):
         if day == TARGET + timedelta(days=1):
@@ -254,7 +254,7 @@ def test_resolve_horizon_dates_skips_a_failed_day_and_noops_on_full_day(monkeypa
     assert any(r.get("error") == "odds API down" for r in reports)
 
     async def full_build(self, target_date, model_run_id=None, research_min_qscore=None, horizon_dates=None):
-        return DailyTickets(target_date, 7, object(), object(), None, 0)
+        return DailyTickets(target_date, 7, object(), object(), None, None, 0)
 
     async def must_not_run(*args, **kwargs):
         raise AssertionError("horizon work on a full day")

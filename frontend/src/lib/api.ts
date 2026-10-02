@@ -77,6 +77,7 @@ export interface DailyTickets {
   pipeline_error: string | null
   conservative: Ticket | null
   balanced: Ticket | null
+  high_odds: Ticket | null
   best_value: Ticket | null
   superseded_versions: TicketHistoryItem[]
 }

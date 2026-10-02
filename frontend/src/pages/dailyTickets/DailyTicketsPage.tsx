@@ -226,12 +226,13 @@ export default function DailyTicketsPage({ date }: DailyTicketsPageProps) {
   }
 
   // Best Value is a protected research stream. Keep all public-page status,
-  // publication metadata and cards scoped to the two release tiers even when
+  // publication metadata and cards scoped to the public release tiers even when
   // an authenticated research response happens to contain that stream.
   const publicPublishedTickets = data
     ? [
         data.conservative,
         data.balanced,
+        data.high_odds,
       ].filter((ticket): ticket is Ticket => ticket != null)
     : [];
   const publicationTimes = publicPublishedTickets
@@ -285,14 +286,20 @@ export default function DailyTicketsPage({ date }: DailyTicketsPageProps) {
     {
       key: "conservative" as const,
       name: "Conservative",
-      desc: fairPriced ? "Most likely ticket · 3–4 legs · 1.8–3.2×" : "Q ≥85 · 3–6 legs · 3–5×",
+      desc: fairPriced ? "Most likely ticket · 3–4 legs · 2.0–3.0×" : "Q ≥85 · 3–6 legs · 3–5×",
       color: "var(--conservative)",
     },
     {
       key: "balanced" as const,
       name: "Balanced",
-      desc: fairPriced ? "Most likely ticket · 3–5 legs · 3.2–6.5×" : "Q ≥80 · 60% Grade A/A+",
+      desc: fairPriced ? "Most likely ticket · 3–5 legs · 3.0–5.0×" : "Q ≥80 · 60% Grade A/A+",
       color: "var(--balanced)",
+    },
+    {
+      key: "high_odds" as const,
+      name: "High Odds",
+      desc: fairPriced ? "Higher-risk ticket · 2–8 legs · 5.0×+" : "Higher-risk research ticket",
+      color: "var(--high-odds)",
     },
   ];
 

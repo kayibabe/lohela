@@ -32,8 +32,8 @@ No calibration can make these tickets beat the market.
   at the de-vigged market probability. Pairs are normalised, 1X2 is
   normalised over three outcomes, and double chance is derived from it. The
   model's number is kept as `raw_model_probability` for audit.
-- `MARKET_TICKET_SPECS`: Conservative (3–4 legs, combined 1.8–3.2), Balanced
-  (3–5, 3.2–6.5), Aggressive (4–6, 6.5–16). The objective is the most likely
+- `MARKET_TICKET_SPECS`: Conservative (3–4 legs, combined 2.0–3.0), Balanced
+  (3–5, 3.0–5.0), and High Odds (2–8 legs, combined 5.0+). The objective is the most likely
   ticket in the band, traded against margin: `log(p) + EV`.
 - The gates now judge the price and the data: a fair price exists, the odds
   are in the tier's leg band, the margin is at most `max_leg_margin` (7%), the

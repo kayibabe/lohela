@@ -18,6 +18,7 @@ from sqlalchemy import select, text
 
 from app.database import AsyncSessionLocal
 from app.models import AccumulatorTicket, Match, Prediction, SelectionResult, TicketSelection, TicketStatus, TicketType
+from app.services.accumulator_builder import PUBLIC_TICKET_TYPES
 
 
 def _utc(value: datetime) -> datetime:
@@ -118,7 +119,7 @@ async def run(since: date) -> dict:
             .join(Match, Match.id == TicketSelection.match_id)
             .where(AccumulatorTicket.pricing == "market",
                    AccumulatorTicket.target_date >= since,
-                   AccumulatorTicket.ticket_type.in_((TicketType.SAFE, TicketType.BALANCED)),
+                   AccumulatorTicket.ticket_type.in_(PUBLIC_TICKET_TYPES),
                    AccumulatorTicket.status.in_((TicketStatus.PUBLISHED, TicketStatus.SETTLED,
                                                  TicketStatus.VOID)))
             .order_by(AccumulatorTicket.published_at, TicketSelection.id)

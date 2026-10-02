@@ -55,7 +55,7 @@ class TicketPublisher:
             raise ValueError("No completed model run exists for the requested date")
         await self._validate_pipeline_context(pipeline_run_id, target_date, built.model_run_id)
 
-        public_tickets = [built.conservative, built.balanced]
+        public_tickets = [built.conservative, built.balanced, built.high_odds]
         missing_public_types = [
             ticket_type.value
             for ticket_type, candidate in zip(PUBLIC_TICKET_TYPES, public_tickets)

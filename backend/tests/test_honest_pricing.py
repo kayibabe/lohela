@@ -118,7 +118,7 @@ def test_market_build_produces_public_tiers_inside_their_bands_with_honest_numbe
     built = asyncio.run(_builder(_slate()).build(TARGET))
     assert built.selection_diagnostics["pricing"]["source"] == "market"
     assert "aggressive" not in built.selection_diagnostics
-    tickets = {t.ticket_type: t for t in (built.conservative, built.balanced)}
+    tickets = {t.ticket_type: t for t in (built.conservative, built.balanced, built.high_odds)}
     assert all(tickets.values())
     for ticket_type, ticket in tickets.items():
         spec = SPEC[ticket_type]
@@ -137,6 +137,15 @@ def test_market_build_produces_public_tiers_inside_their_bands_with_honest_numbe
     match_sets = [{leg.match_id for leg in ticket.legs} for ticket in tickets.values()]
     assert all(len(left & right) <= 1 for i, left in enumerate(match_sets)
                for right in match_sets[i + 1:])
+
+
+def test_market_ticket_ranges_include_requested_high_odds_tier():
+    assert SPEC[TicketType.SAFE].min_combined_odds == 2.0
+    assert SPEC[TicketType.SAFE].max_combined_odds == 3.0
+    assert SPEC[TicketType.BALANCED].min_combined_odds == 3.0
+    assert SPEC[TicketType.BALANCED].max_combined_odds == 5.0
+    assert SPEC[TicketType.HIGH_ODDS].min_combined_odds == 5.0
+    assert math.isinf(SPEC[TicketType.HIGH_ODDS].max_combined_odds)
 
 
 def test_market_overlap_limit_keeps_unbuildable_tier_empty():

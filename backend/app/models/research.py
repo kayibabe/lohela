@@ -35,6 +35,7 @@ class RunStatus(str, enum.Enum):
 class TicketType(str, enum.Enum):
     SAFE = "safe"
     BALANCED = "balanced"
+    HIGH_ODDS = "high_odds"
     BEST_VALUE = "best_value"
 
 

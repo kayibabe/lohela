@@ -174,9 +174,12 @@ class Settings(BaseSettings):
     # public tiers, in bounded steps, until this floor is met or the relaxation
     # ladder is exhausted — see accumulator_builder._RELAXATION_STEPS.
     ticket_relaxation_enabled: bool = True
-    # The public daily portfolio targets both public tiers (Conservative and
-    # Balanced). Missing tiers remain visible as PARTIAL rather than being
+    # The public daily portfolio targets the public tiers. Missing tiers remain
+    # visible as PARTIAL rather than being
     # fabricated or replaced by history.
+    # The two core tiers remain the minimum daily publication floor. High Odds
+    # is published whenever the slate can support it, but does not block the
+    # day's conservative/balanced release when it cannot.
     min_daily_public_tickets: int = 2
     # How ticket legs are priced. "market" (default since 2026-09-23): the
     # bookmaker's de-vigged probability — on both the frozen production

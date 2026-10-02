@@ -76,17 +76,23 @@ TICKET_SPECS: tuple[TicketSpec, ...] = (
 # probability, Q-score/edge (model judgements) no longer gate selection, and
 # each tier is the most likely ticket inside its odds band.
 MARKET_TICKET_SPECS: tuple[TicketSpec, ...] = (
-    TicketSpec(TicketType.SAFE, "Conservative", 3, 4, 1.8, 3.2, 0.0, 0.0, 1, 0.30, 0.05,
+    TicketSpec(TicketType.SAFE, "Conservative", 3, 4, 2.0, 3.0, 0.0, 0.0, 1, 0.30, 0.05,
                pricing="market", min_leg_odds=1.20, max_leg_odds=1.65),
-    TicketSpec(TicketType.BALANCED, "Balanced", 3, 5, 3.2, 6.5, 0.0, 0.0, 1, 0.14, 0.10,
+    TicketSpec(TicketType.BALANCED, "Balanced", 3, 5, 3.0, 5.0, 0.0, 0.0, 1, 0.14, 0.10,
                pricing="market", min_leg_odds=1.25, max_leg_odds=2.30),
+    TicketSpec(TicketType.HIGH_ODDS, "High Odds", 2, 8, 5.0, math.inf, 0.0, 0.0, 1, 0.0, 0.10,
+               pricing="market", min_leg_odds=1.30, max_leg_odds=5.00),
     TicketSpec(TicketType.BEST_VALUE, "Best Value", 2, 5, 2.0, 12.0, 0.0, 0.0, 1, 0.0, 0.10, True,
                pricing="market", min_leg_odds=1.20, max_leg_odds=4.00),
 )
 
 
 # Tiers published to users; BEST_VALUE is internal research only.
-PUBLIC_TICKET_TYPES: tuple[TicketType, ...] = (TicketType.SAFE, TicketType.BALANCED)
+PUBLIC_TICKET_TYPES: tuple[TicketType, ...] = (
+    TicketType.SAFE,
+    TicketType.BALANCED,
+    TicketType.HIGH_ODDS,
+)
 
 
 def active_ticket_specs() -> tuple[TicketSpec, ...]:
@@ -222,6 +228,7 @@ class DailyTickets:
     model_run_id: int | None
     conservative: Optional[Ticket]
     balanced: Optional[Ticket]
+    high_odds: Optional[Ticket]
     best_value: Optional[Ticket]
     qualified_pool: int
     selection_diagnostics: dict[str, dict] = field(default_factory=dict)
@@ -255,7 +262,7 @@ class AccumulatorBuilder:
         td = target_date or cat_today()
         run = await self._resolve_model_run(td, model_run_id)
         if run is None:
-            return DailyTickets(td, None, None, None, None, 0, {})
+            return DailyTickets(td, None, None, None, None, None, 0, {})
 
         # Research Q-score sweeps are model-edge experiments by definition.
         specs = TICKET_SPECS if research_min_qscore is not None else active_ticket_specs()
@@ -268,7 +275,9 @@ class AccumulatorBuilder:
             learning.get("base_model_version") or learning.get("requested_model_version"),
         )
         coefficients = await self._load_correlation_coefficients()
-        output: dict[TicketType, Ticket | None] = {}
+        output: dict[TicketType, Ticket | None] = {
+            ticket_type: None for ticket_type in (*PUBLIC_TICKET_TYPES, TicketType.BEST_VALUE)
+        }
         diagnostics: dict[str, dict] = {"pricing": {"source": pricing}}
         for spec in specs:
             effective_spec = spec
@@ -348,6 +357,7 @@ class AccumulatorBuilder:
             run.id,
             output[TicketType.SAFE],
             output[TicketType.BALANCED],
+            output.get(TicketType.HIGH_ODDS),
             output[TicketType.BEST_VALUE],
             len(pool),
             diagnostics,
@@ -382,8 +392,8 @@ class AccumulatorBuilder:
         # CONSERVATIVE first and keep whichever fills more tiers (ties keep the
         # original order).
         orders = (
-            (TicketType.BALANCED, TicketType.SAFE),
-            (TicketType.SAFE, TicketType.BALANCED),
+            (TicketType.BALANCED, TicketType.SAFE, TicketType.HIGH_ODDS),
+            (TicketType.HIGH_ODDS, TicketType.BALANCED, TicketType.SAFE),
         )
         best: dict[TicketType, Ticket | None] | None = None
         for order in orders:
@@ -417,10 +427,18 @@ class AccumulatorBuilder:
         target_date: date | None,
     ) -> None:
         published = _public_count(output)
-        for ticket_type in (t for t in order if output[t] is None):
+        for ticket_type in (t for t in order if output.get(t) is None):
             if published >= settings.min_daily_public_tickets:
                 break
-            base_spec = next(item for item in active_ticket_specs() if item.ticket_type == ticket_type)
+            base_spec = next(
+                (item for item in active_ticket_specs() if item.ticket_type == ticket_type),
+                None,
+            )
+            # The high-odds tier is intentionally defined for honest market
+            # pricing only. Research/model-pricing builds retain the public
+            # output slot but must not fail while trying to relax it.
+            if base_spec is None:
+                continue
             for level in range(first_level, len(_RELAXATION_STEPS) + 1):
                 relaxed_spec = _relax_spec(base_spec, level) if level else base_spec
                 eligible = [

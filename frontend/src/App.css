@@ -25,6 +25,7 @@
   /* Tier colours */
   --conservative: #059669;
   --balanced:     #1456a0;
+  --high-odds:    #7c3aed;
   --purple:       #1456a0;
   --amber:        #d97706;
 
@@ -2059,7 +2060,7 @@ th[aria-sort="descending"] .table-sort span,
   font-size: 12px;
 }
 
-.public-ticket-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.public-ticket-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 
 .relaxed-badge {
   border: 1px solid color-mix(in srgb, var(--warning) 45%, transparent);
