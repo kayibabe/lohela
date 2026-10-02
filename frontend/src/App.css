@@ -319,8 +319,10 @@ ul { list-style: none; }
 }
 
 .brand-logo {
-  width: 29px;
-  height: 29px;
+  width: 178px;
+  height: auto;
+  max-height: 62px;
+  object-fit: contain;
   display: block;
 }
 
@@ -2225,12 +2227,12 @@ th[aria-sort="descending"] .table-sort span,
 .auth-standalone .auth-page { min-height: 100dvh; width: 100%; box-sizing: border-box; }
 .auth-card { width: min(920px, 100%); max-width: 100%; overflow: hidden; border: 1px solid color-mix(in srgb, var(--border) 80%, transparent); border-radius: 24px; background: var(--surface); box-shadow: 0 28px 80px rgba(17, 41, 72, .16); }
 .auth-card-brand { display: inline-flex; align-items: center; gap: 10px; margin: 28px 0 6px 34px; color: var(--text); text-decoration: none; }
-.auth-card-brand img { width: 31px; height: 31px; }
+.auth-card-brand img { width: 31px; height: auto; }
 .auth-card-brand span { display: grid; gap: 2px; }
 .auth-card-brand strong { font-size: 16px; letter-spacing: -.02em; }
 .auth-card-brand small { color: var(--accent); font-size: 10px; }
 .auth-form-panel .auth-card-brand { align-self: center; flex-direction: column; align-items: center; gap: 9px; margin: 0 0 26px; text-align: center; }
-.auth-form-panel .auth-card-brand img { width: 58px; height: 58px; }
+.auth-form-panel .auth-card-brand img { width: min(100%, 260px); height: auto; }
 .auth-card-body { display: grid; grid-template-columns: .92fr 1.08fr; min-width: 0; }
 .auth-card-body > * { min-width: 0; }
 .auth-benefits { display: flex; flex-direction: column; justify-content: center; min-height: 480px; padding: 52px; background: linear-gradient(145deg, #0c4d91 0%, #1263b0 57%, #0a3f79 100%); color: #fff; position: relative; overflow: hidden; }
@@ -3379,7 +3381,7 @@ th[aria-sort="descending"] .table-sort span,
 .app { display: grid; grid-template-columns: 218px minmax(0, 1fr); grid-template-rows: auto 1fr; }
 .app-sidebar { grid-row: 1 / -1; display: flex; flex-direction: column; min-height: 100dvh; padding: 18px 12px 14px; background: var(--surface); border-right: 1px solid var(--border); }
 .app-sidebar .brand { display: flex; align-items: center; gap: 9px; padding: 0 9px 22px; border-bottom: 1px solid var(--border); }
-.app-sidebar .brand-logo { width: 28px; height: 28px; }
+.app-sidebar .brand-logo { width: 178px; max-width: 100%; height: auto; max-height: 62px; }
 .app-sidebar .brand-name { color: var(--text); }
 .app-sidebar .brand-copy { min-width: 0; }
 .app-sidebar .brand-tagline { color: var(--accent); white-space: normal; overflow-wrap: anywhere; line-height: 1.25; }
