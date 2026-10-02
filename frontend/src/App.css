@@ -3035,6 +3035,51 @@ th[aria-sort="descending"] .table-sort span,
 }
 .ticket-operations-control > div { flex-wrap: wrap; }
 
+/* Give the daily header a clear hierarchy: identity/actions first, context second. */
+.meta-bar {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas:
+    "identity actions"
+    "context context";
+  align-items: start;
+  column-gap: 24px;
+  row-gap: 14px;
+  padding-bottom: 4px;
+}
+.meta-bar > :first-child {
+  grid-area: identity;
+  min-width: 0;
+}
+.meta-context {
+  grid-area: context;
+  justify-content: flex-start;
+  margin-left: 0;
+  padding: 9px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  background: color-mix(in srgb, var(--surface2) 72%, var(--surface));
+  gap: 8px 18px;
+}
+.tickets-banner-actions {
+  grid-area: actions;
+  margin-left: 0;
+}
+
+@media (max-width: 760px) {
+  .meta-bar {
+    grid-template-columns: 1fr;
+    grid-template-areas:
+      "identity"
+      "actions"
+      "context";
+    row-gap: 12px;
+  }
+  .meta-context,
+  .tickets-banner-actions { width: 100%; }
+  .tickets-banner-actions { justify-content: flex-start; }
+}
+
 .publication-diagnostics {
   margin-bottom: 16px;
   padding: 18px;
