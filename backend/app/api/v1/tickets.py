@@ -262,10 +262,16 @@ async def get_daily_tickets(
         # below the configured publication minimum or failed. Historical rows
         # remain available through the history endpoint for audit.
         mapped = {}
+    # This supplemental history is returned alongside the public daily cards.
+    # It must observe the same entitlement boundary as ``rows`` above: an
+    # internal-only ticket is not harmless merely because its legs are redacted.
+    # Its existence, tier, hash and settlement state are research information.
+    visible_ticket_types = list(TicketType) if include_internal else list(PUBLIC_TICKET_TYPES)
     history_result = await db.execute(
         select(AccumulatorTicket)
         .where(
             AccumulatorTicket.target_date == target,
+            AccumulatorTicket.ticket_type.in_(visible_ticket_types),
             AccumulatorTicket.status.in_([TicketStatus.PUBLISHED, TicketStatus.SETTLED, TicketStatus.VOID]),
         )
         .options(selectinload(AccumulatorTicket.selections), selectinload(AccumulatorTicket.results))

@@ -50,4 +50,4 @@ EXPOSE 8000
 
 # Set CELERY_WORKER=1 on the Railway worker service to start the Celery
 # consumer instead of the API server. Both run from the same image.
-CMD ["sh", "-c", "if [ \"$CELERY_WORKER\" = '1' ]; then exec celery -A app.tasks.pipeline worker --loglevel=info; else exec python -m uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}; fi"]
+CMD ["sh", "-c", "if [ \"$CELERY_WORKER\" = '1' ]; then exec python scripts/worker_start.py; else exec python -m uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}; fi"]

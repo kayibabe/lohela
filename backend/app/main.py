@@ -82,6 +82,15 @@ async def lifespan(app: FastAPI):
         coalesce=True,
         max_instances=1,
     )
+    if settings.operational_monitor_enabled:
+        scheduler.add_job(
+            _trigger_operational_monitor,
+            IntervalTrigger(minutes=settings.operational_monitor_interval_minutes),
+            id="operational_monitor",
+            replace_existing=True,
+            coalesce=True,
+            max_instances=1,
+        )
     if settings.learning_shadow_schedule_enabled:
         scheduler.add_job(
             _trigger_shadow_learning,
@@ -233,6 +242,21 @@ async def _run_automation_watchdog(trigger_source: str):
         window.target_date,
         decision.reason,
     )
+
+
+async def _trigger_operational_monitor():
+    """Persist low-noise operational drift signals without changing decisions."""
+    if not settings.operational_monitor_enabled:
+        return
+    async with _scheduler_leadership("operational_monitor") as leader:
+        if not leader:
+            return
+        from app.services.operational_monitor import monitor_operational_health
+
+        async with AsyncSessionLocal() as db:
+            snapshot = await monitor_operational_health(db)
+            await db.commit()
+        logger.info("Operational monitor: %s", snapshot)
 
 
 @asynccontextmanager

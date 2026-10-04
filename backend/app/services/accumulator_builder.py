@@ -248,6 +248,7 @@ class AccumulatorBuilder:
         model_run_id: int | None = None,
         research_min_qscore: float | None = None,
         horizon_dates: list[date] | None = None,
+        market_policy_excluded_markets: frozenset[str] | None = None,
     ) -> DailyTickets:
         """Build the day's portfolio.
 
@@ -288,12 +289,16 @@ class AccumulatorBuilder:
             eligible = [
                 leg
                 for leg in pool
-                if not _research_market_rejection_reasons(leg, effective_spec)
+                if not _research_market_rejection_reasons(
+                    leg, effective_spec, market_policy_excluded_markets
+                )
                 and not selection_rejection_reasons(leg, effective_spec, calibration)
             ]
             rejection_counts: Counter[str] = Counter()
             for leg in pool:
-                rejection_counts.update(_research_market_rejection_reasons(leg, effective_spec))
+                rejection_counts.update(_research_market_rejection_reasons(
+                    leg, effective_spec, market_policy_excluded_markets
+                ))
                 rejection_counts.update(selection_rejection_reasons(leg, effective_spec, calibration))
             diagnostics[spec.ticket_type.value] = {
                 "pool_count": len(pool),
@@ -329,7 +334,9 @@ class AccumulatorBuilder:
 
         used_horizon: list[date] = []
         if research_min_qscore is None and settings.ticket_relaxation_enabled:
-            self._apply_minimum_ticket_relaxation(output, pool, calibration, coefficients)
+            self._apply_minimum_ticket_relaxation(
+                output, pool, calibration, coefficients, market_policy_excluded_markets=market_policy_excluded_markets
+            )
             if horizon_dates and _public_count(output) < settings.min_daily_public_tickets:
                 extended_pool = list(pool)
                 seen = {leg.prediction_id for leg in pool}
@@ -346,6 +353,7 @@ class AccumulatorBuilder:
                     self._apply_minimum_ticket_relaxation(
                         output, extended_pool, calibration, coefficients,
                         first_level=0, target_date=td,
+                        market_policy_excluded_markets=market_policy_excluded_markets,
                     )
                 diagnostics["horizon"] = {
                     "horizon_dates": [d.isoformat() for d in used_horizon],
@@ -373,6 +381,7 @@ class AccumulatorBuilder:
         *,
         first_level: int = 1,
         target_date: date | None = None,
+        market_policy_excluded_markets: frozenset[str] | None = None,
     ) -> None:
         """Seek `settings.min_daily_public_tickets` public tickets when the
         qualified pool and portfolio exposure limits can support them, by loosening the tightest gates (only) for
@@ -399,7 +408,8 @@ class AccumulatorBuilder:
         for order in orders:
             attempt = dict(output)
             self._fill_missing_public_tiers(
-                attempt, order, pool, calibration, coefficients, first_level, target_date
+                attempt, order, pool, calibration, coefficients, first_level, target_date,
+                market_policy_excluded_markets,
             )
             if best is None or _public_count(attempt) > _public_count(best):
                 best = attempt
@@ -425,6 +435,7 @@ class AccumulatorBuilder:
         coefficients: dict[tuple[str, str, str, int | None], float],
         first_level: int,
         target_date: date | None,
+        market_policy_excluded_markets: frozenset[str] | None,
     ) -> None:
         published = _public_count(output)
         for ticket_type in (t for t in order if output.get(t) is None):
@@ -443,7 +454,9 @@ class AccumulatorBuilder:
                 relaxed_spec = _relax_spec(base_spec, level) if level else base_spec
                 eligible = [
                     leg for leg in pool
-                    if not _research_market_rejection_reasons(leg, relaxed_spec)
+                    if not _research_market_rejection_reasons(
+                        leg, relaxed_spec, market_policy_excluded_markets
+                    )
                     and not selection_rejection_reasons(leg, relaxed_spec, calibration)
                 ]
                 prior_public = [
@@ -762,12 +775,18 @@ def _market_rejection_reasons(leg: Leg, spec: TicketSpec) -> list[str]:
     return reasons
 
 
-def _research_market_rejection_reasons(leg: Leg, spec: TicketSpec | None = None) -> list[str]:
+def _research_market_rejection_reasons(
+    leg: Leg,
+    spec: TicketSpec | None = None,
+    market_policy_excluded_markets: frozenset[str] | None = None,
+) -> list[str]:
     """Exclude restricted markets from generated paper tickets only.
 
     The restriction answers where the *model* lost; market-priced tiers don't
     use the model's opinion, so it doesn't apply to them."""
     if spec is not None and spec.pricing == "market":
+        if market_policy_excluded_markets and leg.market in market_policy_excluded_markets:
+            return ["MARKET_POLICY_SHADOW_EXCLUDED"]
         return []
     if leg.market in settings.research_restricted_markets:
         return ["MARKET_RESTRICTED_FOR_RESEARCH"]

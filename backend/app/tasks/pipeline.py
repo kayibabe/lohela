@@ -351,6 +351,17 @@ def generate_tickets(
                 "Model stage did not return a model_run_id; refusing unlinked publication"
             )
         result = _run_async(_run())
+        # This counterfactual is deliberately queued after the immutable
+        # control portfolio has committed. It does not sit in the daily chain,
+        # cannot delay publication, and cannot replace a public ticket.
+        if settings.market_policy_shadow_enabled:
+            try:
+                capture_market_policy_shadow.delay(target_date, model_run_id)
+            except Exception:
+                # Research must remain strictly non-blocking. A broker issue
+                # here cannot turn an already-persisted public publication
+                # into a failed/retried production pipeline.
+                logger.exception("Could not queue market-policy shadow for %s", target_date)
         status = RunStatus.COMPLETED if result["status"] == "completed" else RunStatus.PARTIAL
         _run_async(_track(pipeline_run_id, stages, status, details=result, input_count=result["qualified_pool"], output_count=result["published_tickets"]))
         return result
@@ -785,6 +796,33 @@ def capture_parameter_sweep(self):
     except Exception as exc:
         logger.exception("Parameter-policy scan failed")
         raise self.retry(exc=exc, countdown=600)
+
+
+@celery_app.task(name="pipeline.capture_market_policy_shadow", bind=True, max_retries=1)
+def capture_market_policy_shadow(self, target_date: str, model_run_id: int):
+    """Capture a non-publishing market-exclusion comparison after publication."""
+    from app.database import AsyncSessionLocal
+    from app.services.market_policy_shadow import capture_market_policy_shadow as capture
+
+    async def _run():
+        async with AsyncSessionLocal() as db:
+            row = await capture(db, date.fromisoformat(target_date), model_run_id)
+            await db.commit()
+            return {
+                "snapshot_id": row.id,
+                "target_date": target_date,
+                "model_run_id": model_run_id,
+                "mode": row.payload.get("mode"),
+                "control_unchanged": row.payload.get("control_unchanged"),
+            }
+
+    try:
+        result = _run_async(_run())
+        logger.info("Market-policy shadow captured: %s", result)
+        return result
+    except Exception as exc:
+        logger.exception("Market-policy shadow capture failed")
+        raise self.retry(exc=exc, countdown=300)
 
 
 @celery_app.task(name="pipeline.backup_database", bind=True, max_retries=2)

@@ -81,6 +81,15 @@ def test_market_gates_judge_price_and_data_not_the_model():
     assert "STALE_ODDS" in _market_rejection_reasons(stale, safe)
 
 
+def test_market_policy_shadow_excludes_markets_without_changing_control_rule():
+    safe = SPEC[TicketType.SAFE]
+    leg = market_priced(_leg(1, market="double_chance_1x"))
+    assert _research_market_rejection_reasons(leg, safe) == []
+    assert _research_market_rejection_reasons(
+        leg, safe, frozenset({"double_chance_1x"})
+    ) == ["MARKET_POLICY_SHADOW_EXCLUDED"]
+
+
 def _builder(legs):
     builder = AccumulatorBuilder(db=None)
 

@@ -153,6 +153,24 @@ class Settings(BaseSettings):
         "home_win",
         "double_chance_1x",
     ]
+    # The live market-priced portfolio deliberately remains unchanged. This
+    # list defines a *shadow-only* counterfactual that is captured separately
+    # for comparison; it can never filter, replace, or promote public tickets.
+    market_policy_shadow_excluded_markets: list[str] = [
+        "draw",
+        "under_2.5",
+        "under_3.5",
+        "home_win",
+        "double_chance_1x",
+    ]
+    market_policy_shadow_enabled: bool = True
+    # Authentication throttles are fail-open on an infrastructure outage so a
+    # Redis incident cannot lock legitimate users out of the product.
+    auth_rate_limit_window_seconds: int = 900
+    auth_login_rate_limit: int = 12
+    auth_register_rate_limit: int = 5
+    operational_monitor_enabled: bool = True
+    operational_monitor_interval_minutes: int = 15
     research_target_hit_rate: float = 0.80
     research_minimum_market_sample: int = 100
     # Published public tiers are alternatives, not duplicate exposure. A

@@ -18,6 +18,7 @@ from app.services.auth import (
     session_token_hash,
     verify_password,
 )
+from app.services.auth_rate_limit import enforce_auth_rate_limit
 
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -93,6 +94,7 @@ async def _record_event(request: Request, db: AsyncSession, *, user_id: int | No
 async def register(payload: RegisterCredentials, request: Request, response: Response, db: AsyncSession = Depends(get_db)):
     if not settings.auth_allow_registration:
         raise HTTPException(status_code=404, detail="Registration is disabled")
+    await enforce_auth_rate_limit(request, "register", settings.auth_register_rate_limit)
     email = normalize_email(payload.email)
     existing = await db.scalar(select(User).where(User.email == email))
     if existing:
@@ -111,6 +113,7 @@ async def register(payload: RegisterCredentials, request: Request, response: Res
 
 @router.post("/login", response_model=AuthResponse)
 async def login(payload: LoginCredentials, request: Request, response: Response, db: AsyncSession = Depends(get_db)):
+    await enforce_auth_rate_limit(request, "login", settings.auth_login_rate_limit)
     email = normalize_email(payload.email)
     user = await db.scalar(select(User).where(User.email == email))
     if not user or not verify_password(user.password_hash, payload.password):

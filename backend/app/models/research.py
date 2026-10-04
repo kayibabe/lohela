@@ -584,6 +584,30 @@ class ParameterSweepScan(Base):
     )
 
 
+class MarketPolicyShadowSnapshot(Base):
+    """Frozen, non-publishing comparison for a market-policy counterfactual."""
+
+    __tablename__ = "market_policy_shadow_snapshots"
+    __table_args__ = (
+        UniqueConstraint(
+            "target_date", "model_run_id", "policy_version",
+            name="uq_market_policy_shadow_snapshot",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    target_date: Mapped[date] = mapped_column(Date, nullable=False, index=True)
+    model_run_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("model_runs.id"), nullable=False, index=True
+    )
+    policy_version: Mapped[str] = mapped_column(String(80), nullable=False)
+    excluded_markets: Mapped[list] = mapped_column(JSON, default=list, nullable=False)
+    payload: Mapped[dict] = mapped_column(JSON, nullable=False)
+    captured_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+
 class BacktestRun(Base):
     __tablename__ = "backtest_runs"
 

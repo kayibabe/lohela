@@ -304,6 +304,14 @@ async def automation_alerts(
     }
 
 
+@router.get("/operational-status")
+async def operational_status(db=Depends(get_db)):
+    """Current decision-safety signals; this endpoint performs no repair."""
+    from app.services.operational_monitor import operational_snapshot
+
+    return await operational_snapshot(db)
+
+
 @router.post("/alerts/{alert_id}/resolve")
 async def resolve_alert(alert_id: int, db=Depends(get_db)):
     from app.services.automation_alerts import resolve_automation_alert

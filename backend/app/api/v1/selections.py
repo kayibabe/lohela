@@ -10,7 +10,7 @@ from pydantic import BaseModel
 
 from app.database import get_db
 from app.api.security import require_pro_access
-from app.models import BandMixPairState, Prediction, Match, MatchStatus, Team, Competition, Odds, ModelRun, RunStatus, TicketType
+from app.models import BandMixPairState, MarketPolicyShadowSnapshot, Prediction, Match, MatchStatus, Team, Competition, Odds, ModelRun, RunStatus, TicketType
 from app.config import cat_day_bounds_utc, cat_today
 from app.services.accumulator_builder import AccumulatorBuilder
 from app.services.band_mix_picks import (
@@ -290,6 +290,38 @@ async def get_band_mix_lifecycle(
             "last_roi": state.last_roi,
             "last_reason": state.last_reason,
         } for state in states],
+    }
+
+
+@router.get("/market-policy-shadow")
+async def get_market_policy_shadow(
+    date: Optional[date] = Query(default=None, description="Target date (default: today)"),
+    db: AsyncSession = Depends(get_db),
+):
+    """Return the frozen, non-publishing market-exclusion counterfactual."""
+    target = date or cat_today()
+    row = await db.scalar(
+        select(MarketPolicyShadowSnapshot)
+        .where(MarketPolicyShadowSnapshot.target_date == target)
+        .order_by(MarketPolicyShadowSnapshot.captured_at.desc())
+        .limit(1)
+    )
+    if row is None:
+        return {
+            "target_date": target.isoformat(),
+            "status": "not_captured",
+            "mode": "shadow_only",
+            "control_unchanged": True,
+        }
+    return {
+        "target_date": target.isoformat(),
+        "status": "captured",
+        "snapshot_id": row.id,
+        "model_run_id": row.model_run_id,
+        "policy_version": row.policy_version,
+        "excluded_markets": row.excluded_markets,
+        "captured_at": row.captured_at.isoformat(),
+        **row.payload,
     }
 
 
