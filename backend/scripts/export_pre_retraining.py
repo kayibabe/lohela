@@ -18,7 +18,7 @@ async def main():
         await db.execute(text("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY"))
         evidence["read_only"] = (await db.execute(text("SHOW transaction_read_only"))).scalar()
         for table in ("predictions", "accumulator_tickets", "ticket_selections", "ticket_results",
-                      "competitions", "teams"):
+                      "model_runs", "ticket_generations", "competitions", "teams"):
             evidence["tables"][table] = list((await db.execute(text(
                 f"SELECT row_to_json(t) FROM {table} t ORDER BY id"))).scalars())
         evidence["tables"]["matches"] = list((await db.execute(text(

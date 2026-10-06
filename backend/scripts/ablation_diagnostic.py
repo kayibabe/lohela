@@ -82,7 +82,10 @@ FALLBACK_CONTROL_WEIGHTS = {
 # Mirror of TICKET_SPECS in backend/app/services/accumulator_builder.py:55-59
 # (ticket_type -> min_q_score at full strength) and the relaxation floor at
 # accumulator_builder.py:75. Same fallback/verification approach as above.
-FULL_STRENGTH_MIN_Q = {'SAFE': 85.0, 'BALANCED': 80.0, 'BEST_VALUE': 85.0}
+FULL_STRENGTH_MIN_Q = {'SAFE': 85.0, 'BALANCED': 80.0}
+# Historical archive rows include the retired BEST_VALUE tier; retain its
+# archived threshold for replay without treating it as a live production tier.
+HISTORICAL_FULL_STRENGTH_MIN_Q = {**FULL_STRENGTH_MIN_Q, 'BEST_VALUE': 85.0}
 # Tiers retired from the system; their archived tickets are left out of the analysis.
 RETIRED_TICKET_TYPES = {'AGGRESSIVE'}
 RELAXATION_FLOOR_MIN_Q = 60.0
@@ -126,8 +129,8 @@ def ablation_a_weights(base):
             for k, v in base.items()}
 
 
-def ablation_b_weights(base, new_model_probability_weight=15.0):
-    """Rescale model_probability down (default 25 -> 15), redistribute the
+def ablation_b_weights(base, new_model_probability_weight=12.5):
+    """Rescale model_probability down (default 25 -> 12.5), redistribute the
     difference proportionally across the other 8 components (not zeroed --
     see scoping section 2, Q-ablation B: edge/EV are themselves derived
     from p, so a p-free ranking is not a validated baseline)."""
@@ -159,7 +162,7 @@ def rescored_q(prediction, weights):
 
 
 def gate_bounds(ticket_type, relaxed):
-    full = FULL_STRENGTH_MIN_Q[ticket_type]
+    full = HISTORICAL_FULL_STRENGTH_MIN_Q[ticket_type]
     if not relaxed:
         return full, full
     return RELAXATION_FLOOR_MIN_Q, full  # true relaxed threshold is unrecoverable (see docstring point 3)
