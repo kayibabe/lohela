@@ -200,7 +200,7 @@ export default function PaperLedger() {
     const expanded = expandedAccumulatorId === row.id
     return <article className={`paper-ledger-row daily-accumulator-inline${expanded ? ' expanded' : ''}`} key={`accumulator-${row.id}`}>
       <button className="paper-ticket-summary daily-accumulator-summary" onClick={() => setExpandedAccumulatorId(expanded ? null : row.id)} aria-expanded={expanded} aria-label={`${row.name} accumulator with ${row.legs.length} legs`}>
-        <div className="paper-ticket-identity"><span className="portfolio-tier accumulator">My accumulator</span><strong>{row.name}</strong><small>daily merge · {row.legs.length} legs · model snapshots</small></div>
+        <div className="paper-ticket-identity"><span className="portfolio-tier accumulator">{row.name}</span><small>daily merge · {row.legs.length} legs · model snapshots</small></div>
         <div><span>Odds</span><strong>{row.combined_odds.toFixed(2)}×</strong></div>
         <div><span>Legs</span><strong>{row.legs.length}</strong></div>
         <div title="Product of the immutable leg probability snapshots"><span>Adjusted P</span><strong>{metrics.combinedProbability == null ? '—' : pct(metrics.combinedProbability)}</strong></div>
