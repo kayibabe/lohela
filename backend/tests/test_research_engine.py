@@ -231,7 +231,7 @@ def test_thin_slate_relaxation_recovers_a_balanced_ticket():
     eligible_relaxed = [leg for leg in pool if not selection_rejection_reasons(leg, relaxed, None)]
     ticket = _find_best_ticket(eligible_relaxed, relaxed, {})
     assert ticket is not None
-    assert len(ticket.legs) == 4
+    assert len(ticket.legs) == 3
 
 
 def test_candidate_pool_tiebreak_uses_prediction_id_not_probability():

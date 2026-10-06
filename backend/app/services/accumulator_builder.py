@@ -37,6 +37,10 @@ _MIN_ACTIVE_MODELS = 3
 _BEAM_WIDTH = 800
 _CANDIDATE_LIMIT = 30
 _CONSERVATIVE_MIN_COMBINED_ODDS = 2.0
+_CONSERVATIVE_MAX_COMBINED_ODDS = 3.49
+_BALANCED_MIN_COMBINED_ODDS = 3.50
+_BALANCED_MAX_COMBINED_ODDS = 5.00
+_HIGH_ODDS_MIN_COMBINED_ODDS = 5.01
 
 
 @dataclass(frozen=True)
@@ -63,8 +67,8 @@ class TicketSpec:
 
 
 TICKET_SPECS: tuple[TicketSpec, ...] = (
-    TicketSpec(TicketType.SAFE, "Conservative", 3, 6, _CONSERVATIVE_MIN_COMBINED_ODDS, 5.0, 85.0, 1.0, 3, 0.0, 0.05),
-    TicketSpec(TicketType.BALANCED, "Balanced", 4, 7, 5.0, 10.0, 80.0, 0.60, 1, 0.0, 0.10),
+    TicketSpec(TicketType.SAFE, "Conservative", 2, 3, _CONSERVATIVE_MIN_COMBINED_ODDS, 5.0, 85.0, 1.0, 3, 0.0, 0.05),
+    TicketSpec(TicketType.BALANCED, "Balanced", 3, 3, 4.0, 10.0, 80.0, 0.60, 1, 0.0, 0.10),
 )
 
 # Honest "likely winners" tiers (settings.leg_probability_source == "market").
@@ -76,11 +80,11 @@ TICKET_SPECS: tuple[TicketSpec, ...] = (
 # probability, Q-score/edge (model judgements) no longer gate selection, and
 # each tier is the most likely ticket inside its odds band.
 MARKET_TICKET_SPECS: tuple[TicketSpec, ...] = (
-    TicketSpec(TicketType.SAFE, "Conservative", 3, 4, _CONSERVATIVE_MIN_COMBINED_ODDS, 3.0, 0.0, 0.0, 1, 0.30, 0.05,
+    TicketSpec(TicketType.SAFE, "Conservative", 2, 3, _CONSERVATIVE_MIN_COMBINED_ODDS, _CONSERVATIVE_MAX_COMBINED_ODDS, 0.0, 0.0, 1, 0.30, 0.05,
                pricing="market", min_leg_odds=1.20, max_leg_odds=1.65),
-    TicketSpec(TicketType.BALANCED, "Balanced", 3, 5, 3.0, 5.0, 0.0, 0.0, 1, 0.14, 0.10,
+    TicketSpec(TicketType.BALANCED, "Balanced", 3, 3, _BALANCED_MIN_COMBINED_ODDS, _BALANCED_MAX_COMBINED_ODDS, 0.0, 0.0, 1, 0.14, 0.10,
                pricing="market", min_leg_odds=1.25, max_leg_odds=2.30),
-    TicketSpec(TicketType.HIGH_ODDS, "High Odds", 2, 8, 5.0, math.inf, 0.0, 0.0, 1, 0.0, 0.10,
+    TicketSpec(TicketType.HIGH_ODDS, "High Odds", 2, 8, _HIGH_ODDS_MIN_COMBINED_ODDS, math.inf, 0.0, 0.0, 1, 0.0, 0.10,
                pricing="market", min_leg_odds=1.30, max_leg_odds=5.00),
 )
 
@@ -112,6 +116,9 @@ _RELAXATION_STEPS: tuple[dict, ...] = (
 )
 _RELAXATION_FLOOR_Q_SCORE = 60.0
 _RELAXATION_MAX_COMBINED_ODDS = 10.0
+# Relaxation is a supply fallback for the higher-risk internal tier only.
+# Conservative and Balanced remain full-strength-or-missing.
+_RELAXABLE_PUBLIC_TICKET_TYPES = frozenset({TicketType.HIGH_ODDS})
 
 
 @dataclass
@@ -327,8 +334,7 @@ class AccumulatorBuilder:
                 max_shared_matches=(settings.max_shared_matches_between_market_tickets
                     if pricing == "market" else settings.max_shared_matches_between_tickets),
                 max_match_market_exposure=settings.max_public_ticket_exposure_per_match_market,
-                max_match_exposure=(settings.max_market_ticket_exposure_per_match
-                    if pricing == "market" else None),
+                max_match_exposure=settings.max_public_ticket_exposure_per_match,
             )
 
         used_horizon: list[date] = []
@@ -449,7 +455,10 @@ class AccumulatorBuilder:
             # output slot but must not fail while trying to relax it.
             if base_spec is None:
                 continue
-            for level in range(first_level, len(_RELAXATION_STEPS) + 1):
+            levels = (0,) if ticket_type not in _RELAXABLE_PUBLIC_TICKET_TYPES else range(
+                first_level, len(_RELAXATION_STEPS) + 1
+            )
+            for level in levels:
                 relaxed_spec = _relax_spec(base_spec, level) if level else base_spec
                 eligible = [
                     leg for leg in pool
@@ -472,8 +481,7 @@ class AccumulatorBuilder:
                     max_shared_matches=(settings.max_shared_matches_between_market_tickets
                         if relaxed_spec.pricing == "market" else settings.max_shared_matches_between_tickets),
                     max_match_market_exposure=settings.max_public_ticket_exposure_per_match_market,
-                    max_match_exposure=(settings.max_market_ticket_exposure_per_match
-                        if relaxed_spec.pricing == "market" else None),
+                    max_match_exposure=settings.max_public_ticket_exposure_per_match,
                 )
                 if ticket is not None:
                     ticket.relaxed = level > 0

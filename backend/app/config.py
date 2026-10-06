@@ -175,22 +175,23 @@ class Settings(BaseSettings):
     research_minimum_market_sample: int = 100
     # Published public tiers are alternatives, not duplicate exposure. A
     # later tier may share at most this many matches with an earlier tier.
-    max_shared_matches_between_tickets: int = 2
+    max_shared_matches_between_tickets: int = 1
     # Market-priced public tiers may share one fixture pairwise, and a fixture
     # may appear on at most this many public tickets. Thin slates can leave a
     # tier empty.
     max_shared_matches_between_market_tickets: int = 1
-    max_market_ticket_exposure_per_match: int = 2
+    max_market_ticket_exposure_per_match: int = 1
+    # Hard portfolio-wide cap: a fixture may appear on at most one public
+    # ticket, regardless of whether the ticket is model- or market-priced.
+    max_public_ticket_exposure_per_match: int = 1
     # A public portfolio may expose one match/market once across its tiers.
     # This is stricter than pairwise ticket overlap and prevents repeated
     # failures such as the same totals line appearing in every accumulator.
     max_public_ticket_exposure_per_match_market: int = 1
 
-    # On thin weekday slates the full-strength tier gates (esp. high-grade-leg
-    # ratio) can legitimately admit zero combinations even with a healthy
-    # qualified pool. AccumulatorBuilder relaxes the tightest gates for missing
-    # public tiers, in bounded steps, until this floor is met or the relaxation
-    # ladder is exhausted — see accumulator_builder._RELAXATION_STEPS.
+    # On thin weekday slates the full-strength tier gates can legitimately
+    # admit zero combinations. The fallback may relax the internal High Odds
+    # tier, but never publishes a relaxed Conservative or Balanced ticket.
     ticket_relaxation_enabled: bool = True
     # The public daily portfolio targets the public tiers. Missing tiers remain
     # visible as PARTIAL rather than being

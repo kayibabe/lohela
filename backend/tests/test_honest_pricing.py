@@ -160,7 +160,7 @@ def test_market_build_produces_public_tiers_inside_their_bands_with_honest_numbe
         assert ticket.expected_value < 0
         assert all(l.raw_model_probability == pytest.approx(0.90) for l in ticket.legs)
     # Conservative is the most likely ticket: roughly a coin flip or better.
-    assert tickets[TicketType.SAFE].adjusted_probability >= 0.40
+    assert tickets[TicketType.SAFE].adjusted_probability >= 0.35
     assert (tickets[TicketType.SAFE].adjusted_probability
             > tickets[TicketType.BALANCED].adjusted_probability)
     match_sets = [{leg.match_id for leg in ticket.legs} for ticket in tickets.values()]
@@ -170,10 +170,13 @@ def test_market_build_produces_public_tiers_inside_their_bands_with_honest_numbe
 
 def test_market_ticket_ranges_include_requested_high_odds_tier():
     assert SPEC[TicketType.SAFE].min_combined_odds == 2.0
-    assert SPEC[TicketType.SAFE].max_combined_odds == 3.0
-    assert SPEC[TicketType.BALANCED].min_combined_odds == 3.0
+    assert SPEC[TicketType.SAFE].max_combined_odds == 3.49
+    assert SPEC[TicketType.SAFE].min_legs == 2
+    assert SPEC[TicketType.SAFE].max_legs == 3
+    assert SPEC[TicketType.BALANCED].min_combined_odds == 3.5
     assert SPEC[TicketType.BALANCED].max_combined_odds == 5.0
-    assert SPEC[TicketType.HIGH_ODDS].min_combined_odds == 5.0
+    assert SPEC[TicketType.BALANCED].max_legs == 3
+    assert SPEC[TicketType.HIGH_ODDS].min_combined_odds == 5.01
     assert math.isinf(SPEC[TicketType.HIGH_ODDS].max_combined_odds)
 
 
@@ -181,6 +184,28 @@ def test_conservative_combined_odds_floor_is_two_in_all_pricing_modes():
     for specs in (TICKET_SPECS, MARKET_TICKET_SPECS):
         conservative = next(spec for spec in specs if spec.ticket_type == TicketType.SAFE)
         assert conservative.min_combined_odds == 2.0
+
+
+def test_market_tier_odds_bands_are_non_overlapping():
+    assert SPEC[TicketType.SAFE].max_combined_odds < SPEC[TicketType.BALANCED].min_combined_odds
+    assert SPEC[TicketType.BALANCED].max_combined_odds < SPEC[TicketType.HIGH_ODDS].min_combined_odds
+
+
+def test_normal_public_tiers_are_full_strength_or_missing():
+    """Thin slates must not turn a failed normal tier into a relaxed ticket."""
+    thin = [market_priced(_leg(i, odds=1.30, fair=0.74)) for i in range(1, 4)]
+    built = asyncio.run(_builder(thin).build(TARGET))
+    assert built.conservative is not None  # two legs clear the 2.00 floor
+    assert built.balanced is None  # three legs do not clear its normal floor
+    assert built.conservative.relaxed is False
+    assert built.balanced is None
+
+
+def test_public_portfolio_does_not_repeat_a_fixture(monkeypatch):
+    built = asyncio.run(_builder(_slate()).build(TARGET))
+    tickets = [t for t in (built.conservative, built.balanced, built.high_odds) if t]
+    fixture_ids = [leg.match_id for ticket in tickets for leg in ticket.legs]
+    assert len(fixture_ids) == len(set(fixture_ids))
 
 
 def test_market_overlap_limit_keeps_unbuildable_tier_empty():
