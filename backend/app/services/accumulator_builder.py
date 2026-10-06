@@ -64,7 +64,6 @@ class TicketSpec:
 TICKET_SPECS: tuple[TicketSpec, ...] = (
     TicketSpec(TicketType.SAFE, "Conservative", 3, 6, 3.0, 5.0, 85.0, 1.0, 3, 0.0, 0.05),
     TicketSpec(TicketType.BALANCED, "Balanced", 4, 7, 5.0, 10.0, 80.0, 0.60, 1, 0.0, 0.10),
-    TicketSpec(TicketType.BEST_VALUE, "Best Value", 3, 6, 0.0, math.inf, 85.0, 1.0, 1, 0.0, 0.05, True),
 )
 
 # Honest "likely winners" tiers (settings.leg_probability_source == "market").
@@ -82,12 +81,11 @@ MARKET_TICKET_SPECS: tuple[TicketSpec, ...] = (
                pricing="market", min_leg_odds=1.25, max_leg_odds=2.30),
     TicketSpec(TicketType.HIGH_ODDS, "High Odds", 2, 8, 5.0, math.inf, 0.0, 0.0, 1, 0.0, 0.10,
                pricing="market", min_leg_odds=1.30, max_leg_odds=5.00),
-    TicketSpec(TicketType.BEST_VALUE, "Best Value", 2, 5, 2.0, 12.0, 0.0, 0.0, 1, 0.0, 0.10, True,
-               pricing="market", min_leg_odds=1.20, max_leg_odds=4.00),
 )
 
 
-# Tiers published to users; BEST_VALUE is internal research only.
+# Active tiers published to users. Historical Best Value rows are retained in
+# the database enum and audit readers, but the profile is no longer active.
 PUBLIC_TICKET_TYPES: tuple[TicketType, ...] = (
     TicketType.SAFE,
     TicketType.BALANCED,
@@ -277,7 +275,7 @@ class AccumulatorBuilder:
         )
         coefficients = await self._load_correlation_coefficients()
         output: dict[TicketType, Ticket | None] = {
-            ticket_type: None for ticket_type in (*PUBLIC_TICKET_TYPES, TicketType.BEST_VALUE)
+            ticket_type: None for ticket_type in PUBLIC_TICKET_TYPES
         }
         diagnostics: dict[str, dict] = {"pricing": {"source": pricing}}
         for spec in specs:
@@ -366,7 +364,7 @@ class AccumulatorBuilder:
             output[TicketType.SAFE],
             output[TicketType.BALANCED],
             output.get(TicketType.HIGH_ODDS),
-            output[TicketType.BEST_VALUE],
+            None,
             len(pool),
             diagnostics,
             used_horizon,
@@ -710,6 +708,8 @@ def selection_rejection_reasons(leg: Leg, spec: TicketSpec, calibration: dict | 
         reasons.append("MISSING_ODDS")
     elif not (_MIN_LEG_ODDS <= leg.best_odds <= _MAX_LEG_ODDS):
         reasons.append("LEG_ODDS_OUT_OF_RANGE")
+    if leg.model_probability > settings.max_public_model_probability:
+        reasons.append("MODEL_PROBABILITY_ABOVE_CALIBRATION_CAP")
     if leg.edge is None:
         reasons.append("MISSING_EDGE")
     elif leg.edge < settings.min_selection_edge:
@@ -754,7 +754,11 @@ def _market_rejection_reasons(leg: Leg, spec: TicketSpec) -> list[str]:
     reasons: list[str] = []
     if leg.best_odds <= 0:
         reasons.append("MISSING_ODDS")
-    elif not (spec.min_leg_odds <= leg.best_odds <= spec.max_leg_odds):
+    elif not (
+        spec.min_leg_odds
+        <= leg.best_odds
+        <= min(spec.max_leg_odds, settings.max_public_market_leg_odds)
+    ):
         reasons.append("LEG_ODDS_OUT_OF_TIER_BAND")
     if leg.fair_probability is None:
         reasons.append("MISSING_FAIR_PRICE")

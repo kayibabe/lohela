@@ -211,9 +211,14 @@ class Settings(BaseSettings):
     # fraction of stake against its fair probability (expected value below
     # -max_leg_margin), so accumulators don't compound heavy margins.
     max_leg_margin: float = 0.07
+    # Hard ceiling for public market-priced legs, including relaxation passes.
+    max_public_market_leg_odds: float = 2.0
     # ...and skip a quote more than this far *above* the consensus fair price:
     # typically a stale or out-of-line bookmaker price, not real value.
     max_leg_price_advantage: float = 0.03
+    # Keep model-priced tickets inside the currently supported calibration
+    # range; higher estimates remain available to diagnostics.
+    max_public_model_probability: float = 0.80
     # Rolling-horizon fallback (app/services/ticket_horizon.py). When the
     # target CAT day cannot fill min_daily_public_tickets even after
     # relaxation — international breaks leave whole weeks with 0-5 tracked

@@ -21,6 +21,7 @@ from app.services.accumulator_builder import (
     active_ticket_specs,
     fair_market_probabilities,
     market_priced,
+    selection_rejection_reasons,
 )
 
 SPEC = {s.ticket_type: s for s in MARKET_TICKET_SPECS}
@@ -79,6 +80,25 @@ def test_market_gates_judge_price_and_data_not_the_model():
     stale = market_priced(_leg(5))
     stale.source_odds_at = datetime.now(timezone.utc) - timedelta(hours=6)
     assert "STALE_ODDS" in _market_rejection_reasons(stale, safe)
+
+
+def test_market_public_leg_odds_cap_survives_tier_relaxation():
+    safe = SPEC[TicketType.SAFE]
+    capped = market_priced(_leg(7, odds=2.01, fair=0.49))
+    assert "LEG_ODDS_OUT_OF_TIER_BAND" in _market_rejection_reasons(capped, safe)
+
+
+def test_model_public_probability_cap_rejects_overconfident_leg(monkeypatch):
+    monkeypatch.setattr(settings, "leg_probability_source", "model")
+    leg = _leg(8, odds=1.8, fair=0.55, model_p=0.81)
+    assert "MODEL_PROBABILITY_ABOVE_CALIBRATION_CAP" in selection_rejection_reasons(
+        leg, TICKET_SPECS[0]
+    )
+
+
+def test_best_value_is_not_an_active_ticket_profile():
+    assert all(spec.ticket_type != TicketType.BEST_VALUE for spec in TICKET_SPECS)
+    assert all(spec.ticket_type != TicketType.BEST_VALUE for spec in MARKET_TICKET_SPECS)
 
 
 def test_market_policy_shadow_excludes_markets_without_changing_control_rule():

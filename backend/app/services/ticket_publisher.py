@@ -94,7 +94,9 @@ class TicketPublisher:
         await self.db.flush()
 
         model_run = await self.db.get(ModelRun, built.model_run_id)
-        tickets = [*public_tickets, built.best_value]
+        # Best Value is retired from the active profile. Historical rows stay
+        # queryable, but no new candidate is generated or published.
+        tickets = public_tickets
         published = 0
         published_types = []
         for candidate in tickets:

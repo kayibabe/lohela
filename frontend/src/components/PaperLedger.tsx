@@ -14,7 +14,7 @@ interface PerformanceSummary {
 
 const pct = (value: number) => `${(value * 100).toFixed(1)}%`
 const cohortKey = (row: TicketHistoryItem) => `${row.target_date}:${row.ticket_type}`
-const sourceTicketLabel = (type: string | null | undefined) => ({ safe: 'Conservative', balanced: 'Balanced', high_odds: 'High Odds', best_value: 'Best Value' }[type ?? ''] ?? 'Source ticket')
+const sourceTicketLabel = (type: string | null | undefined) => ({ safe: 'Conservative', balanced: 'Balanced', high_odds: 'High Odds' }[type ?? ''] ?? 'Source ticket')
 
 function accumulatorMetrics(row: CustomAccumulator) {
   const probabilities = row.legs.map(leg => leg.probability_snapshot)
@@ -178,13 +178,11 @@ export default function PaperLedger() {
   }, [filtered])
 
   const productionRows = scopeRows.filter(row => !row.internal_only)
-  const internalRows = scopeRows.filter(row => row.internal_only)
   const productionSettled = productionRows.filter(row => row.result && row.result !== 'pending')
   const productionWins = productionSettled.filter(row => row.result === 'won').length
   const productionStaked = productionSettled.reduce((sum, row) => sum + (row.stake ?? 0), 0)
   const productionPnl = productionSettled.reduce((sum, row) => sum + (row.profit_loss ?? 0), 0)
   const productionInterval = wilsonInterval(productionWins, productionSettled.length)
-  const internalPnl = internalRows.reduce((sum, row) => sum + (row.profit_loss ?? 0), 0)
   const orderedDailyAccumulators = [...dailyAccumulators].sort((a, b) => b.target_date.localeCompare(a.target_date))
   const visibleDailyAccumulators = orderedDailyAccumulators.filter(row =>
     (!dateFrom || row.target_date >= dateFrom) && (!dateTo || row.target_date <= dateTo)
@@ -260,7 +258,7 @@ export default function PaperLedger() {
   return <>
     {error && <div className="tracker-message error" role="alert">{error}</div>}
     <div className="paper-scope-heading">
-      <div><span className="eyebrow">Production-tier evidence</span><strong>Conservative and Balanced only</strong><p>Internal Best Value research is reported separately and cannot carry the release headline.</p></div>
+      <div><span className="eyebrow">Production-tier evidence</span><strong>Conservative, Balanced and High Odds</strong><p>Only active public ticket tiers are included in this release view.</p></div>
       <span className="sample-caution">Small sample · {productionWins} wins / {productionSettled.length} settled</span>
     </div>
     <div className="paper-kpis">
@@ -274,7 +272,6 @@ export default function PaperLedger() {
 
     {dailyAccumulators.length > 0 && <section className="accumulator-performance-card"><div className="accumulator-performance-heading"><div><span className="eyebrow">Personal accumulator record</span><strong>My accumulator performance</strong><p>Separate from production evidence. Open tickets remain exposure until every leg settles.</p></div><span className="accumulator-performance-count">{accumulatorSummary.tickets} ticket{accumulatorSummary.tickets === 1 ? '' : 's'}</span></div><div className="accumulator-performance-grid"><LedgerMetric label="Open" value={accumulatorSummary.open.toString()} note={accumulatorSummary.exposure ? `${fmt(accumulatorSummary.exposure)} exposed` : 'No open exposure'} /><LedgerMetric label="Settled" value={accumulatorSummary.settled.toString()} note={`${accumulatorSummary.won} won · ${accumulatorSummary.lost} lost · ${accumulatorSummary.void} void`} /><LedgerMetric label="Settled P&L" value={accumulatorSummary.settled ? fmtPnl(accumulatorSummary.profitLoss) : '—'} note={accumulatorSummary.settled ? `${fmt(accumulatorSummary.returned)} returned` : 'Settles after all legs finish'} tone={accumulatorSummary.profitLoss >= 0 ? 'positive' : 'negative'} /><LedgerMetric label="Settled ROI" value={accumulatorRoi == null ? '—' : pct(accumulatorRoi)} note={accumulatorSummary.settled ? `${fmt(accumulatorSummary.settledStake)} settled stake` : 'No settled stake yet'} tone={accumulatorRoi == null ? undefined : accumulatorRoi >= 0 ? 'positive' : 'negative'} /></div></section>}
 
-    {internalRows.length > 0 && <section className="internal-research-card"><div><span className="eyebrow">Internal research tier</span><strong>Best Value is excluded from release KPIs</strong><p>{internalRows.length} latest cohort{internalRows.length === 1 ? '' : 's'} · {fmtPnl(internalPnl)} paper P&amp;L. Treat this as exploratory evidence.</p></div><span className="internal-badge">Internal only</span></section>}
 
     <section className="validation-period-card evidence-readiness-card">
       <div><span className="eyebrow">Release evidence gate</span><strong>Evidence accumulating — no automatic pass</strong><p>{firstDate ? `Observation clock started ${new Date(`${firstDate}T00:00:00`).toLocaleDateString()} · day ${observedDays} of 56` : 'Begins with the first production-tier published cohort.'} Calendar time alone cannot approve release.</p><div className="validation-progress"><div><span>{Math.round(observationProgress)}%</span><small>{Math.max(0, 56 - observedDays)} calendar days remaining</small></div><div className="validation-progress-track"><span style={{ width: `${observationProgress}%` }} /></div></div></div>

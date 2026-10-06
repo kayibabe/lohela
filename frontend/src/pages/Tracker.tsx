@@ -2,10 +2,8 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { formatMarket, formatSelection, formatTicketType } from '../lib/api'
 import { fmt, fmtPnl } from '../utils/currency'
 import PaperLedger from '../components/PaperLedger'
-import BestValueResearch from '../components/BestValueResearch'
 import MatchHistory from '../components/MatchHistory'
 import { groupJournalBets, type Bet } from '../lib/trackerGrouping'
-import { useAuth } from '../auth'
 
 interface BetPeriod {
   label: string; bets: number; settled: number; wins: number; losses: number; staked: number; returned: number
@@ -26,9 +24,7 @@ async function responseError(response: Response) {
 }
 
 export default function TrackerPage({ onOpenTickets }: { onOpenTickets?: (date?: string) => void }) {
-  const { user } = useAuth()
-  const canViewBestValue = user?.role === 'admin' || user?.plan === 'pro'
-  const [view, setView] = useState<'paper' | 'best-value' | 'matches' | 'manual'>('paper')
+  const [view, setView] = useState<'paper' | 'matches' | 'manual'>('paper')
   const [bets, setBets] = useState<Bet[]>([])
   const [summary, setSummary] = useState<BetSummary | null>(null)
   const [loading, setLoading] = useState(true)
@@ -79,18 +75,17 @@ export default function TrackerPage({ onOpenTickets }: { onOpenTickets?: (date?:
     setMessage({ tone: 'success', text: 'Journal entry deleted.' }); await load()
   }
 
-  const badge = view === 'paper' ? 'Production paper evidence' : view === 'best-value' ? 'Protected internal research' : view === 'matches' ? 'Published selection evidence' : 'Confirmed and manual journal'
+  const badge = view === 'paper' ? 'Production paper evidence' : view === 'matches' ? 'Published selection evidence' : 'Confirmed and manual journal'
 
   return <div className="page-content tracker-page">
     <div className="analytics-hero tracker-hero"><div><span className="eyebrow">Auditable portfolio</span><h1>Tracker</h1><p>Keep production paper evidence, published match outcomes and personal journal records in clearly separated views.</p></div><span className={`ledger-chip tracker-chip ${view}`}><span /> {badge}</span></div>
     <div className="analytics-tabs tracker-view-tabs" role="tablist" aria-label="Tracker views">
       <button role="tab" aria-selected={view === 'paper'} className={view === 'paper' ? 'active' : ''} onClick={() => setView('paper')}>Paper ledger</button>
-      {canViewBestValue && <button role="tab" aria-selected={view === 'best-value'} className={view === 'best-value' ? 'active' : ''} onClick={() => setView('best-value')}>Best Value</button>}
       <button role="tab" aria-selected={view === 'matches'} className={view === 'matches' ? 'active' : ''} onClick={() => setView('matches')}>Match history</button>
       <button role="tab" aria-selected={view === 'manual'} className={view === 'manual' ? 'active' : ''} onClick={() => setView('manual')}>My journal</button>
     </div>
 
-    {view === 'paper' ? <PaperLedger /> : view === 'best-value' && canViewBestValue ? <BestValueResearch /> : view === 'matches' ? <MatchHistory /> : <>
+    {view === 'paper' ? <PaperLedger /> : view === 'matches' ? <MatchHistory /> : <>
       <div className="journal-note"><strong>Personal journal</strong><span>Confirmed selections retain system provenance; free-form entries remain clearly labelled. Neither changes the immutable system paper ledger.</span></div>
       {message && <div className={`tracker-message ${message.tone}`} role={message.tone === 'error' ? 'alert' : 'status'}>{message.text}</div>}
       <div className="journal-summary-heading"><div><span className="eyebrow">All journal records</span><strong>Portfolio totals</strong></div><span>Totals remain stable when the list is filtered.</span></div>
@@ -109,7 +104,7 @@ export default function TrackerPage({ onOpenTickets }: { onOpenTickets?: (date?:
 
       {showForm && <form className="bet-form" onSubmit={submitBet}>
         <div className="form-row"><div className="form-group" style={{ flex: 3 }}><label>Label</label><input required value={form.label} onChange={event => setForm(value => ({ ...value, label: event.target.value }))} placeholder="Teams or a short description" /></div><div className="form-group"><label>Decimal odds</label><input required type="number" step="0.01" min="1.01" value={form.odds} onChange={event => setForm(value => ({ ...value, odds: event.target.value }))} placeholder="1.85" /></div><div className="form-group"><label>Stake</label><input required type="number" step="0.01" min="0.01" value={form.stake} onChange={event => setForm(value => ({ ...value, stake: event.target.value }))} placeholder="10.00" /></div></div>
-        <div className="form-row"><div className="form-group"><label>Entry type</label><select value={form.ticket_type} onChange={event => setForm(value => ({ ...value, ticket_type: event.target.value }))}><option value="">Uncategorised</option><option value="safe">Conservative</option><option value="balanced">Balanced</option><option value="high_odds">High Odds</option><option value="best_value">Best Value</option><option value="custom">Custom</option></select></div><div className="form-group"><label>Fixture date</label><input type="date" value={form.ticket_date} onChange={event => setForm(value => ({ ...value, ticket_date: event.target.value }))} /></div><div className="form-group" style={{ flex: 2 }}><label>Notes</label><input value={form.notes} onChange={event => setForm(value => ({ ...value, notes: event.target.value }))} placeholder="Optional rationale or bookmaker reference" /></div></div>
+        <div className="form-row"><div className="form-group"><label>Entry type</label><select value={form.ticket_type} onChange={event => setForm(value => ({ ...value, ticket_type: event.target.value }))}><option value="">Uncategorised</option><option value="safe">Conservative</option><option value="balanced">Balanced</option><option value="high_odds">High Odds</option><option value="custom">Custom</option></select></div><div className="form-group"><label>Fixture date</label><input type="date" value={form.ticket_date} onChange={event => setForm(value => ({ ...value, ticket_date: event.target.value }))} /></div><div className="form-group" style={{ flex: 2 }}><label>Notes</label><input value={form.notes} onChange={event => setForm(value => ({ ...value, notes: event.target.value }))} placeholder="Optional rationale or bookmaker reference" /></div></div>
         {form.odds && form.stake && <div className="form-preview">Potential return: <strong>{fmt(Number(form.odds) * Number(form.stake))}</strong></div>}
         <div className="form-actions"><button type="submit" className="btn-primary">Record entry</button><button type="button" className="btn-ghost" onClick={() => setShowForm(false)}>Cancel</button></div>
       </form>}

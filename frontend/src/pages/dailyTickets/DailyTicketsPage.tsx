@@ -225,9 +225,8 @@ export default function DailyTicketsPage({ date }: DailyTicketsPageProps) {
     }
   }
 
-  // Best Value is a protected research stream. Keep all public-page status,
-  // publication metadata and cards scoped to the public release tiers even when
-  // an authenticated research response happens to contain that stream.
+  // Keep all public-page status and publication metadata scoped to active
+  // release tiers.
   const publicPublishedTickets = data
     ? [
         data.conservative,

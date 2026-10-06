@@ -3,7 +3,7 @@ import { formatDate, formatKickoff, formatMarket } from "../../lib/api";
 import { fmt } from "../../utils/currency";
 import type { CustomAccumulator, DailyTab } from "./types";
 
-const sourceTicketLabel = (type?: string | null) => ({ safe: "Conservative", balanced: "Balanced", high_odds: "High Odds", best_value: "Best Value" }[type ?? ""] ?? "Source ticket");
+const sourceTicketLabel = (type?: string | null) => ({ safe: "Conservative", balanced: "Balanced", high_odds: "High Odds" }[type ?? ""] ?? "Source ticket");
 
 export function CustomAccumulatorPanel({
   date,

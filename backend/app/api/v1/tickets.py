@@ -145,7 +145,6 @@ class DailyTicketsOut(BaseModel):
     conservative: Optional[TicketOut]
     balanced: Optional[TicketOut]
     high_odds: Optional[TicketOut]
-    best_value: Optional[TicketOut]
     superseded_versions: list[TicketHistoryOut] = Field(default_factory=list)
 
 
@@ -334,7 +333,6 @@ async def get_daily_tickets(
         conservative=mapped.get(TicketType.SAFE),
         balanced=mapped.get(TicketType.BALANCED),
         high_odds=mapped.get(TicketType.HIGH_ODDS),
-        best_value=mapped.get(TicketType.BEST_VALUE),
         superseded_versions=superseded,
     )
 

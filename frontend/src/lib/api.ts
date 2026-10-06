@@ -78,7 +78,6 @@ export interface DailyTickets {
   conservative: Ticket | null
   balanced: Ticket | null
   high_odds: Ticket | null
-  best_value: Ticket | null
   superseded_versions: TicketHistoryItem[]
 }
 
@@ -150,7 +149,7 @@ export interface SelectionSummary {
   q_grade?: string
   edge: number | null
   source_ticket_id?: number | null
-  source_ticket_type?: 'safe' | 'balanced' | 'high_odds' | 'best_value' | null
+  source_ticket_type?: 'safe' | 'balanced' | 'high_odds' | null
   source_ticket_version?: number | null
   source_conflict?: boolean
   expected_value?: number | null
@@ -182,7 +181,7 @@ export interface CustomAccumulatorLeg {
   q_score_snapshot: number | null
   edge_snapshot: number | null
   source_ticket_id: number | null
-  source_ticket_type: 'safe' | 'balanced' | 'high_odds' | 'best_value' | null
+  source_ticket_type: 'safe' | 'balanced' | 'high_odds' | null
   source_ticket_version: number | null
   source_conflict: boolean
   result: 'pending' | 'won' | 'lost' | 'void'
