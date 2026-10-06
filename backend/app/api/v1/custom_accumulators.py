@@ -8,7 +8,7 @@ from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.api.security import require_research_access
+from app.api.security import require_pro_access
 from app.config import cat_today
 from app.database import get_db
 from app.models import (
@@ -210,7 +210,7 @@ async def list_custom_accumulators(
     return [_out(row) for row in (await db.execute(query)).scalars().unique().all()]
 
 
-@router.post("", response_model=CustomAccumulatorOut, status_code=201, dependencies=[Depends(require_research_access)])
+@router.post("", response_model=CustomAccumulatorOut, status_code=201, dependencies=[Depends(require_pro_access)])
 async def create_custom_accumulator(payload: CustomAccumulatorPayload, db: AsyncSession = Depends(get_db)):
     row = CustomAccumulator(name=payload.name.strip(), target_date=payload.target_date or cat_today())
     db.add(row)
@@ -222,7 +222,7 @@ async def create_custom_accumulator(payload: CustomAccumulatorPayload, db: Async
     return _out(row)
 
 
-@router.patch("/{accumulator_id}", response_model=CustomAccumulatorOut, dependencies=[Depends(require_research_access)])
+@router.patch("/{accumulator_id}", response_model=CustomAccumulatorOut, dependencies=[Depends(require_pro_access)])
 async def update_custom_accumulator(accumulator_id: int, payload: CustomAccumulatorPayload, db: AsyncSession = Depends(get_db)):
     row = (await db.execute(select(CustomAccumulator).options(selectinload(CustomAccumulator.legs)).where(CustomAccumulator.id == accumulator_id))).scalar_one_or_none()
     if not row:
@@ -233,7 +233,7 @@ async def update_custom_accumulator(accumulator_id: int, payload: CustomAccumula
     return _out(row)
 
 
-@router.delete("/{accumulator_id}", status_code=204, dependencies=[Depends(require_research_access)])
+@router.delete("/{accumulator_id}", status_code=204, dependencies=[Depends(require_pro_access)])
 async def delete_custom_accumulator(accumulator_id: int, db: AsyncSession = Depends(get_db)):
     row = await db.get(CustomAccumulator, accumulator_id)
     if not row:

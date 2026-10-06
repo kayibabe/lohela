@@ -1,8 +1,8 @@
 from fastapi.routing import APIRoute
 import inspect
 
-from app.api.security import require_admin_access
-from app.api.v1 import admin, backtests, tickets
+from app.api.security import require_admin_access, require_pro_access
+from app.api.v1 import admin, backtests, custom_accumulators, tickets
 
 
 def _route(path: str, method: str, router):
@@ -50,3 +50,12 @@ def test_ticket_history_defaults_to_public_stream():
     route = _route("/tickets/history", "GET", tickets.router)
     include_internal = route.dependant.query_params[1]
     assert include_internal.default is False
+
+
+def test_custom_accumulator_mutations_require_authenticated_pro_access():
+    for route in custom_accumulators.router.routes:
+        if isinstance(route, APIRoute) and route.path in {"", "/{accumulator_id}"}:
+            dependency_callables = {
+                dependency.call for dependency in route.dependant.dependencies
+            }
+            assert require_pro_access in dependency_callables, route.path
