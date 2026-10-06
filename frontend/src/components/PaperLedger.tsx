@@ -180,18 +180,8 @@ export default function PaperLedger() {
       <div><span className="eyebrow">Production-tier evidence</span><strong>Conservative and Balanced only</strong><p>Internal Best Value research is reported separately and cannot carry the release headline.</p></div>
       <span className="sample-caution">Small sample · {productionWins} wins / {productionSettled.length} settled</span>
     </div>
-    {orderedDailyAccumulators.length > 0 && <section className="daily-accumulator-ledger">
-      <div className="daily-accumulator-heading"><div><span className="eyebrow">Daily merged tickets</span><strong>My accumulator tickets</strong><p>Automatically merged from the day&apos;s Conservative and Balanced tickets. Tracked separately from the official production cohorts.</p></div><span className="custom-status-badge">{orderedDailyAccumulators.length} created</span></div>
-      <div className="daily-accumulator-list">{orderedDailyAccumulators.map(row => {
-        const outcome = row.status === 'draft' ? 'pending' : row.status
-        return <article className="daily-accumulator-row" key={row.id}>
-          <div><strong>{row.name}</strong><small>{new Date(`${row.target_date}T00:00:00`).toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'short', year: 'numeric' })} · {row.legs.length} legs</small></div>
-          <div><span>Odds</span><strong>{row.combined_odds.toFixed(2)}×</strong></div>
-          <div><span>Stake</span><strong>{row.stake == null ? '—' : fmt(row.stake)}</strong></div>
-          <div><span>P&amp;L</span><strong>{row.actual_return == null || row.stake == null ? '—' : fmtPnl(row.actual_return - row.stake)}</strong></div>
-          <span className={`settlement-pill ${outcome}`}>{outcome}</span>
-        </article>
-      })}</div>
+    {orderedDailyAccumulators.length > 0 && <section className="daily-accumulator-ledger daily-accumulator-overview">
+      <div className="daily-accumulator-heading"><div><span className="eyebrow">Daily merged tickets</span><strong>My accumulator tickets</strong><p>Automatically merged from the day&apos;s Conservative and Balanced tickets. Each ticket is also shown inside its matching date below.</p></div><span className="custom-status-badge">{orderedDailyAccumulators.length} created</span></div>
     </section>}
     <div className="paper-kpis">
       <LedgerMetric label="Latest cohorts" value={productionRows.length.toString()} note={`${allVersions.length} immutable versions retained`} />
@@ -227,6 +217,16 @@ export default function PaperLedger() {
         <summary className="paper-month-heading">{monthGroup.monthLabel}</summary>
         <div className="paper-month-body">{monthGroup.dates.map(dayGroup => <section className="paper-date-group" key={dayGroup.date}>
           <div className="paper-date-heading"><strong>{dayGroup.label}</strong><span>{dayGroup.rows.length} latest cohort{dayGroup.rows.length === 1 ? '' : 's'}</span></div>
+          {orderedDailyAccumulators.filter(row => row.target_date === dayGroup.date).map(row => {
+            const outcome = row.status === 'draft' ? 'pending' : row.status
+            return <article className="daily-accumulator-row daily-accumulator-inline" key={`accumulator-${row.id}`}>
+              <div><strong>{row.name}</strong><small>My accumulator · {row.legs.length} legs</small></div>
+              <div><span>Odds</span><strong>{row.combined_odds.toFixed(2)}×</strong></div>
+              <div><span>Stake</span><strong>{row.stake == null ? '—' : fmt(row.stake)}</strong></div>
+              <div><span>P&amp;L</span><strong>{row.actual_return == null || row.stake == null ? '—' : fmtPnl(row.actual_return - row.stake)}</strong></div>
+              <span className={`settlement-pill ${outcome}`}>{outcome}</span>
+            </article>
+          })}
           {dayGroup.rows.map(row => {
         const versions = allVersions.filter(item => cohortKey(item) === cohortKey(row)).sort((a, b) => b.version - a.version)
         return <article className={`paper-ledger-row${expandedId === row.ticket_id ? ' expanded' : ''}`} key={row.ticket_id}>
