@@ -15,6 +15,18 @@ interface PerformanceSummary {
 const pct = (value: number) => `${(value * 100).toFixed(1)}%`
 const cohortKey = (row: TicketHistoryItem) => `${row.target_date}:${row.ticket_type}`
 
+function accumulatorMetrics(row: CustomAccumulator) {
+  const probabilities = row.legs.map(leg => leg.probability_snapshot)
+  const combinedProbability = probabilities.every(value => value != null)
+    ? probabilities.reduce((product, value) => product * (value as number), 1)
+    : null
+  const competitionCounts = new Map<string, number>()
+  row.legs.forEach(leg => competitionCounts.set(leg.competition, (competitionCounts.get(leg.competition) ?? 0) + 1))
+  const concentration = row.legs.length ? Math.max(...competitionCounts.values()) / row.legs.length : 0
+  const riskScore = combinedProbability == null ? null : Math.max(0, Math.min(100, (1 - combinedProbability) * 70 + concentration * 10))
+  return { combinedProbability, riskScore }
+}
+
 export function roiFromTotals(profitLoss: number, staked: number): number | null {
   return staked > 0 ? profitLoss / staked : null
 }
@@ -180,9 +192,6 @@ export default function PaperLedger() {
       <div><span className="eyebrow">Production-tier evidence</span><strong>Conservative and Balanced only</strong><p>Internal Best Value research is reported separately and cannot carry the release headline.</p></div>
       <span className="sample-caution">Small sample · {productionWins} wins / {productionSettled.length} settled</span>
     </div>
-    {orderedDailyAccumulators.length > 0 && <section className="daily-accumulator-ledger daily-accumulator-overview">
-      <div className="daily-accumulator-heading"><div><span className="eyebrow">Daily merged tickets</span><strong>My accumulator tickets</strong><p>Automatically merged from the day&apos;s Conservative and Balanced tickets. Each ticket is also shown inside its matching date below.</p></div><span className="custom-status-badge">{orderedDailyAccumulators.length} created</span></div>
-    </section>}
     <div className="paper-kpis">
       <LedgerMetric label="Latest cohorts" value={productionRows.length.toString()} note={`${allVersions.length} immutable versions retained`} />
       <LedgerMetric label="Settled" value={productionSettled.length.toString()} note={`${productionRows.length - productionSettled.length} production cohorts pending`} />
@@ -219,12 +228,17 @@ export default function PaperLedger() {
           <div className="paper-date-heading"><strong>{dayGroup.label}</strong><span>{dayGroup.rows.length} latest cohort{dayGroup.rows.length === 1 ? '' : 's'}</span></div>
           {orderedDailyAccumulators.filter(row => row.target_date === dayGroup.date).map(row => {
             const outcome = row.status === 'draft' ? 'pending' : row.status
-            return <article className="daily-accumulator-row daily-accumulator-inline" key={`accumulator-${row.id}`}>
-              <div><strong>{row.name}</strong><small>My accumulator · {row.legs.length} legs</small></div>
-              <div><span>Odds</span><strong>{row.combined_odds.toFixed(2)}×</strong></div>
-              <div><span>Stake</span><strong>{row.stake == null ? '—' : fmt(row.stake)}</strong></div>
-              <div><span>P&amp;L</span><strong>{row.actual_return == null || row.stake == null ? '—' : fmtPnl(row.actual_return - row.stake)}</strong></div>
-              <span className={`settlement-pill ${outcome}`}>{outcome}</span>
+            const metrics = accumulatorMetrics(row)
+            return <article className="paper-ledger-row daily-accumulator-inline" key={`accumulator-${row.id}`}>
+              <div className="paper-ticket-summary daily-accumulator-summary">
+                <div className="paper-ticket-identity"><span className="portfolio-tier accumulator">My accumulator</span><strong>{row.name}</strong><small>daily merge · {row.legs.length} legs · model snapshots</small></div>
+                <div><span>Odds</span><strong>{row.combined_odds.toFixed(2)}×</strong></div>
+                <div><span>Legs</span><strong>{row.legs.length}</strong></div>
+                <div title="Product of the immutable leg probability snapshots"><span>Adjusted P</span><strong>{metrics.combinedProbability == null ? '—' : pct(metrics.combinedProbability)}</strong></div>
+                <div title="Transparent accumulator estimate; correlation haircut is not available for personal tickets"><span>Risk</span><strong>{metrics.riskScore == null ? '—' : `${metrics.riskScore.toFixed(0)}/100`}</strong></div>
+                <div className="paper-outcome"><span className={`settlement-pill ${outcome}`}>{outcome}</span>{row.actual_return != null && row.stake != null && <strong className={row.actual_return - row.stake >= 0 ? 'positive' : 'negative'}>{fmtPnl(row.actual_return - row.stake)}</strong>}</div>
+                <span className="paper-chevron" aria-hidden="true">·</span>
+              </div>
             </article>
           })}
           {dayGroup.rows.map(row => {

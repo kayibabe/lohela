@@ -922,7 +922,8 @@ body {
 .daily-accumulator-row{display:grid;grid-template-columns:minmax(220px,1.8fr) repeat(3,minmax(80px,.6fr)) auto;align-items:center;gap:14px;padding:12px;border:1px solid var(--border);border-radius:9px;background:var(--surface)}
 .daily-accumulator-overview{margin-bottom:18px}
 .daily-accumulator-inline{margin:0 0 10px;border-color:color-mix(in srgb,var(--accent) 42%,var(--border));background:color-mix(in srgb,var(--accent-bg) 28%,var(--surface))}
-.daily-accumulator-inline strong:first-child::before{content:'MY ACCUMULATOR';display:block;color:var(--accent);font-size:.68rem;letter-spacing:.08em;margin-bottom:3px}
+.portfolio-tier.accumulator{background:color-mix(in srgb,var(--accent) 12%,var(--surface));color:var(--accent)}
+.daily-accumulator-summary{background:transparent}
 .daily-accumulator-row>div{display:grid;gap:3px}.daily-accumulator-row small,.daily-accumulator-row span{color:var(--muted);font-size:.78rem}.daily-accumulator-row>div>span{font-size:.7rem;text-transform:uppercase;letter-spacing:.05em}
 @media(max-width:800px){.daily-accumulator-row{grid-template-columns:1fr 1fr}.daily-accumulator-row>div:first-child{grid-column:1/-1}.daily-accumulator-heading{display:block}.daily-accumulator-heading .custom-status-badge{display:inline-block;margin-top:8px}}
 .custom-accumulators .section-note{max-width:680px;line-height:1.45}
