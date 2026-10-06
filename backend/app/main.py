@@ -216,7 +216,8 @@ async def _run_automation_watchdog(trigger_source: str):
 
     from app.database import AsyncSessionLocal
     from app.services.automation import assess_due_pipeline, latest_due_pipeline_window
-    from app.tasks.pipeline import run_daily_pipeline
+    from app.services.daily_accumulator import daily_accumulator_merge_pending
+    from app.tasks.pipeline import generate_daily_accumulator, run_daily_pipeline
 
     window = latest_due_pipeline_window()
     if window is None:
@@ -224,7 +225,16 @@ async def _run_automation_watchdog(trigger_source: str):
         return
     async with AsyncSessionLocal() as db:
         decision = await assess_due_pipeline(db, window)
+        merge_pending = False
+        if not decision.should_queue:
+            merge_pending = await daily_accumulator_merge_pending(db, window.target_date)
     if not decision.should_queue:
+        if merge_pending:
+            generate_daily_accumulator.delay(window.target_date.isoformat())
+            logger.warning(
+                "Pipeline watchdog queued missing daily accumulator merge for %s",
+                window.target_date,
+            )
         logger.info(
             "Pipeline watchdog: no catch-up needed for %s/%s (%s, run=%s)",
             window.target_date,

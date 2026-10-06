@@ -22,6 +22,25 @@ from app.services.ticket_publisher import get_latest_published_tickets
 DAILY_ACCUMULATOR_SOURCE = "daily_ticket_merge"
 
 
+async def daily_accumulator_merge_pending(
+    db: AsyncSession, target_date: date
+) -> bool:
+    """Return whether both source tiers exist but their merge is missing."""
+    source_tickets = await get_latest_published_tickets(
+        db, target_date, include_internal=False
+    )
+    source_types = {ticket.ticket_type for ticket in source_tickets}
+    if not {TicketType.SAFE, TicketType.BALANCED}.issubset(source_types):
+        return False
+    existing = await db.scalar(
+        select(CustomAccumulator).where(
+            CustomAccumulator.automation_key
+            == f"daily_accumulator:{target_date.isoformat()}"
+        )
+    )
+    return existing is None
+
+
 def is_daily_accumulator(row: CustomAccumulator) -> bool:
     return (row.settlement_details or {}).get("source") == DAILY_ACCUMULATOR_SOURCE
 
