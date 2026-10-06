@@ -89,6 +89,10 @@ def _out(row: CustomAccumulator) -> CustomAccumulatorOut:
                 "probability_snapshot": leg.probability_snapshot,
                 "q_score_snapshot": leg.q_score_snapshot,
                 "edge_snapshot": leg.edge_snapshot,
+                "source_ticket_id": leg.source_ticket_id,
+                "source_ticket_type": leg.source_ticket_type,
+                "source_ticket_version": leg.source_ticket_version,
+                "source_conflict": leg.source_conflict,
                 "result": leg.result.value if hasattr(leg.result, "value") else leg.result,
                 "settled_at": leg.settled_at.isoformat() if leg.settled_at else None,
             }

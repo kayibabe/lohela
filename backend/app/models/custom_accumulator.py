@@ -5,7 +5,7 @@ from __future__ import annotations
 import enum
 from datetime import date, datetime
 
-from sqlalchemy import Date, DateTime, Enum as SAEnum, Float, ForeignKey, Integer, JSON, String
+from sqlalchemy import Boolean, Date, DateTime, Enum as SAEnum, Float, ForeignKey, Integer, JSON, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
 
@@ -70,6 +70,12 @@ class CustomAccumulatorLeg(Base):
     probability_snapshot: Mapped[float | None] = mapped_column(Float, nullable=True)
     q_score_snapshot: Mapped[float | None] = mapped_column(Float, nullable=True)
     edge_snapshot: Mapped[float | None] = mapped_column(Float, nullable=True)
+    # Immutable provenance for generated daily accumulators. These remain
+    # nullable for manually-created personal legs.
+    source_ticket_id: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
+    source_ticket_type: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    source_ticket_version: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    source_conflict: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="false")
     result: Mapped[SelectionResult] = mapped_column(
         SAEnum(SelectionResult), default=SelectionResult.PENDING, nullable=False
     )

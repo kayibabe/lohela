@@ -14,6 +14,7 @@ interface PerformanceSummary {
 
 const pct = (value: number) => `${(value * 100).toFixed(1)}%`
 const cohortKey = (row: TicketHistoryItem) => `${row.target_date}:${row.ticket_type}`
+const sourceTicketLabel = (type: string | null | undefined) => ({ safe: 'Conservative', balanced: 'Balanced', high_odds: 'High Odds', best_value: 'Best Value' }[type ?? ''] ?? 'Source ticket')
 
 function accumulatorMetrics(row: CustomAccumulator) {
   const probabilities = row.legs.map(leg => leg.probability_snapshot)
@@ -209,7 +210,7 @@ export default function PaperLedger() {
         <span className="paper-chevron" aria-hidden="true">{expanded ? '⌃' : '⌄'}</span>
       </button>
       {expanded && <div className="paper-ticket-detail"><div className="paper-version-toolbar"><div><strong>Immutable selection snapshot</strong><span>Generated from the day&apos;s Conservative and Balanced tickets; selections cannot be edited here.</span></div><div><span className="custom-status-badge automatic">Auto merge</span></div></div>
-        <ul>{row.legs.map(leg => <li key={leg.id}><div><strong>{leg.home_team} <span>vs</span> {leg.away_team}</strong><small>{leg.competition} · {formatKickoff(leg.kickoff_at)}</small><b className="paper-market-badge">{formatMarket(leg.market)}</b></div><div><strong>{leg.odds_snapshot.toFixed(2)}</strong><small>Q {leg.q_score_snapshot == null ? '—' : leg.q_score_snapshot.toFixed(1)} · <b className={`paper-leg-result ${leg.result}`}>{leg.result}</b></small></div></li>)}</ul>
+        <ul>{row.legs.map(leg => <li key={leg.id}><div><strong>{leg.home_team} <span>vs</span> {leg.away_team}</strong><small>{leg.competition} · {formatKickoff(leg.kickoff_at)}</small><b className="paper-market-badge">{formatMarket(leg.market)}</b>{leg.source_ticket_type && <b className="source-ticket-badge">{leg.source_conflict ? 'Conservative priority' : sourceTicketLabel(leg.source_ticket_type)}{leg.source_ticket_version ? ` · v${leg.source_ticket_version}` : ''}</b>}</div><div><strong>{leg.odds_snapshot.toFixed(2)}</strong><small>Q {leg.q_score_snapshot == null ? '—' : leg.q_score_snapshot.toFixed(1)} · <b className={`paper-leg-result ${leg.result}`}>{leg.result}</b></small></div></li>)}</ul>
         <div className="paper-audit"><span>Auto merge · {row.name}</span><span>Generated {new Date(row.created_at).toLocaleString()}</span></div><div className="paper-version-compare"><strong>Merge policy:</strong> Conservative selections have priority when both source tickets contain the same match. Chance and risk are derived from the immutable leg snapshots.</div>
       </div>}
     </article>

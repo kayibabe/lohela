@@ -3,6 +3,8 @@ import { formatDate, formatKickoff, formatMarket } from "../../lib/api";
 import { fmt } from "../../utils/currency";
 import type { CustomAccumulator, DailyTab } from "./types";
 
+const sourceTicketLabel = (type?: string | null) => ({ safe: "Conservative", balanced: "Balanced", high_odds: "High Odds", best_value: "Best Value" }[type ?? ""] ?? "Source ticket");
+
 export function CustomAccumulatorPanel({
   date,
   tickets,
@@ -143,6 +145,7 @@ export function CustomAccumulatorPanel({
                           <span>{leg.best_odds != null ? `${leg.best_odds.toFixed(2)}×` : "—"}</span>
                           <span>Q {leg.q_score.toFixed(1)}</span>
                           <span>{leg.model_agreement != null ? `${(leg.model_agreement * 100).toFixed(1)} pp` : "—"}</span>
+                          {ticket.automatic && leg.source_ticket_type && <span className="source-ticket-badge">{leg.source_conflict ? "Conservative priority" : sourceTicketLabel(leg.source_ticket_type)}{leg.source_ticket_version ? ` · v${leg.source_ticket_version}` : ""}</span>}
                           <button
                             type="button"
                             disabled={legsLocked}

@@ -45,17 +45,32 @@ def is_daily_accumulator(row: CustomAccumulator) -> bool:
     return (row.settlement_details or {}).get("source") == DAILY_ACCUMULATOR_SOURCE
 
 
-def merged_source_selections(source_tickets: list[AccumulatorTicket]) -> list:
-    """Return Conservative-first unique selections, resolving conflicts by match."""
+def merged_source_selection_provenance(source_tickets: list[AccumulatorTicket]) -> list[tuple[object, AccumulatorTicket, bool]]:
+    """Return selected legs with immutable source and conflict provenance."""
     by_type = {ticket.ticket_type: ticket for ticket in source_tickets}
     merged = {}
+    # A match is a conflict when both public source tickets contain it. Keep
+    # this explicit rather than inferring it later from the merged snapshot.
+    match_counts: dict[int, int] = {}
+    for ticket in source_tickets:
+        for selection in ticket.selections:
+            match_counts[selection.match_id] = match_counts.get(selection.match_id, 0) + 1
+    conflicts = {match_id for match_id, count in match_counts.items() if count > 1}
+    output = []
     for ticket_type in (TicketType.SAFE, TicketType.BALANCED):
         ticket = by_type.get(ticket_type)
         if ticket is None:
             continue
         for selection in sorted(ticket.selections, key=lambda item: item.position):
-            merged.setdefault(selection.match_id, selection)
-    return list(merged.values())
+            if selection.match_id not in merged:
+                merged[selection.match_id] = selection
+                output.append((selection, ticket, selection.match_id in conflicts))
+    return output
+
+
+def merged_source_selections(source_tickets: list[AccumulatorTicket]) -> list:
+    """Return Conservative-first unique selections, resolving conflicts by match."""
+    return [selection for selection, _, _ in merged_source_selection_provenance(source_tickets)]
 
 
 async def create_daily_accumulator(
@@ -93,7 +108,7 @@ async def create_daily_accumulator(
             "leg_count": len(existing.legs),
         }
 
-    selections = merged_source_selections(list(source_by_type.values()))
+    selections = merged_source_selection_provenance(list(source_by_type.values()))
     if not selections:
         return {
             "status": "no_source_selections",
@@ -119,7 +134,7 @@ async def create_daily_accumulator(
     await db.flush()
 
     combined_odds = 1.0
-    for position, selection in enumerate(selections, start=1):
+    for position, (selection, source_ticket, source_conflict) in enumerate(selections, start=1):
         match = selection.match
         odds = selection.odds_snapshot
         combined_odds *= odds
@@ -139,6 +154,10 @@ async def create_daily_accumulator(
                 probability_snapshot=selection.probability_snapshot,
                 q_score_snapshot=selection.q_score_snapshot,
                 edge_snapshot=selection.edge_snapshot,
+                source_ticket_id=source_ticket.id,
+                source_ticket_type=source_ticket.ticket_type.value,
+                source_ticket_version=source_ticket.version,
+                source_conflict=source_conflict,
                 result=SelectionResult.PENDING,
             )
         )

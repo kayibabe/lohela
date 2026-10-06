@@ -149,6 +149,10 @@ export interface SelectionSummary {
   q_score: number
   q_grade?: string
   edge: number | null
+  source_ticket_id?: number | null
+  source_ticket_type?: 'safe' | 'balanced' | 'high_odds' | 'best_value' | null
+  source_ticket_version?: number | null
+  source_conflict?: boolean
   expected_value?: number | null
   best_odds: number | null
   bookmaker_count?: number | null
@@ -177,6 +181,10 @@ export interface CustomAccumulatorLeg {
   probability_snapshot: number | null
   q_score_snapshot: number | null
   edge_snapshot: number | null
+  source_ticket_id: number | null
+  source_ticket_type: 'safe' | 'balanced' | 'high_odds' | 'best_value' | null
+  source_ticket_version: number | null
+  source_conflict: boolean
   result: 'pending' | 'won' | 'lost' | 'void'
   settled_at: string | null
 }

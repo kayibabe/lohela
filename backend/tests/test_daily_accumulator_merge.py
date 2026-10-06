@@ -1,15 +1,15 @@
 from types import SimpleNamespace
 
 from app.models import TicketType
-from app.services.daily_accumulator import merged_source_selections
+from app.services.daily_accumulator import merged_source_selection_provenance, merged_source_selections
 
 
 def selection(match_id: int, position: int, picked: str):
     return SimpleNamespace(match_id=match_id, position=position, selection=picked)
 
 
-def ticket(ticket_type, *selections):
-    return SimpleNamespace(ticket_type=ticket_type, selections=list(selections))
+def ticket(ticket_type, *selections, ticket_id=1, version=1):
+    return SimpleNamespace(ticket_type=ticket_type, selections=list(selections), id=ticket_id, version=version)
 
 
 def test_merge_is_union_and_conservative_wins_conflicts():
@@ -46,3 +46,14 @@ def test_merge_preserves_source_order_with_balanced_additions():
     )
 
     assert [row.match_id for row in merged] == [1, 3, 2]
+
+
+def test_merge_records_source_and_conservative_conflict_priority():
+    conservative = ticket(TicketType.SAFE, selection(10, 1, "home_win"), ticket_id=46, version=2)
+    balanced = ticket(TicketType.BALANCED, selection(10, 1, "away_win"), ticket_id=47, version=3)
+
+    merged = merged_source_selection_provenance([balanced, conservative])
+
+    assert [(row.match_id, source.id, source.ticket_type, source.version, conflict) for row, source, conflict in merged] == [
+        (10, 46, TicketType.SAFE, 2, True),
+    ]
