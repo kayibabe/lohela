@@ -3365,6 +3365,7 @@ th[aria-sort="descending"] .table-sort span,
 .paper-ticket-detail li small { color: var(--muted); font-size: 8px; }
 .paper-market-badge { display: inline-block; margin-top: 6px; padding: 3px 7px; border: 1px solid color-mix(in srgb, var(--purple) 30%, var(--border)); border-radius: 5px; background: color-mix(in srgb, var(--purple) 10%, var(--surface)); color: var(--purple); font-size: 10px; font-weight: 800; }
 .source-ticket-badge{display:inline-block;margin:6px 0 0 5px;padding:3px 7px;border:1px solid color-mix(in srgb,var(--accent) 28%,var(--border));border-radius:5px;background:color-mix(in srgb,var(--accent) 8%,var(--surface));color:var(--accent);font-size:9px;font-weight:800}
+.source-ticket-history{display:flex;align-items:center;gap:7px;flex-wrap:wrap;margin:0 0 8px;padding:8px 0;border-bottom:1px solid var(--border);color:var(--muted);font-size:10px}.source-ticket-history strong{color:var(--text2);margin-right:3px}.source-ticket-history span{padding:3px 7px;border:1px solid var(--border);border-radius:999px;background:var(--surface);font-weight:700}
 .paper-leg-result { font-size: 10px; font-weight: 800; text-transform: capitalize; }
 .paper-leg-result.won { color: var(--positive); }
 .paper-leg-result.lost { color: var(--negative); }

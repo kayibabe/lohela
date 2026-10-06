@@ -52,6 +52,7 @@ class CustomAccumulatorOut(BaseModel):
     placed_at: datetime | None
     settled_at: datetime | None
     automatic: bool = False
+    source_ticket_snapshots: dict = Field(default_factory=dict)
     legs: list[dict]
 
 
@@ -60,6 +61,17 @@ def _status_value(status: CustomAccumulatorStatus | str) -> str:
 
 
 def _out(row: CustomAccumulator) -> CustomAccumulatorOut:
+    source_snapshots = dict((row.settlement_details or {}).get("source_ticket_snapshots") or {})
+    # Older generated rows have source IDs and leg versions but predate the
+    # explicit snapshot object. Reconstruct the available immutable identity
+    # rather than returning an empty history panel after upgrade.
+    for leg in row.legs:
+        if leg.source_ticket_type and leg.source_ticket_type not in source_snapshots:
+            source_snapshots[leg.source_ticket_type] = {
+                "ticket_id": leg.source_ticket_id,
+                "ticket_type": leg.source_ticket_type,
+                "version": leg.source_ticket_version,
+            }
     return CustomAccumulatorOut(
         id=row.id,
         name=row.name,
@@ -73,6 +85,7 @@ def _out(row: CustomAccumulator) -> CustomAccumulatorOut:
         placed_at=row.placed_at,
         settled_at=row.settled_at,
         automatic=is_daily_accumulator(row),
+        source_ticket_snapshots=source_snapshots,
         legs=[
             {
                 "id": leg.id,

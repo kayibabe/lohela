@@ -202,6 +202,7 @@ export interface CustomAccumulator {
   placed_at: string | null
   settled_at: string | null
   automatic: boolean
+  source_ticket_snapshots?: Record<string, { ticket_id?: number | null; ticket_type?: string; version?: number | null; model_version?: string; publication_hash?: string; published_at?: string }>
   legs: CustomAccumulatorLeg[]
 }
 

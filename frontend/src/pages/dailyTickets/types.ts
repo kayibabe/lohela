@@ -20,4 +20,5 @@ export interface CustomAccumulator {
   stake: number | null;
   status: "draft" | "placed" | "won" | "lost" | "void" | "cashout";
   automatic: boolean;
+  source_ticket_snapshots?: Record<string, { ticket_id?: number | null; ticket_type?: string; version?: number | null; model_version?: string; publication_hash?: string; published_at?: string }>;
 }

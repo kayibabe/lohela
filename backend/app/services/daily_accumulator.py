@@ -119,6 +119,17 @@ async def create_daily_accumulator(
     source_ticket_ids = {
         ticket_type.value: source_by_type[ticket_type].id for ticket_type in required
     }
+    source_ticket_snapshots = {
+        ticket_type.value: {
+            "ticket_id": source_by_type[ticket_type].id,
+            "ticket_type": ticket_type.value,
+            "version": source_by_type[ticket_type].version,
+            "model_version": source_by_type[ticket_type].model_version,
+            "publication_hash": source_by_type[ticket_type].publication_hash,
+            "published_at": source_by_type[ticket_type].published_at.isoformat(),
+        }
+        for ticket_type in required
+    }
     row = CustomAccumulator(
         name=f"Accu-{target_date.isoformat()}",
         target_date=target_date,
@@ -127,6 +138,7 @@ async def create_daily_accumulator(
         settlement_details={
             "source": DAILY_ACCUMULATOR_SOURCE,
             "source_ticket_ids": source_ticket_ids,
+            "source_ticket_snapshots": source_ticket_snapshots,
             "conflict_policy": "conservative_priority",
         },
     )
