@@ -77,6 +77,31 @@ def _admin_user_out(user: User):
     }
 
 
+async def _ensure_active_admin_continuity(db, user: User, changes: dict) -> None:
+    """Prevent an edit or deletion from removing the final usable admin.
+
+    Counting roles alone is not sufficient: a suspended admin cannot access the
+    private administration surface. The research key remains an emergency
+    service path, but must not be the only way to recover normal access.
+    """
+    is_active_admin = user.role == "admin" and user.account_status == "active"
+    remains_active_admin = (
+        changes.get("role", user.role) == "admin"
+        and changes.get("account_status", user.account_status) == "active"
+    )
+    if not is_active_admin or remains_active_admin:
+        return
+    other_active_admins = await db.scalar(
+        select(func.count()).select_from(User).where(
+            User.id != user.id,
+            User.role == "admin",
+            User.account_status == "active",
+        )
+    )
+    if not other_active_admins:
+        raise HTTPException(status_code=409, detail="Cannot remove the last active admin access")
+
+
 @router.get("/users")
 async def list_users(db=Depends(get_db)):
     rows = (await db.execute(select(User).order_by(User.created_at.desc(), User.id.desc()))).scalars().all()
@@ -119,6 +144,7 @@ async def update_user(user_id: int, payload: AdminUserUpdate, db=Depends(get_db)
         duplicate = await db.scalar(select(User).where(User.id != user_id).where(User.email == changes.get("email", user.email)))
         if duplicate:
             raise HTTPException(status_code=409, detail="Username or email already exists")
+    await _ensure_active_admin_continuity(db, user, changes)
     for key, value in changes.items():
         setattr(user, key, value)
     if "password_hash" in changes or changes.get("account_status") in {"suspended", "pending"}:
@@ -135,10 +161,7 @@ async def delete_user(user_id: int, db=Depends(get_db)):
     user = await db.get(User, user_id)
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
-    if user.role == "admin":
-        admin_count = await db.scalar(select(func.count()).select_from(User).where(User.role == "admin"))
-        if admin_count <= 1:
-            raise HTTPException(status_code=409, detail="Cannot delete the last admin user")
+    await _ensure_active_admin_continuity(db, user, {"role": "user"})
     await db.delete(user)
     await db.commit()
 

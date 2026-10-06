@@ -317,8 +317,18 @@ export default function DailyTicketsPage({ date }: DailyTicketsPageProps) {
         {data && (
           <div className="meta-context" aria-label="Publication context">
             <span className="meta-pool">
-              {data.qualified_pool} candidates
+              {data.qualified_pool} strict candidates
             </span>
+            {(data.horizon_pool ?? 0) > 0 && (
+              <span title="Additional candidates admitted by the bounded rolling-horizon fallback">
+                +{data.horizon_pool} rolling-horizon
+              </span>
+            )}
+            {Object.keys(data.relaxed_ticket_types ?? {}).length > 0 && (
+              <span title="One or more tiers used the bounded relaxation policy">
+                Bounded relaxation
+              </span>
+            )}
             {latestPublication && (
               <span>
                 Published{" "}

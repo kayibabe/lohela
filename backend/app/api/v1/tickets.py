@@ -127,6 +127,15 @@ class TicketOut(BaseModel):
 class DailyTicketsOut(BaseModel):
     target_date: str
     qualified_pool: int
+    # ``qualified_pool`` is the strict same-day candidate pool. A thin slate
+    # may still publish through the bounded relaxation/rolling-horizon policy;
+    # expose that context so a non-zero ticket count is not misread as a
+    # contradiction.
+    horizon_pool: int = 0
+    effective_candidate_pool: int = 0
+    horizon_dates: list[str] = Field(default_factory=list)
+    relaxed_ticket_types: dict[str, int] = Field(default_factory=dict)
+    horizon_ticket_types: dict[str, int] = Field(default_factory=dict)
     generation_id: Optional[int] = None
     generation_status: Optional[str] = None
     generated_ticket_count: int = 0
@@ -226,6 +235,13 @@ async def get_daily_tickets(
         if latest_generation is not None
         else {}
     )
+    selection_diagnostics = (
+        (latest_generation.config_snapshot or {}).get("selection_diagnostics", {})
+        if latest_generation is not None
+        else {}
+    )
+    horizon_diagnostics = selection_diagnostics.get("horizon", {})
+    horizon_pool = int(horizon_diagnostics.get("horizon_pool_count", 0) or 0)
     pipeline_result = await db.execute(
         select(PipelineRun)
         .where(PipelineRun.target_date == target)
@@ -300,12 +316,15 @@ async def get_daily_tickets(
             if latest_generation is not None
             else settings.leg_probability_source
         ),
+        horizon_pool=horizon_pool,
+        effective_candidate_pool=qualified_pool + horizon_pool,
+        horizon_dates=list(horizon_diagnostics.get("horizon_dates", []) or []),
+        relaxed_ticket_types=dict(publication_summary.get("relaxed_ticket_types", {}) or {}),
+        horizon_ticket_types=dict(publication_summary.get("horizon_ticket_types", {}) or {}),
         selection_diagnostics={
             key: value
             for key, value in (
-                (latest_generation.config_snapshot or {}).get("selection_diagnostics", {})
-                if latest_generation
-                else {}
+                selection_diagnostics
             ).items()
             if key != "best_value"
         },

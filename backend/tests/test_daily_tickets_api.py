@@ -116,3 +116,50 @@ async def test_daily_tickets_exposes_valid_partial_generation_rows(monkeypatch):
     assert response.conservative.ticket_id == 1
     assert response.balanced is None
     assert not hasattr(response, "aggressive")
+
+
+@pytest.mark.asyncio
+async def test_daily_tickets_exposes_fallback_pool_context(monkeypatch):
+    generation = SimpleNamespace(
+        id=21,
+        input_count=0,
+        output_count=2,
+        status=RunStatus.PARTIAL,
+        config_snapshot={
+            "publication_summary": {
+                "published_ticket_types": ["safe", "balanced"],
+                "missing_public_ticket_types": ["high_odds"],
+                "relaxed_ticket_types": {"safe": 2},
+                "horizon_ticket_types": {"safe": 1},
+            },
+            "selection_diagnostics": {
+                "pricing": {"source": "market"},
+                "horizon": {
+                    "horizon_dates": ["2026-10-07"],
+                    "horizon_pool_count": 51,
+                },
+            },
+        },
+    )
+    safe_ticket = SimpleNamespace(id=2, ticket_type="safe", generation=SimpleNamespace(input_count=0))
+    db = SimpleNamespace(
+        execute=AsyncMock(
+            side_effect=[
+                _Result(scalar=generation),
+                _Result(rows=[]),
+                _Result(rows=[]),
+            ]
+        )
+    )
+    monkeypatch.setattr(tickets_api, "get_latest_published_tickets", AsyncMock(return_value=[safe_ticket]))
+    monkeypatch.setattr(tickets_api, "_ticket", lambda ticket, reveal: SimpleNamespace(ticket_id=ticket.id))
+    monkeypatch.setattr(tickets_api, "DailyTicketsOut", lambda **kwargs: SimpleNamespace(**kwargs))
+
+    response = await tickets_api.get_daily_tickets(date(2026, 10, 6), db)
+
+    assert response.qualified_pool == 0
+    assert response.horizon_pool == 51
+    assert response.effective_candidate_pool == 51
+    assert response.horizon_dates == ["2026-10-07"]
+    assert response.relaxed_ticket_types == {"safe": 2}
+    assert response.horizon_ticket_types == {"safe": 1}

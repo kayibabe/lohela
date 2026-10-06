@@ -100,6 +100,7 @@ export function CustomAccumulatorPanel({
             const concentration = ticket.legs.length ? Math.max(...Object.values(competitionCounts)) / ticket.legs.length : 0;
             const riskScore = chanceToWin == null ? null : Math.max(0, Math.min(100, (1 - chanceToWin) * 70 + concentration * 10));
             const expectedReturn = chanceToWin == null ? null : chanceToWin * odds - 1;
+            const sourceSnapshots = Object.values(ticket.source_ticket_snapshots ?? {});
             return (
               <article className={`custom-ticket ${ticket.status}${ticket.automatic ? " automatic-ticket" : ""}`} key={ticket.id}>
                 <div className="custom-ticket-header">
@@ -118,6 +119,7 @@ export function CustomAccumulatorPanel({
                     <span><small>Expected return</small><b>{expectedReturn == null ? "—" : `${expectedReturn >= 0 ? "+" : ""}${(expectedReturn * 100).toFixed(1)}%`}</b></span>
                   </div>
                   <p className="automatic-ticket-note">Merged from today&apos;s Conservative and Balanced tickets. Chance and risk use the immutable leg snapshots; this personal ticket does not carry the official correlation model.</p>
+                  {sourceSnapshots.length > 0 && <p className="automatic-ticket-note">Source versions: {sourceSnapshots.map((source) => `${source.ticket_type ?? "ticket"} v${source.version ?? "—"}${source.publication_hash ? ` · ${source.publication_hash.slice(0, 10)}…` : ""}`).join(" · ")}</p>}
                   <div className="ticket-summary automatic-ticket-summary"><strong>{ticket.legs.length} legs</strong><span className="ticket-result-chip pending"><b>{pendingLegs}</b> pending</span></div>
                 </> : <div className="custom-ticket-metrics">
                   <span><small>Combined odds</small><b>{ticket.legs.length ? `${odds.toFixed(2)}×` : "—"}</b></span>

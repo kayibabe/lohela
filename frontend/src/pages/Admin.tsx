@@ -26,11 +26,47 @@ interface PipelineSchedule {
 }
 interface PipelineStatus { id: number; target_date: string; run_type: string; trigger_source: string | null; scheduled_window: string | null; status: string; current_stage: string | null; error_details: string | null; started_at: string | null; completed_at: string | null; stages: { name: string; status: string; retry_count: number; input_count: number; output_count: number; error_details: string | null }[] }
 interface AutomationAlert { id: number; severity: string; task_name: string; target_date: string | null; title: string; detail: string; occurrence_count: number; resolved: boolean; last_seen_at: string }
+interface OperationalStatus {
+  observed_at: string
+  latest_run: { id: number; target_date: string; run_type: string; status: string; current_stage: string | null; completed_at: string | null } | null
+  latest_due_window: { name: string; target_date: string; needs_catchup: boolean; reason: string } | null
+  upcoming_stale_odds_predictions: number
+  finished_match_refresh_lag: number
+  active_alerts: number
+}
+interface MarketPolicyShadowTicket {
+  ticket_type: string
+  legs: { prediction_id: number; match_id: number; market: string; selection: string; odds: number; source_odds_at: string | null }[]
+  combined_odds: number
+  combined_probability: number
+}
+interface MarketPolicyShadow {
+  target_date: string
+  status: 'captured' | 'not_captured'
+  mode: 'shadow_only'
+  control_unchanged: boolean
+  policy_version?: string
+  excluded_markets?: string[]
+  captured_at?: string
+  qualified_pool?: number
+  public_ticket_count?: number
+  missing_public_ticket_types?: string[]
+  tickets?: (MarketPolicyShadowTicket | null)[]
+}
 interface UserRecord { id: number; username: string; email: string; role: 'user' | 'admin'; plan: 'free' | 'pro'; account_status: 'active' | 'suspended' | 'pending'; created_at: string | null; last_login_at: string | null }
 type UserForm = Omit<UserRecord, 'id' | 'created_at' | 'last_login_at'> & { password: string }
 const emptyUserForm: UserForm = { username: '', email: '', password: '', role: 'user', plan: 'free', account_status: 'active' }
 
 function fmt2(n: number) { return String(n).padStart(2, '0') }
+
+async function fetchJson<T>(url: string, fallback: T): Promise<T> {
+  try {
+    const response = await fetch(url)
+    return response.ok ? await response.json() : fallback
+  } catch {
+    return fallback
+  }
+}
 
 const JOB_LABELS: Record<string, string> = {
   daily_pipeline_early: 'Next early pipeline',
@@ -52,6 +88,9 @@ export default function AdminPage() {
   const [clearingCache, setClearingCache] = useState(false)
   const [pipelineRuns, setPipelineRuns] = useState<PipelineStatus[]>([])
   const [alerts, setAlerts] = useState<AutomationAlert[]>([])
+  const [operational, setOperational] = useState<OperationalStatus | null>(null)
+  const [marketPolicyShadow, setMarketPolicyShadow] = useState<MarketPolicyShadow | null>(null)
+  const [refreshingSafety, setRefreshingSafety] = useState(false)
   const [historyStart, setHistoryStart] = useState(() => {
     const d = new Date(); d.setDate(d.getDate() - 7); return d.toISOString().slice(0, 10)
   })
@@ -65,20 +104,24 @@ export default function AdminPage() {
 
   const load = useCallback(async () => {
     setLoading(true)
-    const [sys, cache, sched, status, alertData, userData] = await Promise.all([
-      fetch('/api/v1/admin/system/stats').then(r => r.ok ? r.json() : null),
-      fetch('/api/v1/admin/cache/stats').then(r => r.ok ? r.json() : null),
-      fetch('/api/v1/admin/pipeline/schedule').then(r => r.ok ? r.json() : null),
-      fetch('/api/v1/admin/pipeline/status').then(r => r.ok ? r.json() : { runs: [] }),
-      fetch('/api/v1/admin/alerts').then(r => r.ok ? r.json() : { alerts: [] }),
-      fetch('/api/v1/admin/users').then(r => r.ok ? r.json() : { users: [] }),
+    const [sys, cache, sched, status, alertData, ops, shadow, userData] = await Promise.all([
+      fetchJson<SystemStats | null>('/api/v1/admin/system/stats', null),
+      fetchJson<CacheStats | null>('/api/v1/admin/cache/stats', null),
+      fetchJson<PipelineSchedule | null>('/api/v1/admin/pipeline/schedule', null),
+      fetchJson<{ runs: PipelineStatus[] }>('/api/v1/admin/pipeline/status', { runs: [] }),
+      fetchJson<{ alerts: AutomationAlert[] }>('/api/v1/admin/alerts', { alerts: [] }),
+      fetchJson<OperationalStatus | null>('/api/v1/admin/operational-status', null),
+      fetchJson<MarketPolicyShadow | null>(`/api/v1/selections/market-policy-shadow?date=${localDateString()}`, null),
+      fetchJson<{ users: UserRecord[] }>('/api/v1/admin/users', { users: [] }),
     ])
     setSysStats(sys)
     setCacheStats(cache)
     setSchedule(sched)
-    setPipelineRuns((status as { runs: PipelineStatus[] }).runs)
-    setAlerts((alertData as { alerts: AutomationAlert[] }).alerts)
-    setUsers((userData as { users: UserRecord[] }).users)
+    setPipelineRuns(status.runs)
+    setAlerts(alertData.alerts)
+    setOperational(ops)
+    setMarketPolicyShadow(shadow)
+    setUsers(userData.users)
     setLoading(false)
   }, [])
 
@@ -121,6 +164,20 @@ export default function AdminPage() {
   async function resolveAlert(id: number) {
     const res = await fetch(`/api/v1/admin/alerts/${id}/resolve`, { method: 'POST' })
     if (res.ok) setAlerts(current => current.filter(alert => alert.id !== id))
+  }
+
+  async function refreshSafetyStatus() {
+    setRefreshingSafety(true)
+    try {
+      const [ops, alertData] = await Promise.all([
+        fetchJson<OperationalStatus | null>('/api/v1/admin/operational-status', null),
+        fetchJson<{ alerts: AutomationAlert[] }>('/api/v1/admin/alerts', { alerts: [] }),
+      ])
+      setOperational(ops)
+      setAlerts(alertData.alerts)
+    } finally {
+      setRefreshingSafety(false)
+    }
   }
 
   async function triggerPipeline() {
@@ -178,6 +235,51 @@ export default function AdminPage() {
       )}
 
       <div className="admin-grid">
+
+        <div className="admin-card">
+          <h3 className="admin-card-title">Operational safety</h3>
+          <div className="admin-action-row admin-safety-actions">
+            <p className="admin-hint">Read-only health signals. Investigate before any manual intervention.</p>
+            <button className="btn-ghost btn-sm" onClick={refreshSafetyStatus} disabled={refreshingSafety}>{refreshingSafety ? 'Refreshing…' : 'Refresh'}</button>
+          </div>
+          {operational ? (
+            <div className="admin-info-list">
+              <div className="admin-info-row"><span className="admin-info-label">Observed</span><span className="admin-info-value">{new Date(operational.observed_at).toLocaleString()}</span></div>
+              <div className="admin-info-row"><span className="admin-info-label">Latest pipeline</span><span className={`admin-info-value admin-run-status ${operational.latest_run?.status === 'failed' ? 'negative' : ''}`}>{operational.latest_run ? <><span className={`status-badge status-${operational.latest_run.status}`}>{formatStage(operational.latest_run.status)}</span> · {operational.latest_run.target_date}{operational.latest_run.current_stage ? ` · ${formatStage(operational.latest_run.current_stage)}` : ''}</> : 'No run recorded'}</span></div>
+              <div className="admin-info-row"><span className="admin-info-label">Scheduled catch-up</span><span className={`admin-info-value ${operational.latest_due_window?.needs_catchup ? 'negative' : ''}`}>{operational.latest_due_window ? operational.latest_due_window.needs_catchup ? `Required · ${operational.latest_due_window.reason}` : 'Current' : 'No window due'}</span></div>
+              <div className="admin-info-row"><span className="admin-info-label">Upcoming price freshness</span><span className={`admin-info-value ${operational.upcoming_stale_odds_predictions ? 'negative' : ''}`}>{operational.upcoming_stale_odds_predictions ? `${operational.upcoming_stale_odds_predictions} stale or missing` : 'Current'}</span></div>
+              <div className="admin-info-row"><span className="admin-info-label">Finished-result refresh</span><span className={`admin-info-value ${operational.finished_match_refresh_lag ? 'negative' : ''}`}>{operational.finished_match_refresh_lag ? `${operational.finished_match_refresh_lag} delayed` : 'Current'}</span></div>
+              <div className="admin-info-row"><span className="admin-info-label">Active alerts</span><span className={`admin-info-value ${operational.active_alerts ? 'negative' : ''}`}>{operational.active_alerts || 'None'}</span></div>
+            </div>
+          ) : <div className="admin-loading">Could not load operational status</div>}
+        </div>
+
+        <div className="admin-card">
+          <h3 className="admin-card-title">Market policy shadow</h3>
+          <p className="admin-hint">Shadow only · the control portfolio remains unchanged.</p>
+          {!marketPolicyShadow ? <div className="admin-loading">Could not load the frozen comparison</div> : marketPolicyShadow.status === 'not_captured' ? (
+            <div className="admin-loading">No frozen comparison captured for {marketPolicyShadow.target_date}.</div>
+          ) : (
+            <>
+              <div className="admin-info-list">
+                <div className="admin-info-row"><span className="admin-info-label">Policy</span><span className="admin-info-value">{marketPolicyShadow.policy_version}</span></div>
+                <div className="admin-info-row"><span className="admin-info-label">Excluded markets</span><span className="admin-info-value">{marketPolicyShadow.excluded_markets?.join(', ') || 'None'}</span></div>
+                <div className="admin-info-row"><span className="admin-info-label">Qualified pool</span><span className="admin-info-value admin-count">{marketPolicyShadow.qualified_pool ?? '—'}</span></div>
+                <div className="admin-info-row"><span className="admin-info-label">Comparable public tiers</span><span className="admin-info-value">{marketPolicyShadow.public_ticket_count ?? 0} / 3</span></div>
+                {marketPolicyShadow.missing_public_ticket_types?.length ? <div className="admin-info-row"><span className="admin-info-label">Missing tiers</span><span className="admin-info-value">{marketPolicyShadow.missing_public_ticket_types.join(', ')}</span></div> : null}
+              </div>
+              <details className="admin-shadow-details">
+                <summary>Inspect frozen counterfactual tickets</summary>
+                {(marketPolicyShadow.tickets ?? []).filter((ticket): ticket is MarketPolicyShadowTicket => ticket !== null).map(ticket => (
+                  <div className="admin-shadow-ticket" key={ticket.ticket_type}>
+                    <strong>{formatStage(ticket.ticket_type)}</strong><span>{ticket.legs.length} legs · {ticket.combined_odds.toFixed(2)} odds · {(ticket.combined_probability * 100).toFixed(1)}% model probability</span>
+                    <small>{ticket.legs.map(leg => `${formatStage(leg.market)}: ${leg.selection} (${leg.odds.toFixed(2)})`).join(' · ')}</small>
+                  </div>
+                ))}
+              </details>
+            </>
+          )}
+        </div>
 
         {/* Pipeline */}
         <div className="admin-card">
@@ -244,7 +346,7 @@ export default function AdminPage() {
         {/* Automation alerts */}
         <div className="admin-card">
           <h3 className="admin-card-title">Automation alerts</h3>
-          <p className="admin-hint">Only persistent provider failures and exhausted retries appear here.</p>
+          <p className="admin-hint">Persistent provider failures, exhausted retries, and decision-safety signals.</p>
           {alerts.length === 0 ? (
             <div className="admin-loading">No active automation alerts</div>
           ) : (

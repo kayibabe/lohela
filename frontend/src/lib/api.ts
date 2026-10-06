@@ -63,6 +63,11 @@ export interface Ticket {
 export interface DailyTickets {
   target_date: string
   qualified_pool: number
+  horizon_pool?: number
+  effective_candidate_pool?: number
+  horizon_dates?: string[]
+  relaxed_ticket_types?: Record<string, number>
+  horizon_ticket_types?: Record<string, number>
   generation_id: number | null
   generation_status: string | null
   generated_ticket_count: number
