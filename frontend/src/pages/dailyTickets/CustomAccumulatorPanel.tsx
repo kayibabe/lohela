@@ -91,22 +91,38 @@ export function CustomAccumulatorPanel({
             const statusLabel = ticket.status === "draft" ? "Draft" : ticket.status === "placed" ? "Placed" : "Settled";
             const isLocked = ticket.status !== "draft";
             const legsLocked = isLocked || ticket.automatic;
+            const probabilities = ticket.legs.map((leg) => leg.model_probability).filter((value): value is number => value != null);
+            const chanceToWin = probabilities.length === ticket.legs.length && probabilities.length > 0 ? probabilities.reduce((total, value) => total * value, 1) : null;
+            const competitionCounts = ticket.legs.reduce<Record<string, number>>((counts, leg) => ({ ...counts, [leg.competition]: (counts[leg.competition] ?? 0) + 1 }), {});
+            const concentration = ticket.legs.length ? Math.max(...Object.values(competitionCounts)) / ticket.legs.length : 0;
+            const riskScore = chanceToWin == null ? null : Math.max(0, Math.min(100, (1 - chanceToWin) * 70 + concentration * 10));
+            const expectedReturn = chanceToWin == null ? null : chanceToWin * odds - 1;
+            const pendingLegs = ticket.legs.filter((leg) => !leg.result).length;
             return (
-              <article className={`custom-ticket ${ticket.status}`} key={ticket.id}>
+              <article className={`custom-ticket ${ticket.status}${ticket.automatic ? " automatic-ticket" : ""}`} key={ticket.id}>
                 <div className="custom-ticket-header">
                   <div>
                     <strong>{ticket.name}</strong>
-                    {ticket.automatic && <span className="custom-status-badge">Generated from today&apos;s tickets</span>}
+                    {ticket.automatic && <div className="automatic-ticket-badges"><span className="custom-status-badge automatic">My accumulator</span><span className="relaxed-badge">Includes games to {formatDate(ticket.date)}</span></div>}
                     <span>{formatDate(ticket.date)} · {ticket.legs.length} leg{ticket.legs.length === 1 ? "" : "s"}</span>
                   </div>
                   <span className={`custom-status-badge ${ticket.status}`}>{statusLabel}</span>
                 </div>
-                <div className="custom-ticket-metrics">
+                {ticket.automatic ? <>
+                  <div className="custom-ticket-metrics automatic-ticket-metrics">
+                    <span><small>Ticket odds</small><b>{ticket.legs.length ? `${odds.toFixed(2)}×` : "—"}</b></span>
+                    <span><small>Chance to win</small><b>{chanceToWin == null ? "—" : `${(chanceToWin * 100).toFixed(1)}%`}<em>{chanceToWin ? `about 1 in ${Math.max(1, Math.round(1 / chanceToWin))}` : "snapshot unavailable"}</em></b></span>
+                    <span><small>Risk score</small><b>{riskScore == null ? "—" : `${riskScore.toFixed(0)}/100`}</b></span>
+                    <span><small>Expected return</small><b>{expectedReturn == null ? "—" : `${expectedReturn >= 0 ? "+" : ""}${(expectedReturn * 100).toFixed(1)}%`}</b></span>
+                  </div>
+                  <p className="automatic-ticket-note">Merged from today&apos;s Conservative and Balanced tickets. Chance and risk use the immutable leg snapshots; this personal ticket does not carry the official correlation model.</p>
+                  <div className="ticket-summary automatic-ticket-summary"><strong>{ticket.legs.length} legs</strong><span className="ticket-result-chip pending"><b>{pendingLegs}</b> pending</span></div>
+                </> : <div className="custom-ticket-metrics">
                   <span><small>Combined odds</small><b>{ticket.legs.length ? `${odds.toFixed(2)}×` : "—"}</b></span>
                   <span><small>Stake</small><b>{ticket.stake != null ? fmt(ticket.stake) : "—"}</b></span>
                   <span><small>Potential return</small><b>{potentialReturn != null ? fmt(potentialReturn) : "—"}</b></span>
                   <span><small>Potential P&amp;L</small><b className={potentialReturn != null && ticket.stake != null && potentialReturn > ticket.stake ? "positive" : ""}>{potentialReturn != null && ticket.stake != null ? fmt(potentialReturn - ticket.stake) : "—"}</b></span>
-                </div>
+                </div>}
                 {ticket.legs.length === 0 ? (
                   <div className="custom-ticket-empty">
                     <strong>No selections yet</strong>

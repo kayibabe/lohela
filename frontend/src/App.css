@@ -941,6 +941,7 @@ body {
 .custom-ticket{display:flex;min-width:0;flex-direction:column;gap:0;border:1px solid var(--border);border-top:3px solid var(--accent);border-radius:12px;background:var(--surface);box-shadow:0 5px 16px rgba(30,24,45,.045);overflow:hidden}
 .custom-ticket.placed{border-top-color:var(--positive)}
 .custom-ticket.settled{border-top-color:var(--muted)}
+.custom-ticket.automatic-ticket{border-top-color:var(--accent);box-shadow:0 8px 22px color-mix(in srgb,var(--accent) 10%,transparent)}
 .custom-ticket-header{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;padding:15px 16px 11px;background:var(--surface2)}
 .custom-ticket-header>div{min-width:0}
 .custom-ticket-header strong{display:block;overflow:hidden;color:var(--text);font-size:.95rem;text-overflow:ellipsis;white-space:nowrap}
@@ -949,10 +950,12 @@ body {
 .custom-status-badge.draft{border-color:color-mix(in srgb,var(--accent) 30%,var(--border));background:var(--accent-bg);color:var(--accent)}
 .custom-status-badge.placed{border-color:color-mix(in srgb,var(--positive) 35%,var(--border));background:color-mix(in srgb,var(--positive) 11%,var(--surface));color:var(--positive)}
 .custom-status-badge.settled{border-color:color-mix(in srgb,var(--muted) 35%,var(--border));color:var(--text2)}
+.automatic-ticket-badges{display:flex;align-items:center;gap:7px;flex-wrap:wrap;margin-top:6px}.automatic-ticket-badges .custom-status-badge{margin:0}.custom-status-badge.automatic{border-color:color-mix(in srgb,var(--accent) 35%,var(--border));background:var(--accent-bg);color:var(--accent)}
 .custom-ticket-metrics{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:7px;padding:12px 16px 13px;border-bottom:1px solid var(--border)}
 .custom-ticket-metrics>span{min-width:0;padding:7px 8px;border:1px solid var(--border);border-radius:7px;background:var(--surface2)}
 .custom-ticket-metrics small{display:block;overflow:hidden;color:var(--muted);font-size:.61rem;text-overflow:ellipsis;text-transform:uppercase;white-space:nowrap}
 .custom-ticket-metrics b{display:block;overflow:hidden;margin-top:3px;color:var(--text);font-size:.78rem;text-overflow:ellipsis;white-space:nowrap}
+.automatic-ticket-metrics b em{display:block;margin-top:2px;color:var(--text2);font-size:.65rem;font-style:normal;font-weight:500}.automatic-ticket-note{margin:0 16px;padding:9px 10px;border-left:3px solid var(--accent);background:color-mix(in srgb,var(--accent) 6%,var(--surface));color:var(--text2);font-size:.75rem;line-height:1.45}.automatic-ticket-summary{margin:0 16px;padding:10px 0;border-top:1px solid var(--border)}
 .custom-ticket-legs{display:flex;flex-direction:column;padding:0 16px}
 .custom-ticket-leg{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:11px 0;border-bottom:1px solid var(--border)}
 .custom-ticket-leg:last-child{border-bottom:0}
