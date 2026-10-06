@@ -215,6 +215,7 @@ def test_market_relaxation_widens_bands_but_never_below_two_legs():
     safe = SPEC[TicketType.SAFE]
     level3 = _relax_spec(safe, 3)
     assert level3.pricing == "market"
+    assert level3.min_combined_odds == 2.0
     assert level3.max_combined_odds > safe.max_combined_odds
     assert level3.max_leg_odds > safe.max_leg_odds
     assert level3.min_legs == 2

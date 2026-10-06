@@ -822,7 +822,14 @@ def _relax_spec(spec: TicketSpec, level: int) -> TicketSpec:
         return replace(
             spec,
             min_legs=max(2, spec.min_legs - (1 if level >= 2 else 0)),
-            min_combined_odds=spec.min_combined_odds * (1 - 0.10 * level),
+            # The Conservative 2.00 combined-odds floor is a hard product
+            # rule, including thin-slate fallback. Other market tiers may
+            # still widen their bands during controlled relaxation.
+            min_combined_odds=(
+                _CONSERVATIVE_MIN_COMBINED_ODDS
+                if spec.ticket_type == TicketType.SAFE
+                else spec.min_combined_odds * (1 - 0.10 * level)
+            ),
             max_combined_odds=spec.max_combined_odds * (1 + 0.15 * level),
             max_leg_odds=spec.max_leg_odds + 0.20 * level,
             min_adjusted_probability=spec.min_adjusted_probability * (1 - 0.20 * level),
