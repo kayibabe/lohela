@@ -3353,6 +3353,7 @@ th[aria-sort="descending"] .table-sort span,
 .settlement-pill.won { background: var(--ga-bg); color: var(--ga-text); }
 .settlement-pill.lost { background: color-mix(in srgb, var(--negative) 11%, var(--surface)); color: var(--negative); }
 .settlement-pill.void { background: var(--gc-bg); color: var(--gc-text); }
+.settlement-pill.open { background: var(--accent-bg); color: var(--accent); }
 .paper-chevron { color: var(--muted); font-size: 14px; }
 .paper-ticket-detail { padding: 0 15px 13px; border-top: 1px solid var(--border); background: var(--surface2); }
 .paper-ticket-detail ul { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0 22px; padding-top: 4px; }

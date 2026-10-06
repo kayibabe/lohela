@@ -199,6 +199,9 @@ export default function PaperLedger() {
     const outcome = row.status === 'draft' ? 'pending' : row.status
     const metrics = accumulatorMetrics(row)
     const expanded = expandedAccumulatorId === row.id
+    const pendingLegs = row.legs.filter(leg => leg.result === 'pending').length
+    const statusTone = outcome === 'placed' && pendingLegs > 0 ? 'open' : outcome
+    const statusLabel = outcome === 'placed' && pendingLegs > 0 ? `Open · ${pendingLegs} pending` : outcome
     return <article className={`paper-ledger-row daily-accumulator-inline${expanded ? ' expanded' : ''}`} key={`accumulator-${row.id}`}>
       <button className="paper-ticket-summary daily-accumulator-summary" onClick={() => setExpandedAccumulatorId(expanded ? null : row.id)} aria-expanded={expanded} aria-label={`${row.name} accumulator with ${row.legs.length} legs`}>
         <div className="paper-ticket-identity"><span className="portfolio-tier accumulator">{row.name}</span><small>daily merge · {row.legs.length} legs · model snapshots</small></div>
@@ -206,7 +209,7 @@ export default function PaperLedger() {
         <div><span>Legs</span><strong>{row.legs.length}</strong></div>
         <div title="Product of the immutable leg probability snapshots"><span>Adjusted P</span><strong>{metrics.combinedProbability == null ? '—' : pct(metrics.combinedProbability)}</strong></div>
         <div title="Transparent accumulator estimate; correlation haircut is not available for personal tickets"><span>Risk</span><strong>{metrics.riskScore == null ? '—' : `${metrics.riskScore.toFixed(0)}/100`}</strong></div>
-        <div className="paper-outcome"><span className={`settlement-pill ${outcome}`}>{outcome}</span>{row.actual_return != null && row.stake != null && <strong className={row.actual_return - row.stake >= 0 ? 'positive' : 'negative'}>{fmtPnl(row.actual_return - row.stake)}</strong>}</div>
+        <div className="paper-outcome"><span className={`settlement-pill ${statusTone}`}>{statusLabel}</span>{row.actual_return != null && row.stake != null && <strong className={row.actual_return - row.stake >= 0 ? 'positive' : 'negative'}>{fmtPnl(row.actual_return - row.stake)}</strong>}</div>
         <span className="paper-chevron" aria-hidden="true">{expanded ? '⌃' : '⌄'}</span>
       </button>
       {expanded && <div className="paper-ticket-detail"><div className="paper-version-toolbar"><div><strong>Immutable selection snapshot</strong><span>Generated from the day&apos;s Conservative and Balanced tickets; selections cannot be edited here.</span></div><div><span className="custom-status-badge automatic">Auto merge</span></div></div>{row.source_ticket_snapshots && Object.keys(row.source_ticket_snapshots).length > 0 && <div className="source-ticket-history"><strong>Source ticket versions</strong>{Object.entries(row.source_ticket_snapshots).map(([type, snapshot]) => <span key={type} title={snapshot.publication_hash ? `Publication hash ${snapshot.publication_hash}` : undefined}>{sourceTicketLabel(type)} · v{snapshot.version ?? '—'}{snapshot.model_version ? ` · model ${snapshot.model_version}` : ''}</span>)}</div>}

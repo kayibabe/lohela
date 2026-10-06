@@ -90,7 +90,8 @@ export function CustomAccumulatorPanel({
             );
             const potentialReturn = ticket.stake != null ? ticket.stake * odds : null;
             const canPlace = ticket.legs.length >= 2 && ticket.stake != null && ticket.stake > 0;
-            const statusLabel = ticket.status === "draft" ? "Draft" : ticket.status === "placed" ? "Placed" : "Settled";
+            const pendingLegs = ticket.legs.filter((leg) => !leg.result).length;
+            const statusLabel = ticket.status === "draft" ? "Draft" : ticket.status === "placed" && pendingLegs > 0 ? `Open · ${pendingLegs} pending` : ticket.status === "placed" ? "Placed" : `Settled · ${ticket.status}`;
             const isLocked = ticket.status !== "draft";
             const legsLocked = isLocked || ticket.automatic;
             const probabilities = ticket.legs.map((leg) => leg.model_probability).filter((value): value is number => value != null);
@@ -99,7 +100,6 @@ export function CustomAccumulatorPanel({
             const concentration = ticket.legs.length ? Math.max(...Object.values(competitionCounts)) / ticket.legs.length : 0;
             const riskScore = chanceToWin == null ? null : Math.max(0, Math.min(100, (1 - chanceToWin) * 70 + concentration * 10));
             const expectedReturn = chanceToWin == null ? null : chanceToWin * odds - 1;
-            const pendingLegs = ticket.legs.filter((leg) => !leg.result).length;
             return (
               <article className={`custom-ticket ${ticket.status}${ticket.automatic ? " automatic-ticket" : ""}`} key={ticket.id}>
                 <div className="custom-ticket-header">
