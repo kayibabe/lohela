@@ -36,6 +36,7 @@ _MAX_LEGS_PER_LEAGUE = 2
 _MIN_ACTIVE_MODELS = 3
 _BEAM_WIDTH = 800
 _CANDIDATE_LIMIT = 30
+_CONSERVATIVE_MIN_COMBINED_ODDS = 2.0
 
 
 @dataclass(frozen=True)
@@ -62,7 +63,7 @@ class TicketSpec:
 
 
 TICKET_SPECS: tuple[TicketSpec, ...] = (
-    TicketSpec(TicketType.SAFE, "Conservative", 3, 6, 3.0, 5.0, 85.0, 1.0, 3, 0.0, 0.05),
+    TicketSpec(TicketType.SAFE, "Conservative", 3, 6, _CONSERVATIVE_MIN_COMBINED_ODDS, 5.0, 85.0, 1.0, 3, 0.0, 0.05),
     TicketSpec(TicketType.BALANCED, "Balanced", 4, 7, 5.0, 10.0, 80.0, 0.60, 1, 0.0, 0.10),
 )
 
@@ -75,7 +76,7 @@ TICKET_SPECS: tuple[TicketSpec, ...] = (
 # probability, Q-score/edge (model judgements) no longer gate selection, and
 # each tier is the most likely ticket inside its odds band.
 MARKET_TICKET_SPECS: tuple[TicketSpec, ...] = (
-    TicketSpec(TicketType.SAFE, "Conservative", 3, 4, 2.0, 3.0, 0.0, 0.0, 1, 0.30, 0.05,
+    TicketSpec(TicketType.SAFE, "Conservative", 3, 4, _CONSERVATIVE_MIN_COMBINED_ODDS, 3.0, 0.0, 0.0, 1, 0.30, 0.05,
                pricing="market", min_leg_odds=1.20, max_leg_odds=1.65),
     TicketSpec(TicketType.BALANCED, "Balanced", 3, 5, 3.0, 5.0, 0.0, 0.0, 1, 0.14, 0.10,
                pricing="market", min_leg_odds=1.25, max_leg_odds=2.30),

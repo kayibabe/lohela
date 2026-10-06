@@ -177,6 +177,12 @@ def test_market_ticket_ranges_include_requested_high_odds_tier():
     assert math.isinf(SPEC[TicketType.HIGH_ODDS].max_combined_odds)
 
 
+def test_conservative_combined_odds_floor_is_two_in_all_pricing_modes():
+    for specs in (TICKET_SPECS, MARKET_TICKET_SPECS):
+        conservative = next(spec for spec in specs if spec.ticket_type == TicketType.SAFE)
+        assert conservative.min_combined_odds == 2.0
+
+
 def test_market_overlap_limit_keeps_unbuildable_tier_empty():
     from app.services.accumulator_builder import _evaluate_combo, _find_best_ticket
 
