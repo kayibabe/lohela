@@ -197,8 +197,9 @@ export interface CustomAccumulator {
   legs: CustomAccumulatorLeg[]
 }
 
-export async function fetchCustomAccumulators(date: string): Promise<CustomAccumulator[]> {
-  const res = await fetch(`/api/v1/custom-accumulators?target_date=${encodeURIComponent(date)}`)
+export async function fetchCustomAccumulators(date?: string): Promise<CustomAccumulator[]> {
+  const query = date ? `?target_date=${encodeURIComponent(date)}` : ''
+  const res = await fetch(`/api/v1/custom-accumulators${query}`)
   if (!res.ok) throw new Error(`API error ${res.status}`)
   return res.json()
 }

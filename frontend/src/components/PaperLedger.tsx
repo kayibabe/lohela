@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { fetchTicket, fetchTicketHistory, formatKickoff, formatMarket, formatTicketType, type Ticket, type TicketHistoryItem } from '../lib/api'
+import { fetchCustomAccumulators, fetchTicket, fetchTicketHistory, formatKickoff, formatMarket, formatTicketType, type CustomAccumulator, type Ticket, type TicketHistoryItem } from '../lib/api'
 import GradeBadge from './GradeBadge'
 import { fmt, fmtPnl } from '../utils/currency'
 
@@ -47,6 +47,7 @@ function drawdown(rows: TicketHistoryItem[]) {
 
 export default function PaperLedger() {
   const [allVersions, setAllVersions] = useState<TicketHistoryItem[]>([])
+  const [dailyAccumulators, setDailyAccumulators] = useState<CustomAccumulator[]>([])
   const [performance, setPerformance] = useState<PerformanceSummary | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -69,7 +70,12 @@ export default function PaperLedger() {
         if (!response.ok) throw new Error(`Performance summary failed (${response.status})`)
         return response.json()
       }),
-    ]).then(([history, summary]) => { setAllVersions(history); setPerformance(summary) })
+      fetchCustomAccumulators(),
+    ]).then(([history, summary, accumulators]) => {
+      setAllVersions(history)
+      setPerformance(summary)
+      setDailyAccumulators(accumulators.filter(row => row.automatic))
+    })
       .catch((reason: Error) => setError(reason.message || 'Paper portfolio unavailable'))
       .finally(() => setLoading(false))
   }, [])
@@ -132,6 +138,7 @@ export default function PaperLedger() {
   const productionPnl = productionSettled.reduce((sum, row) => sum + (row.profit_loss ?? 0), 0)
   const productionInterval = wilsonInterval(productionWins, productionSettled.length)
   const internalPnl = internalRows.reduce((sum, row) => sum + (row.profit_loss ?? 0), 0)
+  const orderedDailyAccumulators = [...dailyAccumulators].sort((a, b) => b.target_date.localeCompare(a.target_date))
   const distinctPublishedDays = new Set(productionRows.map(row => row.target_date)).size
   const distinctSettledDays = new Set(productionSettled.map(row => row.target_date)).size
   const firstDate = productionRows.length ? productionRows.map(row => row.target_date).sort()[0] : null
@@ -173,6 +180,19 @@ export default function PaperLedger() {
       <div><span className="eyebrow">Production-tier evidence</span><strong>Conservative and Balanced only</strong><p>Internal Best Value research is reported separately and cannot carry the release headline.</p></div>
       <span className="sample-caution">Small sample · {productionWins} wins / {productionSettled.length} settled</span>
     </div>
+    {orderedDailyAccumulators.length > 0 && <section className="daily-accumulator-ledger">
+      <div className="daily-accumulator-heading"><div><span className="eyebrow">Daily merged tickets</span><strong>My accumulator tickets</strong><p>Automatically merged from the day&apos;s Conservative and Balanced tickets. Tracked separately from the official production cohorts.</p></div><span className="custom-status-badge">{orderedDailyAccumulators.length} created</span></div>
+      <div className="daily-accumulator-list">{orderedDailyAccumulators.map(row => {
+        const outcome = row.status === 'draft' ? 'pending' : row.status
+        return <article className="daily-accumulator-row" key={row.id}>
+          <div><strong>{row.name}</strong><small>{new Date(`${row.target_date}T00:00:00`).toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'short', year: 'numeric' })} · {row.legs.length} legs</small></div>
+          <div><span>Odds</span><strong>{row.combined_odds.toFixed(2)}×</strong></div>
+          <div><span>Stake</span><strong>{row.stake == null ? '—' : fmt(row.stake)}</strong></div>
+          <div><span>P&amp;L</span><strong>{row.actual_return == null || row.stake == null ? '—' : fmtPnl(row.actual_return - row.stake)}</strong></div>
+          <span className={`settlement-pill ${outcome}`}>{outcome}</span>
+        </article>
+      })}</div>
+    </section>}
     <div className="paper-kpis">
       <LedgerMetric label="Latest cohorts" value={productionRows.length.toString()} note={`${allVersions.length} immutable versions retained`} />
       <LedgerMetric label="Settled" value={productionSettled.length.toString()} note={`${productionRows.length - productionSettled.length} production cohorts pending`} />
