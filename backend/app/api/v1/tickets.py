@@ -300,11 +300,15 @@ async def get_daily_tickets(
             if latest_generation is not None
             else settings.leg_probability_source
         ),
-        selection_diagnostics=(
-            (latest_generation.config_snapshot or {}).get("selection_diagnostics", {})
-            if latest_generation
-            else {}
-        ),
+        selection_diagnostics={
+            key: value
+            for key, value in (
+                (latest_generation.config_snapshot or {}).get("selection_diagnostics", {})
+                if latest_generation
+                else {}
+            ).items()
+            if key != "best_value"
+        },
         pipeline_run_id=latest_daily_pipeline.id if latest_daily_pipeline else None,
         pipeline_status=(
             latest_daily_pipeline.status.value if latest_daily_pipeline else None
