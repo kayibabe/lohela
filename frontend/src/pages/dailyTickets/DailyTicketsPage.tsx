@@ -501,7 +501,7 @@ export default function DailyTicketsPage({ date }: DailyTicketsPageProps) {
                     <i aria-hidden="true">→</i>
                     <span><b>{q85Count}</b><small>Q ≥85 selections</small></span>
                     <i aria-hidden="true">→</i>
-                    <span className={addableCount === 0 ? "blocked" : ""}><b>{addableCount}</b><small>safe draft legs</small></span>
+                    <span className={addableCount === 0 ? "blocked" : ""}><b>{addableCount}</b><small>conservative draft legs</small></span>
                     <i aria-hidden="true">→</i>
                     <span className="blocked"><b>0</b><small>published tickets</small></span>
                   </div>

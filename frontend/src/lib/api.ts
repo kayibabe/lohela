@@ -505,7 +505,12 @@ export function formatSelection(selection: string): string {
 }
 
 export function formatTicketType(type: string): string {
-  return type === 'safe' ? 'Conservative' : type.replace(/_/g, ' ').replace(/\b\w/g, character => character.toUpperCase())
+  const labels: Record<string, string> = {
+    safe: 'Conservative',
+    balanced: 'Balanced',
+    high_odds: 'High Odds',
+  }
+  return labels[type] ?? type.replace(/_/g, ' ').replace(/\b\w/g, character => character.toUpperCase())
 }
 
 export function formatStage(stage: string): string {
