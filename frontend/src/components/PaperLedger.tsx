@@ -69,6 +69,7 @@ export default function PaperLedger() {
   const [dateFrom, setDateFrom] = useState('')
   const [dateTo, setDateTo] = useState('')
   const [expandedId, setExpandedId] = useState<number | null>(null)
+  const [expandedAccumulatorId, setExpandedAccumulatorId] = useState<number | null>(null)
   const [ticket, setTicket] = useState<Ticket | null>(null)
   const [compareTicket, setCompareTicket] = useState<Ticket | null>(null)
   const [selectedVersion, setSelectedVersion] = useState<TicketHistoryItem | null>(null)
@@ -115,7 +116,7 @@ export default function PaperLedger() {
     }, { won: 0, lost: 0, void: 0 })
   }, [scopeRows])
   const filtered = useMemo(() => scopeRows.filter(row =>
-    (typeFilter === 'all' || row.ticket_type === typeFilter)
+    (typeFilter === 'all' || typeFilter === 'my_accumulator' || row.ticket_type === typeFilter)
     && (resultFilter === 'all' || (row.result ?? 'pending') === resultFilter)
   ), [scopeRows, typeFilter, resultFilter])
 
@@ -151,6 +152,16 @@ export default function PaperLedger() {
   const productionInterval = wilsonInterval(productionWins, productionSettled.length)
   const internalPnl = internalRows.reduce((sum, row) => sum + (row.profit_loss ?? 0), 0)
   const orderedDailyAccumulators = [...dailyAccumulators].sort((a, b) => b.target_date.localeCompare(a.target_date))
+  const visibleDailyAccumulators = orderedDailyAccumulators.filter(row =>
+    (!dateFrom || row.target_date >= dateFrom) && (!dateTo || row.target_date <= dateTo)
+    && (resultFilter === 'all' || (row.status === 'draft' ? 'pending' : row.status) === resultFilter)
+  )
+  const accumulatorName = orderedDailyAccumulators[0]?.name ?? 'My accumulator'
+  const accumulatorSettlementCounts = orderedDailyAccumulators.reduce((counts, row) => {
+    const result = row.status === 'draft' ? 'pending' : row.status
+    if (result === 'won' || result === 'lost' || result === 'void') counts[result] += 1
+    return counts
+  }, { won: 0, lost: 0, void: 0 })
   const distinctPublishedDays = new Set(productionRows.map(row => row.target_date)).size
   const distinctSettledDays = new Set(productionSettled.map(row => row.target_date)).size
   const firstDate = productionRows.length ? productionRows.map(row => row.target_date).sort()[0] : null
@@ -181,6 +192,24 @@ export default function PaperLedger() {
   async function toggleTicket(row: TicketHistoryItem) {
     if (expandedId === row.ticket_id) { setExpandedId(null); setTicket(null); setCompareTicket(null); setSelectedVersion(null); return }
     setExpandedId(row.ticket_id); await loadVersion(row)
+  }
+
+  function renderAccumulatorRow(row: CustomAccumulator) {
+    const outcome = row.status === 'draft' ? 'pending' : row.status
+    const metrics = accumulatorMetrics(row)
+    const expanded = expandedAccumulatorId === row.id
+    return <article className={`paper-ledger-row daily-accumulator-inline${expanded ? ' expanded' : ''}`} key={`accumulator-${row.id}`}>
+      <button className="paper-ticket-summary daily-accumulator-summary" onClick={() => setExpandedAccumulatorId(expanded ? null : row.id)} aria-expanded={expanded} aria-label={`${row.name} accumulator with ${row.legs.length} legs`}>
+        <div className="paper-ticket-identity"><span className="portfolio-tier accumulator">My accumulator</span><strong>{row.name}</strong><small>daily merge · {row.legs.length} legs · model snapshots</small></div>
+        <div><span>Odds</span><strong>{row.combined_odds.toFixed(2)}×</strong></div>
+        <div><span>Legs</span><strong>{row.legs.length}</strong></div>
+        <div title="Product of the immutable leg probability snapshots"><span>Adjusted P</span><strong>{metrics.combinedProbability == null ? '—' : pct(metrics.combinedProbability)}</strong></div>
+        <div title="Transparent accumulator estimate; correlation haircut is not available for personal tickets"><span>Risk</span><strong>{metrics.riskScore == null ? '—' : `${metrics.riskScore.toFixed(0)}/100`}</strong></div>
+        <div className="paper-outcome"><span className={`settlement-pill ${outcome}`}>{outcome}</span>{row.actual_return != null && row.stake != null && <strong className={row.actual_return - row.stake >= 0 ? 'positive' : 'negative'}>{fmtPnl(row.actual_return - row.stake)}</strong>}</div>
+        <span className="paper-chevron" aria-hidden="true">{expanded ? '⌃' : '⌄'}</span>
+      </button>
+      {expanded && <div className="paper-ticket-detail"><ul>{row.legs.map(leg => <li key={leg.id}><div><strong>{leg.home_team} <span>vs</span> {leg.away_team}</strong><small>{leg.competition} · {formatKickoff(leg.kickoff_at)}</small><b className="paper-market-badge">{formatMarket(leg.market)}</b></div><div><strong>{leg.odds_snapshot.toFixed(2)}</strong><small>Q {leg.q_score_snapshot == null ? '—' : leg.q_score_snapshot.toFixed(1)} · <b className={`paper-leg-result ${leg.result}`}>{leg.result}</b></small></div></li>)}</ul><div className="paper-version-compare"><strong>Immutable selection snapshot:</strong> generated from the day&apos;s Conservative and Balanced tickets.</div></div>}
+    </article>
   }
 
   if (loading) return <div className="paper-ledger-skeleton" aria-busy="true">Loading immutable paper portfolio…</div>
@@ -215,32 +244,19 @@ export default function PaperLedger() {
       </div>
     </section>
 
-    <section className="stake-simulator"><div className="stake-simulator-copy"><span className="eyebrow">What-if sizing</span><strong>Stake simulator · current filters</strong><p>Replays the settled rows currently shown. This does not change the immutable one-unit ledger.</p><div className="paper-ticket-type-filter" aria-label="Ticket type filter">{['all', 'safe', 'balanced', 'high_odds', 'best_value'].map(value => {
-      const counts = value === 'all' ? allSettlementCounts : settlementCounts.get(value) ?? { won: 0, lost: 0, void: 0 }
-      return <button key={value} className={`filter-tab${typeFilter === value ? ' active' : ''}`} onClick={() => setTypeFilter(value)} title={`${value === 'all' ? 'All tickets' : formatTicketType(value)}: ${counts.won} won, ${counts.lost} lost, ${counts.void} void`}><span>{value === 'all' ? 'All tickets' : formatTicketType(value)}</span><small className="filter-tab-outcomes" aria-label={`${counts.won} won, ${counts.lost} lost, ${counts.void} void`}><b className="won">W {counts.won}</b><b className="lost">L {counts.lost}</b><b className="void">V {counts.void}</b></small></button>
+    <section className="stake-simulator"><div className="stake-simulator-copy"><span className="eyebrow">What-if sizing</span><strong>Stake simulator · current filters</strong><p>Replays the settled rows currently shown. This does not change the immutable one-unit ledger.</p><div className="paper-ticket-type-filter" aria-label="Ticket type filter">{['all', 'safe', 'balanced', 'high_odds', 'my_accumulator'].map(value => {
+      const counts = value === 'all' ? allSettlementCounts : value === 'my_accumulator' ? accumulatorSettlementCounts : settlementCounts.get(value) ?? { won: 0, lost: 0, void: 0 }
+      const label = value === 'all' ? 'All tickets' : value === 'my_accumulator' ? accumulatorName : formatTicketType(value)
+      return <button key={value} className={`filter-tab${typeFilter === value ? ' active' : ''}`} onClick={() => setTypeFilter(value)} title={`${label}: ${counts.won} won, ${counts.lost} lost, ${counts.void} void`}><span>{label}</span><small className="filter-tab-outcomes" aria-label={`${counts.won} won, ${counts.lost} lost, ${counts.void} void`}><b className="won">W {counts.won}</b><b className="lost">L {counts.lost}</b><b className="void">V {counts.void}</b></small></button>
     })}</div></div><div className="stake-simulator-filter-controls" aria-label="Ledger filters"><label>Outcome<select aria-label="Settlement filter" value={resultFilter} onChange={event => setResultFilter(event.target.value)}><option value="all">All outcomes</option><option value="pending">Pending</option><option value="won">Won</option><option value="lost">Lost</option><option value="void">Void</option></select></label><label>Model<select aria-label="Model version filter" value={modelFilter} onChange={event => setModelFilter(event.target.value)}><option value="current">Current · {currentModel ?? 'loading'}</option><option value="all">All model versions</option>{modelVersions.filter(version => version !== currentModel).map(version => <option key={version} value={version}>{version}</option>)}</select></label><label>From<input aria-label="Tickets from date" type="date" value={dateFrom} onChange={event => setDateFrom(event.target.value)} /></label><label>To<input aria-label="Tickets to date" type="date" value={dateTo} onChange={event => setDateTo(event.target.value)} /></label></div><label>Stake per ticket<input type="number" min="0" step="0.01" value={stakeSize} onChange={event => setStakeSize(event.target.value)} /></label><div className="stake-simulator-metrics"><div><span>Staked</span><strong>{fmt(simulatedStaked)}</strong></div><div><span>Return</span><strong>{fmt(simulatedReturned)}</strong></div><div><span>P&amp;L</span><strong className={simulatedPnl >= 0 ? 'positive' : 'negative'}>{fmtPnl(simulatedPnl)}</strong></div><div><span>ROI</span><strong className={simulatedRoi == null ? '' : simulatedRoi >= 0 ? 'positive' : 'negative'}>{simulatedRoi == null ? '—' : pct(simulatedRoi)}</strong></div></div></section>
 
-    {filtered.length === 0 ? <div className="analytics-empty"><strong>No tickets match these filters</strong><span>Try another tier, outcome, model version or date range.</span></div> : <div className="paper-ledger-list">{groupedRows.map(yearGroup => <details className="paper-year-group" key={yearGroup.year} open>
+    {typeFilter === 'my_accumulator' ? <div className="paper-ledger-list">{visibleDailyAccumulators.length === 0 ? <div className="analytics-empty"><strong>No accumulator matches these filters</strong><span>Try another outcome or date range.</span></div> : visibleDailyAccumulators.map(row => renderAccumulatorRow(row))}</div> : filtered.length === 0 ? <div className="analytics-empty"><strong>No tickets match these filters</strong><span>Try another tier, outcome, model version or date range.</span></div> : <div className="paper-ledger-list">{groupedRows.map(yearGroup => <details className="paper-year-group" key={yearGroup.year} open>
       <summary className="paper-year-heading">{yearGroup.year}</summary>
       <div className="paper-year-body">{yearGroup.months.map(monthGroup => <details className="paper-month-group" key={`${yearGroup.year}-${monthGroup.month}`} open>
         <summary className="paper-month-heading">{monthGroup.monthLabel}</summary>
         <div className="paper-month-body">{monthGroup.dates.map(dayGroup => <section className="paper-date-group" key={dayGroup.date}>
           <div className="paper-date-heading"><strong>{dayGroup.label}</strong><span>{dayGroup.rows.length} latest cohort{dayGroup.rows.length === 1 ? '' : 's'}</span></div>
-          {orderedDailyAccumulators.filter(row => row.target_date === dayGroup.date).map(row => {
-            const outcome = row.status === 'draft' ? 'pending' : row.status
-            const metrics = accumulatorMetrics(row)
-            return <article className="paper-ledger-row daily-accumulator-inline" key={`accumulator-${row.id}`}>
-              <div className="paper-ticket-summary daily-accumulator-summary">
-                <div className="paper-ticket-identity"><span className="portfolio-tier accumulator">My accumulator</span><strong>{row.name}</strong><small>daily merge · {row.legs.length} legs · model snapshots</small></div>
-                <div><span>Odds</span><strong>{row.combined_odds.toFixed(2)}×</strong></div>
-                <div><span>Legs</span><strong>{row.legs.length}</strong></div>
-                <div title="Product of the immutable leg probability snapshots"><span>Adjusted P</span><strong>{metrics.combinedProbability == null ? '—' : pct(metrics.combinedProbability)}</strong></div>
-                <div title="Transparent accumulator estimate; correlation haircut is not available for personal tickets"><span>Risk</span><strong>{metrics.riskScore == null ? '—' : `${metrics.riskScore.toFixed(0)}/100`}</strong></div>
-                <div className="paper-outcome"><span className={`settlement-pill ${outcome}`}>{outcome}</span>{row.actual_return != null && row.stake != null && <strong className={row.actual_return - row.stake >= 0 ? 'positive' : 'negative'}>{fmtPnl(row.actual_return - row.stake)}</strong>}</div>
-                <span className="paper-chevron" aria-hidden="true">·</span>
-              </div>
-            </article>
-          })}
+          {visibleDailyAccumulators.filter(row => row.target_date === dayGroup.date).map(row => renderAccumulatorRow(row))}
           {dayGroup.rows.map(row => {
         const versions = allVersions.filter(item => cohortKey(item) === cohortKey(row)).sort((a, b) => b.version - a.version)
         return <article className={`paper-ledger-row${expandedId === row.ticket_id ? ' expanded' : ''}`} key={row.ticket_id}>
