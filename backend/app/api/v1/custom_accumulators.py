@@ -23,6 +23,7 @@ from app.models import (
     SelectionResult,
     Team,
 )
+from app.services.daily_accumulator import is_daily_accumulator
 
 router = APIRouter(
     prefix="/custom-accumulators",
@@ -50,6 +51,7 @@ class CustomAccumulatorOut(BaseModel):
     created_at: datetime
     placed_at: datetime | None
     settled_at: datetime | None
+    automatic: bool = False
     legs: list[dict]
 
 
@@ -70,6 +72,7 @@ def _out(row: CustomAccumulator) -> CustomAccumulatorOut:
         created_at=row.created_at,
         placed_at=row.placed_at,
         settled_at=row.settled_at,
+        automatic=is_daily_accumulator(row),
         legs=[
             {
                 "id": leg.id,
@@ -120,6 +123,21 @@ async def _apply_payload(db: AsyncSession, row: CustomAccumulator, payload: Cust
         raise HTTPException(400, "Only draft and placed are user-controlled statuses")
     if row.status != CustomAccumulatorStatus.DRAFT and requested_status == "draft":
         raise HTTPException(409, "Settled or placed accumulators cannot be returned to draft")
+    if is_daily_accumulator(row):
+        existing_ids = [leg.prediction_id for leg in row.legs]
+        if payload.name.strip() != row.name:
+            raise HTTPException(409, "The daily accumulator name is system-generated and immutable")
+        if payload.target_date and payload.target_date != row.target_date:
+            raise HTTPException(409, "The daily accumulator date is immutable")
+        if list(dict.fromkeys(payload.prediction_ids)) != existing_ids:
+            raise HTTPException(409, "The daily accumulator legs are system-generated and immutable")
+        row.stake = payload.stake
+        row.status = CustomAccumulatorStatus.PLACED if requested_status == "placed" else CustomAccumulatorStatus.DRAFT
+        if requested_status == "placed" and row.placed_at is None:
+            row.placed_at = datetime.now(timezone.utc)
+        row.potential_return = round(row.combined_odds * row.stake, 2) if row.stake else None
+        return
+
     if row.status != CustomAccumulatorStatus.DRAFT and payload.prediction_ids:
         raise HTTPException(409, "Placed accumulators cannot change legs")
 
@@ -222,5 +240,7 @@ async def delete_custom_accumulator(accumulator_id: int, db: AsyncSession = Depe
         raise HTTPException(404, "Custom accumulator not found")
     if row.status != CustomAccumulatorStatus.DRAFT:
         raise HTTPException(409, "Only draft accumulators can be deleted")
+    if is_daily_accumulator(row):
+        raise HTTPException(409, "Daily accumulators are system-generated and cannot be deleted")
     await db.delete(row)
     await db.commit()

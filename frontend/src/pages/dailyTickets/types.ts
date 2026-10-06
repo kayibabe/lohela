@@ -19,4 +19,5 @@ export interface CustomAccumulator {
   legs: SelectionSummary[];
   stake: number | null;
   status: "draft" | "placed" | "won" | "lost" | "void" | "cashout";
+  automatic: boolean;
 }

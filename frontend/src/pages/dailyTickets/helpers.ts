@@ -142,5 +142,6 @@ export function apiAccumulatorToUi(row: ApiCustomAccumulator): CustomAccumulator
     })),
     stake: row.stake,
     status: row.status,
+    automatic: row.automatic,
   };
 }

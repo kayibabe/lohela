@@ -370,6 +370,27 @@ def generate_tickets(
         raise self.retry(exc=exc, countdown=120)
 
 
+@celery_app.task(name="pipeline.generate_daily_accumulator", bind=True, max_retries=2)
+def generate_daily_accumulator(self, target_date: str):
+    """Merge the committed Conservative and Balanced tickets once published."""
+    from app.database import AsyncSessionLocal
+    from app.services.daily_accumulator import create_daily_accumulator
+
+    async def _run():
+        async with AsyncSessionLocal() as db:
+            result = await create_daily_accumulator(db, date.fromisoformat(target_date))
+            await db.commit()
+            return result
+
+    try:
+        result = _run_async(_run())
+        logger.info("Daily accumulator merge for %s: %s", target_date, result)
+        return result
+    except Exception as exc:
+        logger.exception("Daily accumulator merge failed for %s", target_date)
+        raise self.retry(exc=exc, countdown=120)
+
+
 @celery_app.task(name="pipeline.settle_results", bind=True, max_retries=2)
 def settle_results(
     self,
@@ -878,6 +899,8 @@ def _daily_pipeline_canvas(today: str, pipeline_run_id: int):
         # This mutable signature receives the exact ModelRunner result from the
         # previous stage, preserving model-run lineage into publication.
         generate_tickets.s(today, pipeline_run_id),
+        # Publication commits before this task reads the two source tickets.
+        generate_daily_accumulator.si(today),
         settle_results.si(pipeline_run_id, "daily_pipeline"),
         aggregate_performance.si(pipeline_run_id),
     )

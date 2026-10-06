@@ -193,6 +193,7 @@ export interface CustomAccumulator {
   created_at: string
   placed_at: string | null
   settled_at: string | null
+  automatic: boolean
   legs: CustomAccumulatorLeg[]
 }
 

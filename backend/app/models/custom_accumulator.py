@@ -28,6 +28,7 @@ class CustomAccumulator(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     name: Mapped[str] = mapped_column(String(160), nullable=False)
     target_date: Mapped[date] = mapped_column(Date, nullable=False, index=True)
+    automation_key: Mapped[str | None] = mapped_column(String(80), nullable=True, unique=True, index=True)
     status: Mapped[CustomAccumulatorStatus] = mapped_column(
         SAEnum(CustomAccumulatorStatus), default=CustomAccumulatorStatus.DRAFT, nullable=False, index=True
     )

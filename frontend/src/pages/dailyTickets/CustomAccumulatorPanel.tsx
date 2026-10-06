@@ -90,11 +90,13 @@ export function CustomAccumulatorPanel({
             const canPlace = ticket.legs.length >= 2 && ticket.stake != null && ticket.stake > 0;
             const statusLabel = ticket.status === "draft" ? "Draft" : ticket.status === "placed" ? "Placed" : "Settled";
             const isLocked = ticket.status !== "draft";
+            const legsLocked = isLocked || ticket.automatic;
             return (
               <article className={`custom-ticket ${ticket.status}`} key={ticket.id}>
                 <div className="custom-ticket-header">
                   <div>
                     <strong>{ticket.name}</strong>
+                    {ticket.automatic && <span className="custom-status-badge">Generated from today&apos;s tickets</span>}
                     <span>{formatDate(ticket.date)} · {ticket.legs.length} leg{ticket.legs.length === 1 ? "" : "s"}</span>
                   </div>
                   <span className={`custom-status-badge ${ticket.status}`}>{statusLabel}</span>
@@ -127,8 +129,8 @@ export function CustomAccumulatorPanel({
                           <span>{leg.model_agreement != null ? `${(leg.model_agreement * 100).toFixed(1)} pp` : "—"}</span>
                           <button
                             type="button"
-                            disabled={isLocked}
-                            title={isLocked ? "Return to draft before removing selections" : "Remove selection"}
+                            disabled={legsLocked}
+                            title={legsLocked ? "Generated legs cannot be changed" : "Remove selection"}
                             aria-label={`Remove ${leg.home_team} versus ${leg.away_team}`}
                             onClick={() => void updateTicket(ticket, { legs: ticket.legs.filter((row) => row.prediction_id !== leg.prediction_id) })}
                           >
@@ -163,12 +165,12 @@ export function CustomAccumulatorPanel({
                     >
                       {ticket.status === "draft" ? "Mark placed" : ticket.status === "placed" ? "Placed" : `Settled · ${ticket.status}`}
                     </button>
-                    <button className="btn-ghost btn-sm" disabled={isLocked || ticket.legs.length === 0} onClick={() => clearTicket(ticket)}>
+                    <button className="btn-ghost btn-sm" disabled={legsLocked || ticket.legs.length === 0} onClick={() => clearTicket(ticket)}>
                       Clear selections
                     </button>
-                    <button className="btn-ghost btn-sm danger-action" onClick={() => deleteTicket(ticket)}>
+                    {!ticket.automatic && <button className="btn-ghost btn-sm danger-action" onClick={() => deleteTicket(ticket)}>
                       Delete draft
-                    </button>
+                    </button>}
                   </div>
                 </div>
                 {ticket.status === "draft" && !canPlace && ticket.legs.length > 0 && (

@@ -26,8 +26,11 @@ def test_daily_pipeline_runs_current_model_then_forwards_its_result_to_publicati
     canvas = _daily_pipeline_canvas("2026-08-28", 17)
     model_task = canvas.tasks[3]
     publication_task = canvas.tasks[4]
+    accumulator_task = canvas.tasks[5]
 
     assert model_task.args == ("2026-08-28", CURRENT_MODEL_VERSION, 17)
     assert model_task.immutable is True
     assert publication_task.args == ("2026-08-28", 17)
     assert publication_task.immutable is False
+    assert accumulator_task.args == ("2026-08-28",)
+    assert accumulator_task.immutable is True

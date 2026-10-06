@@ -131,7 +131,7 @@ export default function DailyTicketsPage({ date }: DailyTicketsPageProps) {
       return;
     }
     const current = custom.find(
-      (ticket) => ticket.date === date && ticket.status === "draft",
+      (ticket) => ticket.date === date && ticket.status === "draft" && !ticket.automatic,
     );
     if (current) {
       if (current.legs.some((leg) => leg.match_id === row.match_id)) return;
