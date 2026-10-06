@@ -27,11 +27,6 @@ function accumulatorMetrics(row: CustomAccumulator) {
   return { combinedProbability, riskScore }
 }
 
-const accumulatorEndDate = (row: CustomAccumulator) => {
-  const latest = row.legs.reduce((current, leg) => Date.parse(leg.kickoff_at) > Date.parse(current) ? leg.kickoff_at : current, row.legs[0]?.kickoff_at ?? `${row.target_date}T00:00:00`)
-  return new Date(latest).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' })
-}
-
 export function roiFromTotals(profitLoss: number, staked: number): number | null {
   return staked > 0 ? profitLoss / staked : null
 }
@@ -203,8 +198,6 @@ export default function PaperLedger() {
     const outcome = row.status === 'draft' ? 'pending' : row.status
     const metrics = accumulatorMetrics(row)
     const expanded = expandedAccumulatorId === row.id
-    const pendingLegs = row.legs.filter(leg => leg.result === 'pending').length
-    const expectedReturn = metrics.combinedProbability == null ? null : metrics.combinedProbability * row.combined_odds - 1
     return <article className={`paper-ledger-row daily-accumulator-inline${expanded ? ' expanded' : ''}`} key={`accumulator-${row.id}`}>
       <button className="paper-ticket-summary daily-accumulator-summary" onClick={() => setExpandedAccumulatorId(expanded ? null : row.id)} aria-expanded={expanded} aria-label={`${row.name} accumulator with ${row.legs.length} legs`}>
         <div className="paper-ticket-identity"><span className="portfolio-tier accumulator">My accumulator</span><strong>{row.name}</strong><small>daily merge · {row.legs.length} legs · model snapshots</small></div>
@@ -215,16 +208,10 @@ export default function PaperLedger() {
         <div className="paper-outcome"><span className={`settlement-pill ${outcome}`}>{outcome}</span>{row.actual_return != null && row.stake != null && <strong className={row.actual_return - row.stake >= 0 ? 'positive' : 'negative'}>{fmtPnl(row.actual_return - row.stake)}</strong>}</div>
         <span className="paper-chevron" aria-hidden="true">{expanded ? '⌃' : '⌄'}</span>
       </button>
-      {expanded && <div className="paper-ticket-detail"><div className="daily-accumulator-ticket-card ticket-card">
-        <div className="ticket-header">
-          <div className="ticket-tier-row"><div className="ticket-tier-identity"><div className="tier-dot" style={{ background: 'var(--accent)' }} /><span className="ticket-name" style={{ color: 'var(--accent)' }}>My accumulator</span><span className="relaxed-badge horizon-badge">Includes games to {accumulatorEndDate(row)}</span></div><div className="ticket-tier-badges"><span className="ticket-status-badge open">{outcome === 'pending' ? `Open · ${pendingLegs} pending` : outcome}</span><span className="version-badge">Auto</span><span className="fair-price-badge">Merged</span></div></div>
-          <div className="ticket-stats"><div className="stat"><span className="stat-label">Ticket odds</span><span className="stat-value neutral">{row.combined_odds.toFixed(2)}×</span></div><div className="stat"><span className="stat-label">Chance to win</span><span className="stat-value neutral">{metrics.combinedProbability == null ? '—' : `${(metrics.combinedProbability * 100).toFixed(1)}%`}<small className="stat-sub">{metrics.combinedProbability ? `about 1 in ${Math.max(1, Math.round(1 / metrics.combinedProbability))}` : 'snapshot unavailable'}</small></span></div><div className="stat"><span className="stat-label">Risk score</span><span className="stat-value neutral">{metrics.riskScore == null ? '—' : `${metrics.riskScore.toFixed(0)}/100`}</span></div><div className="stat"><span className="stat-label">Expected return</span><span className="stat-value neutral">{expectedReturn == null ? '—' : `${expectedReturn >= 0 ? '+' : ''}${(expectedReturn * 100).toFixed(1)}%`}</span></div></div>
-          <p className="fair-price-note">Merged from the day&apos;s Conservative and Balanced tickets. Chance and risk use the immutable leg snapshots; this personal ticket does not carry the official correlation model.</p>
-          <div className="ticket-summary"><strong>{row.legs.length} legs</strong><div className="ticket-result-counts"><span className="ticket-result-chip pending"><b>{pendingLegs}</b> pending</span></div></div>
-        </div>
-        <ul className="leg-list">{row.legs.map(leg => <li key={leg.id} className="leg-item"><div className="leg-detail-trigger"><div><div className="leg-match">{leg.home_team}<span className="leg-match-vs"> vs </span>{leg.away_team}</div><div className="leg-meta"><span className="leg-comp">{leg.competition}</span><span className="leg-time kickoff-time">{formatKickoff(leg.kickoff_at)}</span><span className="match-state-badge scheduled">Upcoming</span><span className="leg-market">{formatMarket(leg.market)}</span></div><div className={`leg-outcome ${leg.result}`}><span className="leg-outcome-label">Pick</span><strong>{leg.result === 'pending' ? 'Pending' : leg.result}</strong></div></div><div className="leg-right"><span className="leg-odds">{leg.odds_snapshot.toFixed(2)}×</span>{leg.probability_snapshot != null && <span className="leg-chance">{(leg.probability_snapshot * 100).toFixed(0)}% chance</span>}<span className="leg-q">Q {leg.q_score_snapshot == null ? '—' : leg.q_score_snapshot.toFixed(1)}</span></div></div></li>)}</ul>
-        <div className="ticket-audit"><span>Auto merge · immutable selection snapshots</span><span>{row.name}</span></div>
-      </div></div>}
+      {expanded && <div className="paper-ticket-detail"><div className="paper-version-toolbar"><div><strong>Immutable selection snapshot</strong><span>Generated from the day&apos;s Conservative and Balanced tickets; selections cannot be edited here.</span></div><div><span className="custom-status-badge automatic">Auto merge</span></div></div>
+        <ul>{row.legs.map(leg => <li key={leg.id}><div><strong>{leg.home_team} <span>vs</span> {leg.away_team}</strong><small>{leg.competition} · {formatKickoff(leg.kickoff_at)}</small><b className="paper-market-badge">{formatMarket(leg.market)}</b></div><div><strong>{leg.odds_snapshot.toFixed(2)}</strong><small>Q {leg.q_score_snapshot == null ? '—' : leg.q_score_snapshot.toFixed(1)} · <b className={`paper-leg-result ${leg.result}`}>{leg.result}</b></small></div></li>)}</ul>
+        <div className="paper-audit"><span>Auto merge · {row.name}</span><span>Generated {new Date(row.created_at).toLocaleString()}</span></div><div className="paper-version-compare"><strong>Merge policy:</strong> Conservative selections have priority when both source tickets contain the same match. Chance and risk are derived from the immutable leg snapshots.</div>
+      </div>}
     </article>
   }
 
