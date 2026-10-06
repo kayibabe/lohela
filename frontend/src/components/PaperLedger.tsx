@@ -28,6 +28,39 @@ function accumulatorMetrics(row: CustomAccumulator) {
   return { combinedProbability, riskScore }
 }
 
+export interface AccumulatorPerformanceSummary {
+  tickets: number
+  open: number
+  settled: number
+  won: number
+  lost: number
+  void: number
+  exposure: number
+  settledStake: number
+  returned: number
+  profitLoss: number
+}
+
+export function accumulatorPerformance(rows: CustomAccumulator[]): AccumulatorPerformanceSummary {
+  return rows.reduce((summary, row) => {
+    const settled = row.status === 'won' || row.status === 'lost' || row.status === 'void'
+    const stake = row.stake ?? 0
+    summary.tickets += 1
+    summary.exposure += !settled ? stake : 0
+    if (!settled) summary.open += 1
+    if (settled) {
+      summary.settled += 1
+      summary.settledStake += stake
+      summary.returned += row.actual_return ?? 0
+      if (row.status === 'won') summary.won += 1
+      if (row.status === 'lost') summary.lost += 1
+      if (row.status === 'void') summary.void += 1
+      summary.profitLoss += (row.actual_return ?? 0) - stake
+    }
+    return summary
+  }, { tickets: 0, open: 0, settled: 0, won: 0, lost: 0, void: 0, exposure: 0, settledStake: 0, returned: 0, profitLoss: 0 } as AccumulatorPerformanceSummary)
+}
+
 export function roiFromTotals(profitLoss: number, staked: number): number | null {
   return staked > 0 ? profitLoss / staked : null
 }
@@ -163,6 +196,8 @@ export default function PaperLedger() {
     if (result === 'won' || result === 'lost' || result === 'void') counts[result] += 1
     return counts
   }, { won: 0, lost: 0, void: 0 })
+  const accumulatorSummary = accumulatorPerformance(orderedDailyAccumulators)
+  const accumulatorRoi = roiFromTotals(accumulatorSummary.profitLoss, accumulatorSummary.settledStake)
   const distinctPublishedDays = new Set(productionRows.map(row => row.target_date)).size
   const distinctSettledDays = new Set(productionSettled.map(row => row.target_date)).size
   const firstDate = productionRows.length ? productionRows.map(row => row.target_date).sort()[0] : null
@@ -236,6 +271,8 @@ export default function PaperLedger() {
       <LedgerMetric label="ROI" value={productionStaked ? pct(productionPnl / productionStaked) : '—'} note={`${fmt(productionStaked)} settled stake · outlier-sensitive`} tone={productionPnl >= 0 ? 'positive' : 'negative'} />
       <LedgerMetric label="Drawdown" value={productionSettled.length ? fmt(drawdown(productionSettled)) : '—'} note="Peak-to-trough production units" tone="warning" />
     </div>
+
+    {dailyAccumulators.length > 0 && <section className="accumulator-performance-card"><div className="accumulator-performance-heading"><div><span className="eyebrow">Personal accumulator record</span><strong>My accumulator performance</strong><p>Separate from production evidence. Open tickets remain exposure until every leg settles.</p></div><span className="accumulator-performance-count">{accumulatorSummary.tickets} ticket{accumulatorSummary.tickets === 1 ? '' : 's'}</span></div><div className="accumulator-performance-grid"><LedgerMetric label="Open" value={accumulatorSummary.open.toString()} note={accumulatorSummary.exposure ? `${fmt(accumulatorSummary.exposure)} exposed` : 'No open exposure'} /><LedgerMetric label="Settled" value={accumulatorSummary.settled.toString()} note={`${accumulatorSummary.won} won · ${accumulatorSummary.lost} lost · ${accumulatorSummary.void} void`} /><LedgerMetric label="Settled P&L" value={accumulatorSummary.settled ? fmtPnl(accumulatorSummary.profitLoss) : '—'} note={accumulatorSummary.settled ? `${fmt(accumulatorSummary.returned)} returned` : 'Settles after all legs finish'} tone={accumulatorSummary.profitLoss >= 0 ? 'positive' : 'negative'} /><LedgerMetric label="Settled ROI" value={accumulatorRoi == null ? '—' : pct(accumulatorRoi)} note={accumulatorSummary.settled ? `${fmt(accumulatorSummary.settledStake)} settled stake` : 'No settled stake yet'} tone={accumulatorRoi == null ? undefined : accumulatorRoi >= 0 ? 'positive' : 'negative'} /></div></section>}
 
     {internalRows.length > 0 && <section className="internal-research-card"><div><span className="eyebrow">Internal research tier</span><strong>Best Value is excluded from release KPIs</strong><p>{internalRows.length} latest cohort{internalRows.length === 1 ? '' : 's'} · {fmtPnl(internalPnl)} paper P&amp;L. Treat this as exploratory evidence.</p></div><span className="internal-badge">Internal only</span></section>}
 

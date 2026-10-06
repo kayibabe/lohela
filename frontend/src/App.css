@@ -3237,6 +3237,13 @@ th[aria-sort="descending"] .table-sort span,
 .bankroll-input input { width: 92px; height: 34px; padding: 0 8px; border: 1px solid var(--border); border-radius: var(--r-sm); background: var(--surface); color: var(--text); font: inherit; font-weight: 500; }
 .tickets-operation-message { max-width: 1280px; margin: 12px auto 0; }
 .paper-kpis { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 10px; margin-bottom: 12px; }
+.accumulator-performance-card { margin: 0 0 12px; padding: 16px; border: 1px solid color-mix(in srgb, var(--accent) 32%, var(--border)); border-radius: 12px; background: color-mix(in srgb, var(--accent-bg) 30%, var(--surface)); }
+.accumulator-performance-heading { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; margin-bottom: 12px; }
+.accumulator-performance-heading strong { display: block; margin-top: 3px; font-size: 16px; }
+.accumulator-performance-heading p { margin: 5px 0 0; color: var(--muted); font-size: 12px; }
+.accumulator-performance-count { padding: 4px 8px; border-radius: 999px; background: var(--surface); color: var(--muted); font-size: 11px; font-weight: 800; white-space: nowrap; }
+.accumulator-performance-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+.accumulator-performance-grid .metric-card { background: var(--surface); }
 .paper-ledger-skeleton { padding: 50px 20px; color: var(--muted); text-align: center; font-size: 12px; }
 .paper-date-group + .paper-date-group { margin-top: 22px; }
 .paper-year-group, .paper-month-group { display: block; }
@@ -3376,6 +3383,7 @@ th[aria-sort="descending"] .table-sort span,
 
 @media (max-width: 1180px) {
   .paper-kpis { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .accumulator-performance-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .paper-ticket-summary { grid-template-columns: minmax(190px, 1.5fr) repeat(3, minmax(70px, .55fr)) minmax(100px, .7fr) 14px; }
   .paper-ticket-summary > div:nth-child(5) { display: none !important; }
 }
@@ -3393,6 +3401,9 @@ th[aria-sort="descending"] .table-sort span,
 
 @media (max-width: 520px) {
   .paper-kpis { grid-template-columns: 1fr 1fr; }
+  .accumulator-performance-heading { display: block; }
+  .accumulator-performance-count { display: inline-block; margin-top: 8px; }
+  .accumulator-performance-grid { grid-template-columns: 1fr 1fr; }
   .validation-period-card { padding: 15px; }
   .paper-toolbar select { width: 100%; }
   .paper-ticket-summary { grid-template-columns: minmax(0, 1fr) minmax(70px, auto) 12px; padding: 12px; }

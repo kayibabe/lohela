@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { latestTicketCohorts, roiFromTotals, wilsonInterval } from '../components/PaperLedger'
-import type { TicketHistoryItem } from '../lib/api'
+import { accumulatorPerformance, latestTicketCohorts, roiFromTotals, wilsonInterval } from '../components/PaperLedger'
+import type { CustomAccumulator, TicketHistoryItem } from '../lib/api'
 import { groupJournalBets, groupMatchHistory, type Bet } from '../lib/trackerGrouping'
 
 const historyRow = (ticketId: number, version: number, targetDate = '2026-08-30'): TicketHistoryItem => ({
@@ -48,6 +48,17 @@ const bet = (id: number, date: string): Bet => ({
 })
 
 describe('Tracker evidence helpers', () => {
+  it('keeps open accumulator exposure separate from settled performance', () => {
+    const row = (id: number, status: CustomAccumulator['status'], stake: number, actualReturn: number | null): CustomAccumulator => ({
+      id, name: `Accu-${id}`, target_date: '2026-10-06', status, stake, combined_odds: 2,
+      potential_return: stake * 2, actual_return: actualReturn, created_at: '2026-10-06T08:00:00Z',
+      placed_at: '2026-10-06T08:01:00Z', settled_at: status === 'placed' ? null : '2026-10-06T20:00:00Z', automatic: true,
+      legs: [],
+    })
+    const summary = accumulatorPerformance([row(1, 'placed', 5000, null), row(2, 'won', 1, 2.5), row(3, 'lost', 1, 0)])
+    expect(summary).toMatchObject({ tickets: 3, open: 1, settled: 2, won: 1, lost: 1, exposure: 5000, settledStake: 2, returned: 2.5, profitLoss: 0.5 })
+  })
+
   it('keeps only the latest displayed cohort while retaining prior versions for audit', () => {
     const rows = [historyRow(1, 1), historyRow(2, 2), historyRow(3, 1, '2026-08-29')]
     const latest = latestTicketCohorts(rows)
