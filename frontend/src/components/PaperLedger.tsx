@@ -188,7 +188,37 @@ export default function PaperLedger() {
     (!dateFrom || row.target_date >= dateFrom) && (!dateTo || row.target_date <= dateTo)
     && (resultFilter === 'all' || (row.status === 'draft' ? 'pending' : row.status) === resultFilter)
   )
-  const accumulatorName = orderedDailyAccumulators[0]?.name ?? 'My accumulator'
+  const groupedDailyAccumulators = useMemo(() => {
+    const years = new Map<string, Map<string, Map<string, CustomAccumulator[]>>>()
+    for (const row of visibleDailyAccumulators) {
+      const [year, month, day] = row.target_date.split('-')
+      if (!year || !month || !day) continue
+      const months = years.get(year) ?? new Map<string, Map<string, CustomAccumulator[]>>()
+      const dates = months.get(month) ?? new Map<string, CustomAccumulator[]>()
+      dates.set(day, [...(dates.get(day) ?? []), row])
+      months.set(month, dates)
+      years.set(year, months)
+    }
+    return [...years.entries()].sort(([a], [b]) => b.localeCompare(a)).map(([year, months]) => {
+      const monthGroups = [...months.entries()].sort(([a], [b]) => b.localeCompare(a)).map(([month, dates]) => {
+        const dateGroups = [...dates.entries()].sort(([a], [b]) => b.localeCompare(a)).map(([day, rows]) => {
+          const date = `${year}-${month}-${day}`
+          return {
+            date,
+            label: new Date(`${date}T00:00:00`).toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'short' }),
+            rows,
+          }
+        })
+        return {
+          month,
+          monthLabel: new Date(`${year}-${month}-01T00:00:00`).toLocaleDateString(undefined, { month: 'long' }),
+          dates: dateGroups,
+        }
+      })
+      return { year, months: monthGroups }
+    })
+  }, [visibleDailyAccumulators])
+  const accumulatorName = 'My Accumulators'
   const accumulatorSettlementCounts = orderedDailyAccumulators.reduce((counts, row) => {
     const result = row.status === 'draft' ? 'pending' : row.status
     if (result === 'won' || result === 'lost' || result === 'void') counts[result] += 1
@@ -291,13 +321,22 @@ export default function PaperLedger() {
       return <button key={value} className={`filter-tab${typeFilter === value ? ' active' : ''}`} onClick={() => setTypeFilter(value)} title={`${label}: ${counts.won} won, ${counts.lost} lost, ${counts.void} void`}><span>{label}</span><small className="filter-tab-outcomes" aria-label={`${counts.won} won, ${counts.lost} lost, ${counts.void} void`}><b className="won">W {counts.won}</b><b className="lost">L {counts.lost}</b><b className="void">V {counts.void}</b></small></button>
     })}</div></div><div className="stake-simulator-filter-controls" aria-label="Ledger filters"><label>Outcome<select aria-label="Settlement filter" value={resultFilter} onChange={event => setResultFilter(event.target.value)}><option value="all">All outcomes</option><option value="pending">Pending</option><option value="won">Won</option><option value="lost">Lost</option><option value="void">Void</option></select></label><label>Model<select aria-label="Model version filter" value={modelFilter} onChange={event => setModelFilter(event.target.value)}><option value="current">Current · {currentModel ?? 'loading'}</option><option value="all">All model versions</option>{modelVersions.filter(version => version !== currentModel).map(version => <option key={version} value={version}>{version}</option>)}</select></label><label>From<input aria-label="Tickets from date" type="date" value={dateFrom} onChange={event => setDateFrom(event.target.value)} /></label><label>To<input aria-label="Tickets to date" type="date" value={dateTo} onChange={event => setDateTo(event.target.value)} /></label></div><label>Stake per ticket<input type="number" min="0" step="0.01" value={stakeSize} onChange={event => setStakeSize(event.target.value)} /></label><div className="stake-simulator-metrics"><div><span>Staked</span><strong>{fmt(simulatedStaked)}</strong></div><div><span>Return</span><strong>{fmt(simulatedReturned)}</strong></div><div><span>P&amp;L</span><strong className={simulatedPnl >= 0 ? 'positive' : 'negative'}>{fmtPnl(simulatedPnl)}</strong></div><div><span>ROI</span><strong className={simulatedRoi == null ? '' : simulatedRoi >= 0 ? 'positive' : 'negative'}>{simulatedRoi == null ? '—' : pct(simulatedRoi)}</strong></div></div></section>
 
-    {typeFilter === 'my_accumulator' ? <div className="paper-ledger-list">{visibleDailyAccumulators.length === 0 ? <div className="analytics-empty"><strong>No accumulator matches these filters</strong><span>Try another outcome or date range.</span></div> : visibleDailyAccumulators.map(row => renderAccumulatorRow(row))}</div> : filtered.length === 0 ? <div className="analytics-empty"><strong>No tickets match these filters</strong><span>Try another tier, outcome, model version or date range.</span></div> : <div className="paper-ledger-list">{groupedRows.map(yearGroup => <details className="paper-year-group" key={yearGroup.year} open>
+    {typeFilter === 'my_accumulator' ? <div className="paper-ledger-list">{visibleDailyAccumulators.length === 0 ? <div className="analytics-empty"><strong>No accumulator matches these filters</strong><span>Try another outcome or date range.</span></div> : groupedDailyAccumulators.map(yearGroup => <details className="paper-year-group" key={yearGroup.year} open>
+      <summary className="paper-year-heading">{yearGroup.year}</summary>
+      <div className="paper-year-body">{yearGroup.months.map(monthGroup => <details className="paper-month-group" key={`${yearGroup.year}-${monthGroup.month}`} open>
+        <summary className="paper-month-heading">{monthGroup.monthLabel}</summary>
+        <div className="paper-month-body">{monthGroup.dates.map(dayGroup => <section className="paper-date-group" key={dayGroup.date}>
+          <div className="paper-date-heading"><strong>{dayGroup.label}</strong><span>{dayGroup.rows.length} accumulator{dayGroup.rows.length === 1 ? '' : 's'}</span></div>
+          {dayGroup.rows.map(row => renderAccumulatorRow(row))}
+        </section>)}</div>
+      </details>)}</div>
+    </details>)}</div> : filtered.length === 0 ? <div className="analytics-empty"><strong>No tickets match these filters</strong><span>Try another tier, outcome, model version or date range.</span></div> : <div className="paper-ledger-list">{groupedRows.map(yearGroup => <details className="paper-year-group" key={yearGroup.year} open>
       <summary className="paper-year-heading">{yearGroup.year}</summary>
       <div className="paper-year-body">{yearGroup.months.map(monthGroup => <details className="paper-month-group" key={`${yearGroup.year}-${monthGroup.month}`} open>
         <summary className="paper-month-heading">{monthGroup.monthLabel}</summary>
         <div className="paper-month-body">{monthGroup.dates.map(dayGroup => <section className="paper-date-group" key={dayGroup.date}>
           <div className="paper-date-heading"><strong>{dayGroup.label}</strong><span>{dayGroup.rows.length} latest cohort{dayGroup.rows.length === 1 ? '' : 's'}</span></div>
-          {visibleDailyAccumulators.filter(row => row.target_date === dayGroup.date).map(row => renderAccumulatorRow(row))}
+          {typeFilter === 'all' && visibleDailyAccumulators.filter(row => row.target_date === dayGroup.date).map(row => renderAccumulatorRow(row))}
           {dayGroup.rows.map(row => {
         const versions = allVersions.filter(item => cohortKey(item) === cohortKey(row)).sort((a, b) => b.version - a.version)
         return <article className={`paper-ledger-row${expandedId === row.ticket_id ? ' expanded' : ''}`} key={row.ticket_id}>

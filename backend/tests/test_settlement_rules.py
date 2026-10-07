@@ -167,7 +167,10 @@ async def test_custom_accumulator_settles_when_all_legs_are_gradeable():
         stake=10.0,
         actual_return=None,
         settled_at=None,
-        settlement_details=None,
+        settlement_details={
+            "source": "daily_ticket_merge",
+            "source_ticket_snapshots": {"safe": {"ticket_id": 1}},
+        },
     )
     db = SimpleNamespace(
         execute=AsyncMock(return_value=_UniqueRows([accumulator])),
@@ -185,6 +188,13 @@ async def test_custom_accumulator_settles_when_all_legs_are_gradeable():
     assert changed == 1
     assert accumulator.status == CustomAccumulatorStatus.WON
     assert accumulator.actual_return == 30.0
+    assert accumulator.settlement_details == {
+        "source": "daily_ticket_merge",
+        "source_ticket_snapshots": {"safe": {"ticket_id": 1}},
+        "settlement_source": "test",
+        "result": "won",
+        "legs": ["won", "won"],
+    }
 
 
 def test_settle_finished_matches_accepts_a_kickoff_window():

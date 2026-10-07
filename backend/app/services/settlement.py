@@ -265,8 +265,15 @@ class SettlementService:
             accumulator.status = status
             accumulator.actual_return = actual_return
             accumulator.settled_at = now
+            # Preserve immutable origin/provenance metadata.  The tracker uses
+            # the daily-merge marker to distinguish generated accumulators from
+            # user-created ones; replacing the whole JSON object here made a
+            # settled daily accumulator disappear from that view.
+            previous_details = dict(accumulator.settlement_details or {})
             accumulator.settlement_details = {
-                "source": source,
+                **previous_details,
+                "source": previous_details.get("source", source),
+                "settlement_source": source,
                 "result": status.value,
                 "legs": [outcome.value for outcome in outcomes],
             }
