@@ -141,10 +141,15 @@ export function CustomAccumulatorPanel({
                       <div className="custom-ticket-leg" key={leg.prediction_id}>
                         <div className="custom-ticket-leg-main">
                           <strong>{leg.home_team} <span>vs</span> {leg.away_team}</strong>
-                          <small>{leg.competition} · {formatKickoff(leg.kickoff_at)} · {formatMarket(leg.market)}</small>
+                          <small className="custom-ticket-leg-meta">
+                            <span className="custom-leg-competition">{leg.competition}</span>
+                            <span className="custom-leg-date" aria-label={`Match date ${formatDate(leg.kickoff_at)}`}>{formatDate(leg.kickoff_at)}</span>
+                            <span className="custom-leg-time" aria-label={`Kickoff time ${formatKickoff(leg.kickoff_at)}`}>{formatKickoff(leg.kickoff_at)}</span>
+                            <span className="custom-leg-market">{formatMarket(leg.market)}</span>
+                          </small>
                         </div>
                         <div className="custom-ticket-leg-evidence">
-                          <span>{leg.best_odds != null ? `${leg.best_odds.toFixed(2)}×` : "—"}</span>
+                          <span className="custom-leg-odds">{leg.best_odds != null ? `${leg.best_odds.toFixed(2)}×` : "—"}</span>
                           <span>Q {leg.q_score.toFixed(1)}</span>
                           <span>{leg.model_agreement != null ? `${(leg.model_agreement * 100).toFixed(1)} pp` : "—"}</span>
                           {ticket.automatic && leg.source_ticket_type && <span className="source-ticket-badge">{leg.source_conflict ? "Conservative priority" : sourceTicketLabel(leg.source_ticket_type)}{leg.source_ticket_version ? ` · v${leg.source_ticket_version}` : ""}</span>}

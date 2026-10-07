@@ -963,8 +963,15 @@ body {
 .custom-ticket-leg-main strong{display:block;overflow:hidden;color:var(--text);font-size:.8rem;text-overflow:ellipsis;white-space:nowrap}
 .custom-ticket-leg-main strong span{color:var(--muted);font-weight:400}
 .custom-ticket-leg-main small{display:block;overflow:hidden;margin-top:4px;color:var(--muted);font-size:.68rem;text-overflow:ellipsis;white-space:nowrap}
+.custom-ticket-leg-meta{display:flex!important;align-items:center;gap:6px;flex-wrap:wrap;overflow:visible!important;text-overflow:clip!important;white-space:normal!important}
+.custom-ticket-leg-meta > span{display:inline-flex;align-items:center;min-height:20px}
+.custom-leg-competition{color:var(--muted)}
+.custom-leg-date{color:#7c3aed;font-weight:800}
+.custom-leg-time{color:var(--accent);font-weight:800;font-variant-numeric:tabular-nums}
+.custom-leg-market{padding:2px 6px;border:1px solid color-mix(in srgb,var(--warning) 30%,var(--border));border-radius:4px;background:color-mix(in srgb,var(--warning) 12%,var(--surface));color:var(--warning);font-weight:800;text-transform:uppercase;letter-spacing:.04em}
 .custom-ticket-leg-evidence{display:flex;align-items:center;gap:6px;flex:0 0 auto;color:var(--accent);font-size:.68rem;font-weight:800;white-space:nowrap}
 .custom-ticket-leg-evidence span{margin:0;padding:3px 5px;border-radius:5px;background:var(--accent-bg)}
+.custom-ticket-leg-evidence .custom-leg-odds{border:1px solid color-mix(in srgb,var(--positive) 35%,var(--border));background:color-mix(in srgb,var(--positive) 11%,var(--surface));color:var(--positive);font-variant-numeric:tabular-nums}
 .custom-ticket-leg-evidence button{width:22px;height:22px;border:1px solid var(--border);border-radius:50%;background:var(--surface);color:var(--muted);cursor:pointer;font-size:1rem;line-height:1}
 .custom-ticket-leg-evidence button:hover:not(:disabled),.danger-action:hover:not(:disabled){border-color:var(--negative);color:var(--negative)}
 .custom-ticket-leg-evidence button:disabled{opacity:.4;cursor:not-allowed}
