@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 
-from sqlalchemy import func, select
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
@@ -17,6 +17,26 @@ from app.services.automation_alerts import (
 from app.services.pipeline_tracker import infer_pipeline_run_type
 
 
+def _upcoming_stale_odds_conditions(now: datetime):
+    """Limit stale-odds alerts to fixtures close enough to require refresh."""
+    return and_(
+        Match.status == MatchStatus.SCHEDULED,
+        Match.kickoff_at > now,
+        Match.kickoff_at <= now + timedelta(hours=settings.max_selection_odds_age_hours),
+        (Prediction.source_odds_at.is_(None))
+        | (Prediction.source_odds_at < now - timedelta(hours=settings.max_selection_odds_age_hours)),
+    )
+
+
+def _finished_refresh_lag_conditions(now: datetime):
+    """Only flag finished fixtures that still lack a final score."""
+    return and_(
+        Match.status == MatchStatus.FINISHED,
+        Match.kickoff_at >= now - timedelta(days=1),
+        or_(Match.home_goals.is_(None), Match.away_goals.is_(None)),
+    )
+
+
 async def operational_snapshot(db: AsyncSession, now: datetime | None = None) -> dict:
     now = now or datetime.now(timezone.utc)
     latest_run = await db.scalar(
@@ -24,23 +44,15 @@ async def operational_snapshot(db: AsyncSession, now: datetime | None = None) ->
     )
     due = latest_due_pipeline_window(now)
     due_decision = await assess_due_pipeline(db, due) if due else None
-    stale_before = now - timedelta(hours=settings.max_selection_odds_age_hours)
     upcoming_stale_odds = await db.scalar(
         select(func.count())
         .select_from(Prediction)
         .join(Match)
-        .where(
-            Match.status == MatchStatus.SCHEDULED,
-            Match.kickoff_at > now,
-            Match.kickoff_at <= now + timedelta(days=1),
-            (Prediction.source_odds_at.is_(None)) | (Prediction.source_odds_at < stale_before),
-        )
+        .where(_upcoming_stale_odds_conditions(now))
     )
     finished_stale = await db.scalar(
         select(func.count()).select_from(Match).where(
-            Match.status == MatchStatus.FINISHED,
-            Match.kickoff_at >= now - timedelta(days=1),
-            Match.updated_at < now - timedelta(minutes=settings.settlement_interval_minutes * 3),
+            _finished_refresh_lag_conditions(now),
         )
     )
     active_alerts = await db.scalar(

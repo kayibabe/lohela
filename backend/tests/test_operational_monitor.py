@@ -27,3 +27,23 @@ async def test_operational_snapshot_reports_read_only_signals(monkeypatch):
     assert result["upcoming_stale_odds_predictions"] == 3
     assert result["finished_match_refresh_lag"] == 2
     assert result["active_alerts"] == 1
+
+
+def test_stale_odds_alert_is_limited_to_near_kickoff_fixtures():
+    sql = str(operational_monitor._upcoming_stale_odds_conditions(
+        datetime(2026, 10, 4, 8, tzinfo=timezone.utc)
+    ))
+
+    assert "kickoff_at" in sql
+    assert "source_odds_at" in sql
+    assert "1 day" not in sql
+
+
+def test_finished_refresh_alert_requires_missing_final_score():
+    sql = str(operational_monitor._finished_refresh_lag_conditions(
+        datetime(2026, 10, 4, 8, tzinfo=timezone.utc)
+    ))
+
+    assert "home_goals" in sql
+    assert "away_goals" in sql
+    assert "updated_at" not in sql
