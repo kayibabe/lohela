@@ -155,7 +155,7 @@ export default function DailyTicketsPage({ date }: DailyTicketsPageProps) {
     setDetail({
       selection: {
         ...selection,
-        source_odds_at: null,
+        source_odds_at: selection.source_odds_at ?? null,
         result: selection.result ?? undefined,
       },
     });
@@ -302,6 +302,11 @@ export default function DailyTicketsPage({ date }: DailyTicketsPageProps) {
     },
   ];
 
+  const decisionRows = matches
+    .filter((row) => row.best_odds != null)
+    .sort((left, right) => (right.edge ?? -1) - (left.edge ?? -1))
+    .slice(0, 6);
+
   return (
     <>
       <div className="meta-bar">
@@ -411,6 +416,7 @@ export default function DailyTicketsPage({ date }: DailyTicketsPageProps) {
                 ["tickets", "Recommendations"],
                 ["best-mix", "Best-mix picks"],
                 ["odds-policy", "Dynamic odds policy"],
+                ["passed", "Passed / why"],
                 ["my-accumulators", "My accumulators"],
               ] as [DailyTab, string][]
             ).map(([key, label]) => (
@@ -456,6 +462,13 @@ export default function DailyTicketsPage({ date }: DailyTicketsPageProps) {
               </p>
             </div>
           )}
+          {tab === "tickets" && (
+            <DecisionSummary
+              date={date}
+              matches={decisionRows}
+              onSelect={openSelection}
+            />
+          )}
           {tab === "best-mix" && (
             <BandMixPicks
               date={date}
@@ -470,6 +483,9 @@ export default function DailyTicketsPage({ date }: DailyTicketsPageProps) {
               onSelect={openSelection}
               onAdd={addToAccumulator}
             />
+          )}
+          {tab === "passed" && (
+            <PassedMatches rows={rejected} onSelect={openSelection} />
           )}
           {tab === "tickets" && (
             <>
@@ -569,5 +585,97 @@ export default function DailyTicketsPage({ date }: DailyTicketsPageProps) {
         />
       )}
     </>
+  );
+}
+
+function PassedMatches({ rows, onSelect }: { rows: SelectionSummary[]; onSelect: (row: SelectionSummary) => void }) {
+  return <section className="passed-matches-panel" aria-labelledby="passed-matches-title">
+    <div className="section-heading">
+      <div><span className="eyebrow">Transparent rejection ledger</span><h2 id="passed-matches-title">Passed opportunities and why</h2><span className="section-note">Candidates remain visible so the system teaches the user what failed a publication gate.</span></div>
+      <span className="section-note"><b>{rows.length}</b> reviewed</span>
+    </div>
+    {rows.length === 0 ? <div className="decision-empty"><strong>No rejected candidates recorded</strong><span>When the candidate ledger is empty, there is no pass explanation to display.</span></div> : <div className="passed-matches-list">
+      {rows.map(row => <article className="passed-match-row" key={row.prediction_id}>
+        <div className="passed-match-main"><button onClick={() => onSelect(row)}><strong>{row.home_team} vs {row.away_team}</strong><small>{row.competition} · {new Date(row.kickoff_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</small></button><span>{row.market} · {row.selection}</span></div>
+        <div className="passed-match-metrics"><span><small>Q-score</small><b>{row.q_score.toFixed(1)}</b></span><span><small>Odds</small><b>{row.best_odds == null ? "Unavailable" : row.best_odds.toFixed(2)}</b></span><span><small>Edge</small><b>{row.edge == null ? "Unavailable" : `${(row.edge * 100).toFixed(1)}%`}</b></span></div>
+        <div className="passed-match-reasons"><strong>PASS because</strong><span>{(row.reason_codes?.length ? row.reason_codes : ["Publication gate did not pass"]).map(reasonLabel).join(" · ")}</span></div>
+      </article>)}
+    </div>}
+  </section>
+}
+
+function DecisionSummary({
+  date,
+  matches,
+  onSelect,
+}: {
+  date: string;
+  matches: SelectionSummary[];
+  onSelect: (selection: SelectionSummary) => void;
+}) {
+  const top = matches[0] ?? null;
+  const isBettable = (selection: SelectionSummary) => selection.recommendation_status ? selection.recommendation_status === "BET" : selection.q_score >= 85 && (selection.edge ?? 0) > 0 && selection.data_quality_status === "good" && (selection.active_models?.length ?? 0) > 0;
+  const action = top ? (top.recommendation_status ?? (isBettable(top) ? "BET" : "WATCH")) : "PASS";
+  const actionTone = action.toLowerCase();
+  const reason = top
+    ? action === "BET"
+      ? "Qualified quality score and positive priced edge. Review the risks before logging a decision."
+      : "A qualified signal exists, but the evidence is not strong enough for a direct BET label."
+    : "No priced selection passed the current publication and evidence gates.";
+
+  return (
+    <section className="decision-summary" aria-labelledby="decision-summary-title">
+      <div className="decision-summary-header">
+        <div>
+          <span className="eyebrow">Decision workspace · {date}</span>
+          <h2 id="decision-summary-title">BET / WATCH / PASS</h2>
+          <p>{reason}</p>
+        </div>
+        <span className={`decision-status ${actionTone}`} aria-label={`Recommendation ${action}`}>
+          {action}
+        </span>
+      </div>
+      <div className="decision-principles" aria-label="Decision definitions">
+        <span><b>Grade</b> opportunity quality</span>
+        <span><b>Confidence</b> prediction certainty</span>
+        <span><b>Risk</b> invalidation context</span>
+      </div>
+      {top && (
+        <div className="decision-lead">
+          <div>
+            <strong>{top.home_team} <span>vs</span> {top.away_team}</strong>
+            <small>{top.competition} · {new Date(top.kickoff_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</small>
+          </div>
+          <div className="decision-lead-selection">
+            <span>{top.market}</span>
+            <b>{top.selection}</b>
+          </div>
+          <button className="btn-ghost btn-sm" onClick={() => onSelect(top)}>Why this?</button>
+        </div>
+      )}
+      <div className="decision-table-wrap">
+        {matches.length === 0 ? (
+          <div className="decision-empty"><strong>No qualified priced opportunities</strong><span>PASS is a valid outcome when odds, provenance, or edge evidence is unavailable.</span></div>
+        ) : (
+          <table className="decision-table">
+            <thead><tr><th>Match</th><th>Selection</th><th>Model</th><th>Odds</th><th>Edge</th><th>Grade</th><th>Data</th><th>Decision</th></tr></thead>
+            <tbody>{matches.map((row) => {
+              const rowAction = row.recommendation_status ?? (isBettable(row) ? "BET" : "WATCH");
+              return <tr key={`${row.match_id}-${row.prediction_id}`}>
+                <td><button className="decision-match" onClick={() => onSelect(row)}>{row.home_team} vs {row.away_team}<small>{row.competition}</small></button></td>
+                <td><span className="decision-market">{row.market}</span><strong>{row.selection}</strong></td>
+                <td>{row.model_probability == null ? "—" : `${(row.model_probability * 100).toFixed(1)}%`}</td>
+                <td>{row.best_odds == null ? "—" : row.best_odds.toFixed(2)}</td>
+                <td className={(row.edge ?? 0) > 0 ? "positive" : "negative"}>{row.edge == null ? "—" : `${(row.edge * 100).toFixed(1)}%`}</td>
+                <td><span className="decision-grade">{row.q_grade ?? "Q"} · {row.q_score}</span></td>
+                <td><span className={`data-quality-pill ${row.data_quality_status ?? "unknown"}`}>{row.data_quality_score == null ? "—" : `${row.data_quality_score.toFixed(0)}/100`}</span></td>
+                <td><span className={`decision-pill ${rowAction.toLowerCase()}`}>{rowAction}</span></td>
+              </tr>;
+            })}</tbody>
+          </table>
+        )}
+      </div>
+      <p className="decision-footnote">Historical performance and calibration live in Validate. This surface shows current evidence only; it does not guarantee an outcome.</p>
+    </section>
   );
 }

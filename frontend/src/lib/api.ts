@@ -168,6 +168,16 @@ export interface SelectionSummary {
   elapsed_minutes?: number | null
   result?: 'won' | 'lost' | 'void' | null
   reason_codes?: string[]
+  source_odds_at?: string | null
+  as_of_at?: string | null
+  data_quality_score?: number | null
+  data_quality_status?: 'good' | 'review' | 'weak' | 'unknown'
+  active_models?: string[]
+  data_quality_snapshot?: Record<string, unknown>
+  recommendation_status?: 'BET' | 'WATCH' | 'PASS'
+  recommendation_reasons?: string[]
+  recommendation_risks?: string[]
+  recommendation_policy_version?: string | null
 }
 
 export interface CustomAccumulatorLeg {

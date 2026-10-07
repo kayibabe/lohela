@@ -27,6 +27,15 @@ export interface DetailSelection {
   home_goals?: number | null
   away_goals?: number | null
   selection_settled_at?: string | null
+  as_of_at?: string | null
+  data_quality_score?: number | null
+  data_quality_status?: 'good' | 'review' | 'weak' | 'unknown'
+  active_models?: string[]
+  data_quality_snapshot?: Record<string, unknown>
+  recommendation_status?: 'BET' | 'WATCH' | 'PASS'
+  recommendation_reasons?: string[]
+  recommendation_risks?: string[]
+  recommendation_policy_version?: string | null
 }
 
 interface Props {
@@ -49,6 +58,12 @@ function spreadLabel(value: number | null | undefined) {
   if (value <= 0.10) return 'Acceptable'
   if (value <= 0.15) return 'Caution'
   return 'High disagreement'
+}
+
+function evidenceLabel(value: string) {
+  return value
+    .replace(/_/g, ' ')
+    .replace(/\b\w/g, character => character.toUpperCase())
 }
 
 function freshness(iso?: string | null) {
@@ -103,6 +118,23 @@ export default function SelectionDetail({ selection, modelVersion, publishedAt, 
   const implied = selection.avg_implied ?? (selection.best_odds ? 1 / selection.best_odds : null)
   const priceState = useMemo(() => freshness(selection.source_odds_at), [selection.source_odds_at])
   const strength = useMemo(() => (market ? marketDecisionStrength : decisionStrength)(selection, priceState), [selection, priceState, market])
+  const evidenceReasons = useMemo(() => {
+    const reasons: string[] = selection.recommendation_reasons?.length ? [...selection.recommendation_reasons] : []
+    if ((selection.edge ?? 0) > 0) reasons.push(`positive edge of ${pct(selection.edge, true)}`)
+    if ((selection.q_score ?? 0) >= 85) reasons.push(`Q-score ${selection.q_score?.toFixed(1)}`)
+    if ((selection.model_agreement ?? 1) <= 0.05) reasons.push('strong model agreement')
+    if (selection.data_quality_status === 'good') reasons.push('good data quality')
+    return reasons.slice(0, 4)
+  }, [selection])
+  const riskReasons = useMemo(() => {
+    const risks: string[] = selection.recommendation_risks?.length ? [...selection.recommendation_risks] : []
+    if ((selection.edge ?? 0) <= 0) risks.push('no positive captured edge')
+    if ((selection.model_agreement ?? 0) > 0.10) risks.push('model disagreement')
+    if (selection.data_quality_status === 'review') risks.push('data quality needs review')
+    if (priceState.state !== 'fresh') risks.push('price snapshot is not fresh')
+    if (!selection.active_models?.length) risks.push('active model set unavailable')
+    return risks.slice(0, 4)
+  }, [selection, priceState.state])
   const stakeValue = Number(stake)
   const hasPublishedBetSource = Boolean(selection.selection_id && selection.best_odds)
   const canConfirmBet = hasPublishedBetSource && Number.isFinite(stakeValue) && stakeValue > 0
@@ -199,6 +231,14 @@ export default function SelectionDetail({ selection, modelVersion, publishedAt, 
           {strength.cautions.length === 0 && <p className="decision-strength-note positive"><strong>Passes the visible checks.</strong> Confirm the published odds before treating this as an acca leg.</p>}
         </section>
 
+        <section className="explainability-card" aria-label="Recommendation explanation">
+          <div className="evidence-title"><h3>Why this recommendation?</h3><span>Persisted decision evidence</span></div>
+          <div className="explainability-grid">
+            <div><strong>Why consider it</strong>{evidenceReasons.length ? <ul>{evidenceReasons.map(reason => <li key={reason}>{evidenceLabel(reason)}</li>)}</ul> : <span>No positive reason is available from the captured snapshot.</span>}</div>
+            <div><strong>Risks and unknowns</strong>{riskReasons.length ? <ul>{riskReasons.map(reason => <li key={reason}>{evidenceLabel(reason)}</li>)}</ul> : <span>No additional visible caution was recorded.</span>}</div>
+          </div>
+        </section>
+
         <section className="detail-pick">
           <div><span>Market</span><strong>{formatMarket(selection.market)}</strong></div>
           <div><span>Snapshot odds</span><strong>{selection.best_odds?.toFixed(2) ?? '—'}</strong></div>
@@ -237,6 +277,9 @@ export default function SelectionDetail({ selection, modelVersion, publishedAt, 
           <div><span>Odds captured</span><code>{selection.source_odds_at ? new Date(selection.source_odds_at).toLocaleString() : 'Unavailable'}</code></div>
           <div><span>Published</span><code>{publishedAt ? new Date(publishedAt).toLocaleString() : 'Selection pool'}</code></div>
           <div><span>Model</span><code>{modelVersion ?? 'Latest completed run'}</code></div>
+          <div><span>Information as of</span><code>{selection.as_of_at ? new Date(selection.as_of_at).toLocaleString() : 'Unavailable'}</code></div>
+          <div><span>Data quality</span><code>{selection.data_quality_score == null ? 'Unavailable' : `${selection.data_quality_score.toFixed(0)}/100 · ${selection.data_quality_status ?? 'unknown'}`}</code></div>
+          <div><span>Active models</span><code>{selection.active_models?.length ? selection.active_models.join(', ') : 'Unavailable'}</code></div>
           <div><span>Market settled</span><code>{selection.selection_settled_at ? new Date(selection.selection_settled_at).toLocaleString() : 'Pending'}</code></div>
         </section>
 

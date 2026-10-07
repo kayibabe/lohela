@@ -323,10 +323,26 @@ async def all_market_research_summary(db: AsyncSession, stake: float = 1.0, date
         return {"selections": len(items), "settled": len(effective), "wins": wins, "losses": losses, "voids": voids,
                 "staked": round(staked, 2), "returned": round(returned, 2), "pnl": round(pnl, 2),
                 "roi": round(pnl / staked, 4) if staked else 0.0, "hit_rate": round(wins / len(effective), 4) if effective else 0.0}
-    groups = {"by_date": {}, "by_month": {}, "by_year": {}, "by_market": {}, "by_competition": {}}
+    groups = {
+        "by_date": {}, "by_month": {}, "by_year": {}, "by_market": {},
+        "by_competition": {}, "by_odds_band": {}, "by_probability_band": {},
+        "by_grade": {},
+    }
+    def odds_band(odds: float) -> str:
+        if odds < 1.30: return "1.10–1.29"
+        if odds < 1.50: return "1.30–1.49"
+        if odds < 1.70: return "1.50–1.69"
+        if odds < 2.00: return "1.70–1.99"
+        if odds < 2.50: return "2.00–2.49"
+        if odds < 3.00: return "2.50–2.99"
+        return "3.00+"
+    def probability_band(probability: float) -> str:
+        lower = max(0, min(90, int(probability * 10) * 10))
+        return f"{lower}–{lower + 9}%"
     for prediction, outcome in rows:
         d = prediction.match.kickoff_at.date().isoformat(); comp = prediction.match.competition.name if prediction.match.competition else str(prediction.match.competition_id)
-        for key, value in (("by_date", d), ("by_month", d[:7]), ("by_year", d[:4]), ("by_market", prediction.market), ("by_competition", comp)):
+        grade = prediction.q_grade.value if hasattr(prediction.q_grade, "value") else str(prediction.q_grade)
+        for key, value in (("by_date", d), ("by_month", d[:7]), ("by_year", d[:4]), ("by_market", prediction.market), ("by_competition", comp), ("by_odds_band", odds_band(prediction.source_decimal_odds)), ("by_probability_band", probability_band(prediction.model_probability)), ("by_grade", grade)):
             groups[key].setdefault(value, []).append((prediction, outcome))
     return {"stake": stake, "eligible_predictions": len(latest), "settled_predictions": len(rows),
             "excluded_missing_odds": excluded_missing_odds,

@@ -33,6 +33,7 @@ from app.services.models import (
     xg_market_probability,
 )
 from app.services.models.bayesian import _run_analytical, predict_market_from_posteriors
+from app.services.decision_evidence import build_decision_evidence
 
 
 TOTALS = ("under_2.5", "under_3.5", "under_4.5")
@@ -239,6 +240,15 @@ class HistoricalTotalsBackfill:
                         data_quality=match.data_quality_score / 100.0,
                     ),
                 )
+                decision_evidence = build_decision_evidence(
+                    q_score=q_score.q_score,
+                    edge=q_score.edge,
+                    model_agreement=ensemble.model_agreement,
+                    data_quality_score=match.data_quality_score,
+                    active_models=ensemble.active_models,
+                    source_odds_at=self._aware(quote.fetched_at) if quote else None,
+                    kickoff_at=match.kickoff_at,
+                )
                 self.db.add(Prediction(
                     model_run_id=None,
                     match_id=match.id,
@@ -278,6 +288,10 @@ class HistoricalTotalsBackfill:
                         "point_in_time": True,
                     },
                     as_of_at=input_as_of,
+                    recommendation_status=decision_evidence["status"],
+                    recommendation_reasons=decision_evidence["reasons"],
+                    recommendation_risks=decision_evidence["risks"],
+                    recommendation_policy_version=decision_evidence["policy_version"],
                 ))
                 existing.add((match.id, market))
                 written += 1

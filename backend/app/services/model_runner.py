@@ -39,6 +39,7 @@ from app.services.models import (
     should_use_zinb,
 )
 from app.services.models.ensemble import DEFAULT_WEIGHTS, Q_SCORE_WEIGHTS
+from app.services.decision_evidence import build_decision_evidence
 
 logger = logging.getLogger(__name__)
 
@@ -468,6 +469,16 @@ class ModelRunner:
                 age_hours = None
                 component_status["source_odds"] = "missing"
 
+            decision_evidence = build_decision_evidence(
+                q_score=q_result.q_score,
+                edge=q_result.edge,
+                model_agreement=ensemble.model_agreement,
+                data_quality_score=match.data_quality_score,
+                active_models=ensemble.active_models,
+                source_odds_at=source_odds_at,
+                kickoff_at=match.kickoff_at,
+            )
+
             prediction = Prediction(
                 model_run_id=self._model_run.id if self._model_run else None,
                 match_id=match.id,
@@ -517,6 +528,10 @@ class ModelRunner:
                     "is_fallback": bundle.best.is_fallback if bundle else False,
                     "bookmaker_count": bundle.bookmaker_count if bundle else 0,
                 },
+                recommendation_status=decision_evidence["status"],
+                recommendation_reasons=decision_evidence["reasons"],
+                recommendation_risks=decision_evidence["risks"],
+                recommendation_policy_version=decision_evidence["policy_version"],
             )
             self.db.add(prediction)
             count += 1

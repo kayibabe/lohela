@@ -87,6 +87,13 @@ class Prediction(Base):
     source_implied_probability: Mapped[float | None] = mapped_column(Float, nullable=True)
     source_odds_provenance: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
 
+    # Append-only decision contract captured with the prediction. This keeps
+    # later UI policy changes from rewriting historical recommendation meaning.
+    recommendation_status: Mapped[str | None] = mapped_column(String(10), nullable=True, index=True)
+    recommendation_reasons: Mapped[list] = mapped_column(JSON, default=list, nullable=False)
+    recommendation_risks: Mapped[list] = mapped_column(JSON, default=list, nullable=False)
+    recommendation_policy_version: Mapped[str | None] = mapped_column(String(40), nullable=True)
+
     # Closing-line value — the best available price at kickoff for this exact
     # market/selection, captured once and never overwritten. Comparing the
     # entry price (source_decimal_odds) against this is the standard way to

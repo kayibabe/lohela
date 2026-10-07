@@ -6,7 +6,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from app.database import get_db
 from app.api.security import require_pro_access
@@ -66,6 +66,16 @@ class SelectionOut(BaseModel):
     live_phase: str | None = None
     elapsed_minutes: int | None = None
     result: str | None = None
+    source_odds_at: str | None = None
+    as_of_at: str | None = None
+    data_quality_score: float | None = None
+    data_quality_status: str = "unknown"
+    active_models: list[str] = Field(default_factory=list)
+    data_quality_snapshot: dict = Field(default_factory=dict)
+    recommendation_status: str = "WATCH"
+    recommendation_reasons: list[str] = Field(default_factory=list)
+    recommendation_risks: list[str] = Field(default_factory=list)
+    recommendation_policy_version: str | None = None
 
     model_config = {"from_attributes": True}
 
@@ -235,6 +245,20 @@ async def get_qualified_selections(
             live_phase=match.live_phase,
             elapsed_minutes=match.elapsed_minutes,
             result=_finished_selection_result(match, pred.market),
+            source_odds_at=pred.source_odds_at.isoformat() if pred.source_odds_at else None,
+            as_of_at=(pred.as_of_at or pred.created_at).isoformat() if (pred.as_of_at or pred.created_at) else None,
+            data_quality_score=match.data_quality_score,
+            data_quality_status=(
+                "good" if match.data_quality_score >= 60
+                else "review" if match.data_quality_score >= 40
+                else "weak"
+            ),
+            active_models=[str(model) for model in (pred.active_models or [])],
+            data_quality_snapshot=pred.data_quality_snapshot or {},
+            recommendation_status=pred.recommendation_status or "WATCH",
+            recommendation_reasons=[str(reason) for reason in (pred.recommendation_reasons or [])],
+            recommendation_risks=[str(risk) for risk in (pred.recommendation_risks or [])],
+            recommendation_policy_version=pred.recommendation_policy_version,
         ))
 
     return output
