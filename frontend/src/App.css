@@ -26,6 +26,7 @@
   --conservative: #059669;
   --balanced:     #1456a0;
   --high-odds:    #7c3aed;
+  --date-accent:  #7c3aed;
   --purple:       #1456a0;
   --amber:        #d97706;
 
@@ -71,6 +72,7 @@
     --accent:    #35d5e8;
     --accent-bg: #123440;
     --accent-mid:#69e5f1;
+    --date-accent: #c4b5fd;
     --conservative: #34d399;
     --positive:  #34d399;
     --negative:  #f87171;
@@ -1325,7 +1327,7 @@ body {
 }
 .match-history-row small { color: var(--accent); font-weight: 700; }
 .paper-ticket-detail li > div:first-child small { color: var(--accent); font-weight: 700; }
-.paper-kickoff-date { color: var(--text); font-weight: 800; }
+.paper-kickoff-date { color: var(--date-accent); font-weight: 800; }
 
 .leg-market {
   font-size: 10px;
