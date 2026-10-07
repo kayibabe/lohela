@@ -16,7 +16,7 @@ const ticket: CustomAccumulator = {
     home_team: 'Sport Recife',
     away_team: 'São Bernardo',
     competition: 'Brasileirão Série B',
-    kickoff_at: '2026-10-07T00:30:00Z',
+    kickoff_at: '2026-10-08T12:30:00Z',
     market: 'home_win',
     selection: 'home_win',
     q_score: 62.4,
@@ -40,6 +40,7 @@ describe('CustomAccumulatorPanel', () => {
     )
 
     expect(html).toContain('Wed, 7 Oct 2026')
+    expect(html).toContain('Includes games to Thu, 8 Oct 2026')
     expect(html).toMatch(/\d{2}:30/)
     expect(html).toContain('Home Win')
     expect(html).toContain('1.26×')

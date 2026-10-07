@@ -5,6 +5,13 @@ import type { CustomAccumulator, DailyTab } from "./types";
 
 const sourceTicketLabel = (type?: string | null) => ({ safe: "Conservative", balanced: "Balanced", high_odds: "High Odds" }[type ?? ""] ?? "Source ticket");
 
+function latestAccumulatorKickoff(ticket: CustomAccumulator): string {
+  return ticket.legs.reduce(
+    (latest, leg) => new Date(leg.kickoff_at).getTime() > new Date(latest).getTime() ? leg.kickoff_at : latest,
+    ticket.date,
+  );
+}
+
 export function CustomAccumulatorPanel({
   date,
   tickets,
@@ -101,12 +108,13 @@ export function CustomAccumulatorPanel({
             const riskScore = chanceToWin == null ? null : Math.max(0, Math.min(100, (1 - chanceToWin) * 70 + concentration * 10));
             const expectedReturn = chanceToWin == null ? null : chanceToWin * odds - 1;
             const sourceSnapshots = Object.values(ticket.source_ticket_snapshots ?? {});
+            const latestKickoff = latestAccumulatorKickoff(ticket);
             return (
               <article className={`custom-ticket ${ticket.status}${ticket.automatic ? " automatic-ticket" : ""}`} key={ticket.id}>
                 <div className="custom-ticket-header">
                   <div>
                     <strong>{ticket.name}</strong>
-                    {ticket.automatic && <div className="automatic-ticket-badges"><span className="custom-status-badge automatic">My accumulator</span><span className="relaxed-badge">Includes games to {formatDate(ticket.date)}</span></div>}
+                    {ticket.automatic && <div className="automatic-ticket-badges"><span className="custom-status-badge automatic">My accumulator</span><span className="relaxed-badge">Includes games to {formatDate(latestKickoff)}</span></div>}
                     <span>{formatDate(ticket.date)} · {ticket.legs.length} leg{ticket.legs.length === 1 ? "" : "s"}</span>
                   </div>
                   <span className={`custom-status-badge ${ticket.status}`}>{statusLabel}</span>
