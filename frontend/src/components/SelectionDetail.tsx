@@ -45,6 +45,7 @@ interface Props {
   /** 'market': the leg's probability is the bookmaker's fair price, not a model estimate. */
   pricing?: 'market' | 'model'
   onClose: () => void
+  onOpenMatch?: (matchId: number) => void
 }
 
 const pct = (value: number | null | undefined, signed = false) => {
@@ -99,7 +100,7 @@ function decisionStrength(selection: DetailSelection, priceState: ReturnType<typ
   return { label: strong ? 'Strong' : caution ? 'Review' : 'Acceptable', tone: strong ? 'strong' : caution ? 'caution' : 'acceptable', cautions }
 }
 
-export default function SelectionDetail({ selection, modelVersion, publishedAt, pricing, onClose }: Props) {
+export default function SelectionDetail({ selection, modelVersion, publishedAt, pricing, onClose, onOpenMatch }: Props) {
   const market = pricing === 'market'
   const label = market
     ? { prob: 'Fair chance', edge: 'Price vs fair', probRow: 'Fair chance (margin removed)', impliedRow: 'Quoted price implies', subtitle: 'Fair price vs quoted price', ev: 'Long-run return at this price against the fair chance. Negative values are the bookmaker margin.' }
@@ -210,7 +211,7 @@ export default function SelectionDetail({ selection, modelVersion, publishedAt, 
             <h2 id="selection-detail-title">{selection.home_team} <span>vs</span> {selection.away_team}</h2>
             <p>{selection.competition} · <span className="kickoff-time">{formatKickoff(selection.kickoff_at)}</span></p>
           </div>
-          <button ref={closeRef} className="detail-close" onClick={onClose} aria-label="Close selection details">×</button>
+          <div className="detail-header-actions">{onOpenMatch && <button className="btn-secondary" onClick={() => onOpenMatch(selection.match_id)}>Open match intelligence</button>}<button ref={closeRef} className="detail-close" onClick={onClose} aria-label="Close selection details">×</button></div>
         </div>
 
         <div className="detail-status-row">

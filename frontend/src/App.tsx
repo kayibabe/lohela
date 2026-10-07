@@ -8,11 +8,12 @@ import ToolsPage from './pages/Tools'
 import AdminPage from './pages/Admin'
 import LoginPage from './pages/Login'
 import UpgradePage from './pages/Upgrade'
+import MatchIntelligencePage from './pages/MatchIntelligencePage'
 import { AuthControls, useAuth } from './auth'
 
 type Theme = 'dark' | 'light' | 'system'
 type ModulePage = 'tickets' | 'tracker' | 'analytics' | 'tools' | 'admin'
-type Page = ModulePage | 'login' | 'upgrade'
+type Page = ModulePage | 'match' | 'login' | 'upgrade'
 
 // Keep primary navigation aligned to the user's decision loop. Utilities
 // remain routable for backwards compatibility, but are not a peer destination
@@ -45,13 +46,14 @@ function NavIcon({ name }: { name: string }) {
 export default function App() {
   const { user, loading } = useAuth()
   const [page, setPage] = useState<Page>(() => routePage(window.location.pathname))
+  const [matchId, setMatchId] = useState<number | null>(() => routeMatchId(window.location.pathname))
   const [returnPath, setReturnPath] = useState<ModulePage>('tickets')
   const [date, setDate] = useState(TODAY)
   const [theme, setTheme] = useState<Theme>('system')
   const [lastUpdated, setLastUpdated] = useState(() => new Date())
 
   useEffect(() => {
-    const onPopState = () => setPage(routePage(window.location.pathname))
+    const onPopState = () => { setPage(routePage(window.location.pathname)); setMatchId(routeMatchId(window.location.pathname)) }
     window.addEventListener('popstate', onPopState)
     return () => window.removeEventListener('popstate', onPopState)
   }, [])
@@ -63,7 +65,7 @@ export default function App() {
     }
     if (!loading && page !== 'login' && page !== 'upgrade') {
       const guarded = guardPage(page, user)
-      if (guarded !== page) navigate(guarded, guarded === 'login' ? page : undefined, true)
+      if (guarded !== page) navigate(guarded, guarded === 'login' ? (isModulePage(page) ? page : 'tickets') : undefined, true)
     }
   }, [loading, page, user])
 
@@ -72,6 +74,12 @@ export default function App() {
     setPage(next)
     const path = next === 'login' ? '/login' : next === 'upgrade' ? '/upgrade' : `/${next}`
     window.history[replace ? 'replaceState' : 'pushState']({}, '', path)
+  }
+
+  function navigateToMatch(nextMatchId: number) {
+    setMatchId(nextMatchId)
+    setPage('match')
+    window.history.pushState({}, '', `/match/${nextMatchId}`)
   }
 
   function goTo(next: ModulePage) {
@@ -127,7 +135,7 @@ export default function App() {
       </aside>
       <header className="app-header">
         <div className="header-page-title">
-          <span className="research-status"><span className="status-dot" /> {page === 'tickets' ? 'Decision workspace' : isModulePage(page) ? NAV_META[page].hint : 'System'}</span>
+        <span className="research-status"><span className="status-dot" /> {page === 'tickets' ? 'Decision workspace' : page === 'match' ? 'Match intelligence' : isModulePage(page) ? NAV_META[page].hint : 'System'}</span>
           <button className="theme-btn" onClick={cycleTheme} title={`Theme: ${theme}`} aria-label={`Theme: ${theme}. Change theme`}>
             <span className="theme-auto">{theme === 'system' ? 'Auto' : theme}</span>
           </button>
@@ -156,7 +164,8 @@ export default function App() {
 
       <main className="main" id="main-content" tabIndex={-1}>
         {page === 'upgrade' && <UpgradePage onBack={() => goTo('tickets')} />}
-        {page === 'tickets' && <DailyTicketsPage key={date} date={date} />}
+        {page === 'tickets' && <DailyTicketsPage key={date} date={date} onOpenMatch={navigateToMatch} />}
+        {page === 'match' && matchId != null && <MatchIntelligencePage matchId={matchId} onBack={() => navigate('tickets')} />}
         {page === 'tracker' && <TrackerPage onOpenTickets={(targetDate) => { if (targetDate) setDate(targetDate); goTo('tickets') }} />}
         {page === 'analytics' && <AnalyticsPage />}
         {page === 'tools' && <ToolsPage />}
@@ -185,18 +194,24 @@ function routePage(pathname: string): Page {
   const path = pathname.replace(/\/$/, '')
   if (path === '/login') return 'login'
   if (path === '/upgrade') return 'upgrade'
+  if (/^\/match\/\d+$/.test(path)) return 'match'
   if (path === '/tickets') return 'tickets'
   if (path === '/tracker' || path === '/analytics' || path === '/tools' || path === '/admin') return path.slice(1) as ModulePage
   return 'login'
 }
 
-function isModulePage(page: Page): page is ModulePage {
-  return page !== 'login' && page !== 'upgrade'
+function routeMatchId(pathname: string): number | null {
+  const match = pathname.replace(/\/$/, '').match(/^\/match\/(\d+)$/)
+  return match ? Number(match[1]) : null
 }
 
-function guardPage(page: ModulePage, user: ReturnType<typeof useAuth>['user']): Page {
+function isModulePage(page: Page): page is ModulePage {
+  return page !== 'login' && page !== 'upgrade' && page !== 'match'
+}
+
+function guardPage(page: ModulePage | 'match', user: ReturnType<typeof useAuth>['user']): Page {
   if (page === 'admin' && user?.role !== 'admin') return user ? 'upgrade' : 'login'
-  if ((page === 'tickets' || page === 'tracker' || page === 'analytics') && !user) return 'login'
+  if ((page === 'tickets' || page === 'tracker' || page === 'analytics' || page === 'match') && !user) return 'login'
   if (page === 'analytics' && user?.role !== 'admin' && user?.plan !== 'pro') return 'upgrade'
   return page
 }

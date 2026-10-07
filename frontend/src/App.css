@@ -2872,6 +2872,43 @@ th[aria-sort="descending"] .table-sort span,
 
 /* ─── Research analytics workspace ───────────────────────────── */
 .analytics-page { max-width: 1360px; }
+
+.match-intelligence-page { display: grid; gap: 18px; }
+.match-intelligence-intro { align-items: flex-start; }
+.match-intelligence-intro h1 span { color: var(--muted); font-weight: 400; }
+.match-intelligence-intro p { color: var(--muted); margin: 6px 0 0; }
+.text-button { background: transparent; border: 0; color: var(--accent); padding: 0; margin-bottom: 12px; cursor: pointer; font: inherit; }
+.match-intelligence-verdict { display: grid; justify-items: end; gap: 5px; text-align: right; }
+.match-intelligence-verdict span, .match-intelligence-verdict small { color: var(--muted); }
+.match-intelligence-verdict strong { font-size: 1.15rem; }
+.match-intelligence-metrics { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+.match-intelligence-evidence { margin: 0; }
+.match-intelligence-table-wrap { overflow-x: auto; }
+.match-intelligence-table { width: 100%; border-collapse: collapse; min-width: 760px; }
+.match-intelligence-table th, .match-intelligence-table td { padding: 11px 12px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: middle; }
+.match-intelligence-table th { color: var(--muted); font-size: .72rem; text-transform: uppercase; letter-spacing: .06em; }
+.match-intelligence-table td small { display: block; color: var(--muted); margin-top: 3px; }
+.match-intelligence-table td:first-child { min-width: 150px; }
+.recommendation-badge { display: inline-flex; align-items: center; justify-content: center; border-radius: 999px; padding: 4px 9px; font-size: .72rem; font-weight: 800; letter-spacing: .04em; }
+.recommendation-badge.bet { color: var(--success); background: color-mix(in srgb, var(--success) 14%, transparent); }
+.recommendation-badge.watch { color: var(--warning); background: color-mix(in srgb, var(--warning) 14%, transparent); }
+.recommendation-badge.pass { color: var(--danger); background: color-mix(in srgb, var(--danger) 12%, transparent); }
+.match-intelligence-columns { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 18px; }
+.match-intelligence-columns .evidence-card { margin: 0; }
+.match-intelligence-page .form-teams { margin-top: 8px; }
+.match-intelligence-page .audit-panel { margin-top: 4px; }
+.detail-header-actions { display: flex; align-items: center; gap: 8px; }
+
+@media (max-width: 900px) {
+  .match-intelligence-metrics { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+@media (max-width: 640px) {
+  .match-intelligence-intro { display: block; }
+  .match-intelligence-verdict { justify-items: start; text-align: left; margin-top: 14px; }
+  .match-intelligence-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .match-intelligence-columns { grid-template-columns: 1fr; }
+  .detail-header-actions .btn-secondary { display: none; }
+}
 .analytics-hero {
   display: flex;
   align-items: flex-end;

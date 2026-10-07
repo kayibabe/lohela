@@ -133,6 +133,44 @@ class MatchContextOut(BaseModel):
     h2h: list[dict]
 
 
+class MatchIntelligencePredictionOut(BaseModel):
+    prediction_id: int
+    market: str
+    selection: str
+    model_probability: float
+    edge: float | None
+    expected_value: float | None
+    q_score: float
+    q_grade: str
+    best_odds: float | None
+    avg_implied: float | None
+    model_agreement: float
+    source_odds_at: str | None
+    as_of_at: str | None
+    recommendation_status: str
+    recommendation_reasons: list[str] = Field(default_factory=list)
+    recommendation_risks: list[str] = Field(default_factory=list)
+    active_models: list[str] = Field(default_factory=list)
+
+
+class MatchIntelligenceOut(BaseModel):
+    match_id: int
+    home_team: str
+    away_team: str
+    competition: str
+    kickoff_at: str
+    status: str
+    live_phase: str | None
+    elapsed_minutes: int | None
+    home_goals: int | None
+    away_goals: int | None
+    data_quality_score: float
+    data_quality_status: str
+    predictions: list[MatchIntelligencePredictionOut]
+    context: MatchContextOut
+    evidence_note: str
+
+
 @router.get("/qualified", response_model=list[SelectionOut])
 async def get_qualified_selections(
     date: Optional[date] = Query(default=None, description="Target date (default: today)"),
@@ -262,6 +300,98 @@ async def get_qualified_selections(
         ))
 
     return output
+
+
+@router.get("/match-intelligence/{match_id}", response_model=MatchIntelligenceOut)
+async def get_match_intelligence(match_id: int, db: AsyncSession = Depends(get_db)):
+    """Return one evidence-linked, pre-kickoff match intelligence record.
+
+    Predictions are limited to the latest stored prediction per market. The
+    route never recomputes probabilities and exposes missing price evidence as
+    null rather than implying a value opportunity.
+    """
+    from fastapi import HTTPException
+
+    match = await db.get(Match, match_id)
+    if match is None:
+        raise HTTPException(404, "Match not found")
+    home = await db.get(Team, match.home_team_id)
+    away = await db.get(Team, match.away_team_id)
+    competition = await db.get(Competition, match.competition_id)
+    if not home or not away or not competition:
+        raise HTTPException(409, "Match intelligence is incomplete")
+
+    latest_by_market = (
+        select(Prediction.market, func.max(Prediction.id).label("prediction_id"))
+        .where(Prediction.match_id == match_id)
+        .group_by(Prediction.market)
+        .subquery()
+    )
+    predictions = list((await db.execute(
+        select(Prediction)
+        .join(latest_by_market, latest_by_market.c.prediction_id == Prediction.id)
+        .order_by(Prediction.q_score.desc(), Prediction.market.asc())
+    )).scalars().all())
+
+    odds_rows = list((await db.execute(
+        select(Odds)
+        .where(Odds.match_id == match_id)
+        .order_by(Odds.decimal_odds.desc())
+    )).scalars().all())
+    odds_by_market: dict[str, list[Odds]] = {}
+    for quote in odds_rows:
+        odds_by_market.setdefault(quote.market, []).append(quote)
+
+    rows = []
+    for prediction in predictions:
+        quotes = [
+            quote for quote in odds_by_market.get(prediction.market, [])
+            if quote.selection == prediction.selection
+        ]
+        best_odds = max((quote.decimal_odds for quote in quotes), default=None)
+        avg_implied = (
+            sum(quote.implied_probability for quote in quotes) / len(quotes)
+            if quotes else None
+        )
+        rows.append(MatchIntelligencePredictionOut(
+            prediction_id=prediction.id,
+            market=prediction.market,
+            selection=prediction.selection,
+            model_probability=prediction.model_probability,
+            edge=prediction.edge,
+            expected_value=prediction.expected_value,
+            q_score=prediction.q_score,
+            q_grade=prediction.q_grade.value,
+            best_odds=best_odds,
+            avg_implied=round(avg_implied, 4) if avg_implied is not None else None,
+            model_agreement=prediction.model_agreement,
+            source_odds_at=prediction.source_odds_at.isoformat() if prediction.source_odds_at else None,
+            as_of_at=(prediction.as_of_at or prediction.created_at).isoformat(),
+            recommendation_status=prediction.recommendation_status or "WATCH",
+            recommendation_reasons=[str(item) for item in (prediction.recommendation_reasons or [])],
+            recommendation_risks=[str(item) for item in (prediction.recommendation_risks or [])],
+            active_models=[str(item) for item in (prediction.active_models or [])],
+        ))
+
+    score = float(match.data_quality_score or 0)
+    status = "good" if score >= 60 else "review" if score >= 40 else "weak"
+    return MatchIntelligenceOut(
+        match_id=match.id,
+        home_team=home.name,
+        away_team=away.name,
+        competition=competition.name,
+        kickoff_at=match.kickoff_at.isoformat(),
+        status=match.status.value,
+        live_phase=match.live_phase,
+        elapsed_minutes=match.elapsed_minutes,
+        home_goals=match.home_goals,
+        away_goals=match.away_goals,
+        data_quality_score=score,
+        data_quality_status=status,
+        predictions=rows,
+        context=await get_match_context(match_id, db),
+        evidence_note="Probabilities and prices are stored snapshots; missing odds are not treated as value.",
+    )
 
 
 @router.get("/band-mix")

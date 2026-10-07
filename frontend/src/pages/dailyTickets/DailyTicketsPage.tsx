@@ -31,7 +31,7 @@ import {
 } from "./helpers";
 import type { CustomAccumulator, DailyTab, DailyTicketsPageProps } from "./types";
 
-export default function DailyTicketsPage({ date }: DailyTicketsPageProps) {
+export default function DailyTicketsPage({ date, onOpenMatch }: DailyTicketsPageProps & { onOpenMatch?: (matchId: number) => void }) {
   const { user } = useAuth();
   const isAdmin = user?.role === "admin";
   const [data, setData] = useState<DailyTickets | null>(null);
@@ -582,6 +582,7 @@ export default function DailyTicketsPage({ date }: DailyTicketsPageProps) {
           publishedAt={detail.publishedAt}
           pricing={detail.pricing}
           onClose={() => setDetail(null)}
+          onOpenMatch={onOpenMatch}
         />
       )}
     </>

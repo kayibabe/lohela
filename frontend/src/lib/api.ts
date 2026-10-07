@@ -180,6 +180,48 @@ export interface SelectionSummary {
   recommendation_policy_version?: string | null
 }
 
+export interface MatchIntelligencePrediction {
+  prediction_id: number
+  market: string
+  selection: string
+  model_probability: number
+  edge: number | null
+  expected_value: number | null
+  q_score: number
+  q_grade: string
+  best_odds: number | null
+  avg_implied: number | null
+  model_agreement: number
+  source_odds_at: string | null
+  as_of_at: string | null
+  recommendation_status: 'BET' | 'WATCH' | 'PASS'
+  recommendation_reasons: string[]
+  recommendation_risks: string[]
+  active_models: string[]
+}
+
+export interface MatchIntelligence {
+  match_id: number
+  home_team: string
+  away_team: string
+  competition: string
+  kickoff_at: string
+  status: string
+  live_phase: string | null
+  elapsed_minutes: number | null
+  home_goals: number | null
+  away_goals: number | null
+  data_quality_score: number
+  data_quality_status: string
+  predictions: MatchIntelligencePrediction[]
+  context: {
+    home: { team: string; results: string[]; wins: number; draws: number; losses: number; matches: number; goals_for: number; goals_against: number; goal_difference: number; avg_goals_for: number; avg_goals_against: number; points_per_game: number }
+    away: { team: string; results: string[]; wins: number; draws: number; losses: number; matches: number; goals_for: number; goals_against: number; goal_difference: number; avg_goals_for: number; avg_goals_against: number; points_per_game: number }
+    h2h: Array<{ date: string; home_team: string; away_team: string; score: string }>
+  }
+  evidence_note: string
+}
+
 export interface CustomAccumulatorLeg {
   id: number
   position: number
