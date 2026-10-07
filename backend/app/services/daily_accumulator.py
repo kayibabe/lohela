@@ -73,10 +73,28 @@ def merged_source_selections(source_tickets: list[AccumulatorTicket]) -> list:
     return [selection for selection, _, _ in merged_source_selection_provenance(source_tickets)]
 
 
+def daily_accumulator_source_snapshots(
+    source_by_type: dict[TicketType, AccumulatorTicket],
+    required: tuple[TicketType, ...] = (TicketType.SAFE, TicketType.BALANCED),
+) -> dict:
+    """Return the immutable source identities used by an automatic merge."""
+    return {
+        ticket_type.value: {
+            "ticket_id": source_by_type[ticket_type].id,
+            "ticket_type": ticket_type.value,
+            "version": source_by_type[ticket_type].version,
+            "model_version": source_by_type[ticket_type].model_version,
+            "publication_hash": source_by_type[ticket_type].publication_hash,
+            "published_at": source_by_type[ticket_type].published_at.isoformat(),
+        }
+        for ticket_type in required
+    }
+
+
 async def create_daily_accumulator(
     db: AsyncSession, target_date: date
 ) -> dict:
-    """Create one idempotent system draft after both source tiers are persisted."""
+    """Create or refresh the automatic merge after both source tiers are persisted."""
     source_tickets = await get_latest_published_tickets(
         db, target_date, include_internal=False
     )
@@ -89,6 +107,10 @@ async def create_daily_accumulator(
             "source_ticket_ids": {},
         }
 
+    source_ticket_ids = {
+        ticket_type.value: source_by_type[ticket_type].id for ticket_type in required
+    }
+    source_ticket_snapshots = daily_accumulator_source_snapshots(source_by_type, required)
     existing_rows = (
         await db.execute(
             select(CustomAccumulator)
@@ -101,12 +123,40 @@ async def create_daily_accumulator(
     ).scalars().all()
     existing = next((row for row in existing_rows if is_daily_accumulator(row)), None)
     if existing is not None:
-        return {
-            "status": "already_exists",
-            "target_date": target_date.isoformat(),
-            "accumulator_id": existing.id,
-            "leg_count": len(existing.legs),
+        current_snapshots = (existing.settlement_details or {}).get("source_ticket_snapshots") or {}
+        if current_snapshots == source_ticket_snapshots:
+            return {
+                "status": "already_exists",
+                "target_date": target_date.isoformat(),
+                "accumulator_id": existing.id,
+                "leg_count": len(existing.legs),
+            }
+        if existing.status not in {
+            CustomAccumulatorStatus.DRAFT,
+            CustomAccumulatorStatus.PLACED,
+        }:
+            return {
+                "status": "source_changed_but_locked",
+                "target_date": target_date.isoformat(),
+                "accumulator_id": existing.id,
+                "source_ticket_ids": source_ticket_ids,
+            }
+        # A source ticket was republished after this automatic row was built.
+        # Refresh the open row in place so its identity, stake, and placement
+        # status survive while its legs become the current source union.
+        row = existing
+        row.legs.clear()
+        row.settlement_details = {
+            **(row.settlement_details or {}),
+            "source": DAILY_ACCUMULATOR_SOURCE,
+            "source_ticket_ids": source_ticket_ids,
+            "source_ticket_snapshots": source_ticket_snapshots,
+            "conflict_policy": "conservative_priority",
         }
+        row.actual_return = None
+        row.settled_at = None
+    else:
+        row = None
 
     selections = merged_source_selection_provenance(list(source_by_type.values()))
     if not selections:
@@ -116,34 +166,21 @@ async def create_daily_accumulator(
             "source_ticket_ids": {ticket_type.value: source_by_type[ticket_type].id for ticket_type in required},
         }
 
-    source_ticket_ids = {
-        ticket_type.value: source_by_type[ticket_type].id for ticket_type in required
-    }
-    source_ticket_snapshots = {
-        ticket_type.value: {
-            "ticket_id": source_by_type[ticket_type].id,
-            "ticket_type": ticket_type.value,
-            "version": source_by_type[ticket_type].version,
-            "model_version": source_by_type[ticket_type].model_version,
-            "publication_hash": source_by_type[ticket_type].publication_hash,
-            "published_at": source_by_type[ticket_type].published_at.isoformat(),
-        }
-        for ticket_type in required
-    }
-    row = CustomAccumulator(
-        name=f"Accu-{target_date.isoformat()}",
-        target_date=target_date,
-        automation_key=f"daily_accumulator:{target_date.isoformat()}",
-        status=CustomAccumulatorStatus.DRAFT,
-        settlement_details={
-            "source": DAILY_ACCUMULATOR_SOURCE,
-            "source_ticket_ids": source_ticket_ids,
-            "source_ticket_snapshots": source_ticket_snapshots,
-            "conflict_policy": "conservative_priority",
-        },
-    )
-    db.add(row)
-    await db.flush()
+    if row is None:
+        row = CustomAccumulator(
+            name=f"Accu-{target_date.isoformat()}",
+            target_date=target_date,
+            automation_key=f"daily_accumulator:{target_date.isoformat()}",
+            status=CustomAccumulatorStatus.DRAFT,
+            settlement_details={
+                "source": DAILY_ACCUMULATOR_SOURCE,
+                "source_ticket_ids": source_ticket_ids,
+                "source_ticket_snapshots": source_ticket_snapshots,
+                "conflict_policy": "conservative_priority",
+            },
+        )
+        db.add(row)
+        await db.flush()
 
     combined_odds = 1.0
     for position, (selection, source_ticket, source_conflict) in enumerate(selections, start=1):
@@ -176,7 +213,7 @@ async def create_daily_accumulator(
     row.combined_odds = round(combined_odds, 4)
     await db.flush()
     return {
-        "status": "created",
+        "status": "refreshed" if existing is not None else "created",
         "target_date": target_date.isoformat(),
         "accumulator_id": row.id,
         "leg_count": len(selections),
