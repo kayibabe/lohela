@@ -65,6 +65,13 @@ export function roiFromTotals(profitLoss: number, staked: number): number | null
   return staked > 0 ? profitLoss / staked : null
 }
 
+export function simulatorTotals(rows: Array<{ settled: boolean; returnAmount: number | null | undefined }>, stake: number) {
+  const settledRows = rows.filter(row => row.settled)
+  const staked = settledRows.length * stake
+  const returned = settledRows.reduce((sum, row) => sum + (row.returnAmount ?? 0) * stake, 0)
+  return { staked, returned, profitLoss: returned - staked }
+}
+
 export function latestTicketCohorts(rows: TicketHistoryItem[]) {
   const latest = new Map<string, TicketHistoryItem>()
   for (const row of rows) {
@@ -232,10 +239,24 @@ export default function PaperLedger() {
   const observedDays = firstDate ? Math.max(1, Math.floor((Date.now() - new Date(`${firstDate}T00:00:00`).getTime()) / 86_400_000) + 1) : 0
   const observationProgress = Math.min(100, observedDays / 56 * 100)
   const stake = Math.max(0, Number(stakeSize) || 0)
-  const simulatedRows = filtered.filter(row => row.result && row.result !== 'pending')
-  const simulatedStaked = simulatedRows.length * stake
-  const simulatedReturned = simulatedRows.reduce((sum, row) => sum + (row.return_amount ?? 0) * stake, 0)
-  const simulatedPnl = simulatedReturned - simulatedStaked
+  const simulated = typeFilter === 'my_accumulator'
+    ? simulatorTotals(
+      visibleDailyAccumulators.map(row => ({
+        settled: row.status === 'won' || row.status === 'lost' || row.status === 'void',
+        returnAmount: row.stake && row.stake > 0 ? (row.actual_return ?? 0) / row.stake : row.actual_return,
+      })),
+      stake,
+    )
+    : simulatorTotals(
+      filtered.map(row => ({
+        settled: Boolean(row.result && row.result !== 'pending'),
+        returnAmount: row.return_amount,
+      })),
+      stake,
+    )
+  const simulatedStaked = simulated.staked
+  const simulatedReturned = simulated.returned
+  const simulatedPnl = simulated.profitLoss
   const simulatedRoi = roiFromTotals(simulatedPnl, simulatedStaked)
   const evidence = performance?.evidence_gate
   const pricedCoverage = evidence?.unique_official_selections ? evidence.priced_selections / evidence.unique_official_selections : null

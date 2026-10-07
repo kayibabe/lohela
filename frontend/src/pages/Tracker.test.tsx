@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { accumulatorPerformance, latestTicketCohorts, roiFromTotals, wilsonInterval } from '../components/PaperLedger'
+import { accumulatorPerformance, latestTicketCohorts, roiFromTotals, simulatorTotals, wilsonInterval } from '../components/PaperLedger'
 import type { CustomAccumulator, TicketHistoryItem } from '../lib/api'
 import { groupJournalBets, groupMatchHistory, type Bet } from '../lib/trackerGrouping'
 
@@ -76,6 +76,13 @@ describe('Tracker evidence helpers', () => {
     expect(roiFromTotals(5.87, 17)).toBeCloseTo(0.345294, 5)
     expect(roiFromTotals(-2, 10)).toBe(-0.2)
     expect(roiFromTotals(0, 0)).toBeNull()
+  })
+
+  it('calculates accumulator simulator totals from accumulator rows, not ticket rows', () => {
+    const totals = simulatorTotals([
+      { settled: true, returnAmount: 43.21 },
+    ], 1)
+    expect(totals).toEqual({ staked: 1, returned: 43.21, profitLoss: 42.21 })
   })
 
   it('groups journal rows once by year, month and date', () => {
