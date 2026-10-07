@@ -148,7 +148,9 @@ describe('audited ticket surfaces', () => {
       <TicketCard ticket={ticket} tierName="Balanced" tierDesc="Q ≥80" color="blue" />,
     )
     expect(html).not.toContain('Includes games to')
-    expect(html).not.toContain('Fri 28 Aug')
+    expect(html).toContain('Fri 28 Aug')
+    expect(html).toContain('class="leg-time kickoff-date"')
+    expect(html).toContain('class="leg-time kickoff-time"')
   })
 
   it('renders a clear empty persisted-ticket state', () => {

@@ -219,8 +219,10 @@ export default function TicketCard({ ticket, tierName, tierDesc, color, research
                 </div>
                 <div className="leg-meta">
                   <span className="leg-comp">{leg.competition}</span>
-                  <span className="leg-time kickoff-time">
-                    {(ticket.horizon_days ?? 0) > 0 && <>{formatLegDay(leg.kickoff_at)} </>}
+                  <span className="leg-time kickoff-date" aria-label={`Match date ${formatLegDay(leg.kickoff_at)}`}>
+                    {formatLegDay(leg.kickoff_at)}
+                  </span>
+                  <span className="leg-time kickoff-time" aria-label={`Kickoff time ${formatKickoff(leg.kickoff_at)}`}>
                     {formatKickoff(leg.kickoff_at)}
                   </span>
                   <span className={`match-state-badge ${(leg.match_status ?? 'pending').toLowerCase()}`}>

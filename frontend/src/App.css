@@ -1298,7 +1298,24 @@ body {
   flex-shrink: 0;
 }
 
-.kickoff-time { color: var(--accent); font-weight: 800; font-variant-numeric: tabular-nums; letter-spacing: .01em; }
+.kickoff-date,
+.kickoff-time,
+.leg-market,
+.leg-odds {
+  transition: color .12s ease, background-color .12s ease, border-color .12s ease;
+}
+
+.kickoff-date {
+  color: #7c3aed;
+  font-weight: 800;
+  letter-spacing: .01em;
+}
+
+.kickoff-time {
+  color: var(--accent);
+  font-weight: 800;
+  letter-spacing: .01em;
+}
 .match-history-row small { color: var(--accent); font-weight: 700; }
 .paper-ticket-detail li > div:first-child small { color: var(--accent); font-weight: 700; }
 
@@ -1309,8 +1326,9 @@ body {
   text-transform: uppercase;
   padding: 2px 6px;
   border-radius: 3px;
-  background: var(--accent-bg);
-  color: var(--accent);
+  background: color-mix(in srgb, var(--warning) 12%, var(--surface));
+  color: var(--warning);
+  border: 1px solid color-mix(in srgb, var(--warning) 30%, var(--border));
   white-space: nowrap;
 }
 
@@ -1323,10 +1341,16 @@ body {
 }
 
 .leg-odds {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 7px;
+  border: 1px solid color-mix(in srgb, var(--positive) 35%, var(--border));
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--positive) 11%, var(--surface));
   font-size: 15px;
   font-weight: 800;
   font-variant-numeric: tabular-nums;
-  color: var(--text);
+  color: var(--positive);
   line-height: 1;
 }
 
