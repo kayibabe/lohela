@@ -1325,6 +1325,7 @@ body {
 }
 .match-history-row small { color: var(--accent); font-weight: 700; }
 .paper-ticket-detail li > div:first-child small { color: var(--accent); font-weight: 700; }
+.paper-kickoff-date { color: var(--text); font-weight: 800; }
 
 .leg-market {
   font-size: 10px;
