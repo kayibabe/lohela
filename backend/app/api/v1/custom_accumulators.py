@@ -96,6 +96,9 @@ def _out(row: CustomAccumulator) -> CustomAccumulatorOut:
                 "away_team": leg.away_team,
                 "competition": leg.competition,
                 "kickoff_at": leg.kickoff_at.isoformat(),
+                "match_status": leg.match.status.value if hasattr(leg.match.status, "value") else leg.match.status,
+                "home_goals": leg.match.home_goals,
+                "away_goals": leg.match.away_goals,
                 "market": leg.market,
                 "selection": leg.selection,
                 "odds_snapshot": leg.odds_snapshot,
@@ -221,7 +224,9 @@ async def list_custom_accumulators(
     target_date: date | None = Query(default=None),
     db: AsyncSession = Depends(get_db),
 ):
-    query = select(CustomAccumulator).options(selectinload(CustomAccumulator.legs)).order_by(CustomAccumulator.created_at.desc())
+    query = select(CustomAccumulator).options(
+        selectinload(CustomAccumulator.legs).selectinload(CustomAccumulatorLeg.match),
+    ).order_by(CustomAccumulator.created_at.desc())
     if target_date:
         query = query.where(CustomAccumulator.target_date == target_date)
     return [_out(row) for row in (await db.execute(query)).scalars().unique().all()]
@@ -235,7 +240,9 @@ async def create_custom_accumulator(payload: CustomAccumulatorPayload, db: Async
     await _apply_payload(db, row, payload)
     await db.commit()
     await db.refresh(row, attribute_names=["created_at"])
-    row = (await db.execute(select(CustomAccumulator).options(selectinload(CustomAccumulator.legs)).where(CustomAccumulator.id == row.id))).scalar_one()
+    row = (await db.execute(select(CustomAccumulator).options(
+        selectinload(CustomAccumulator.legs).selectinload(CustomAccumulatorLeg.match),
+    ).where(CustomAccumulator.id == row.id))).scalar_one()
     return _out(row)
 
 
@@ -246,7 +253,9 @@ async def update_custom_accumulator(accumulator_id: int, payload: CustomAccumula
         raise HTTPException(404, "Custom accumulator not found")
     await _apply_payload(db, row, payload)
     await db.commit()
-    row = (await db.execute(select(CustomAccumulator).options(selectinload(CustomAccumulator.legs)).where(CustomAccumulator.id == row.id))).scalar_one()
+    row = (await db.execute(select(CustomAccumulator).options(
+        selectinload(CustomAccumulator.legs).selectinload(CustomAccumulatorLeg.match),
+    ).where(CustomAccumulator.id == row.id))).scalar_one()
     return _out(row)
 
 

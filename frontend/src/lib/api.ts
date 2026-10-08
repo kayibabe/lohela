@@ -6,6 +6,9 @@ export interface Leg {
   away_team: string
   competition: string
   kickoff_at: string
+  match_status?: string
+  home_goals?: number | null
+  away_goals?: number | null
   market: string
   selection: string
   model_probability: number | null
@@ -17,9 +20,6 @@ export interface Leg {
   expected_value: number | null
   source_odds_at: string | null
   result: string
-  match_status?: string
-  home_goals?: number | null
-  away_goals?: number | null
   live_phase?: string | null
   elapsed_minutes?: number | null
   selection_settled_at?: string | null
@@ -231,6 +231,9 @@ export interface CustomAccumulatorLeg {
   away_team: string
   competition: string
   kickoff_at: string
+  match_status?: string
+  home_goals?: number | null
+  away_goals?: number | null
   market: string
   selection: string
   odds_snapshot: number

@@ -81,4 +81,6 @@ class CustomAccumulatorLeg(Base):
     )
     settled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
+    match: Mapped["Match"] = relationship("Match", foreign_keys=[match_id], viewonly=True)
+
     accumulator: Mapped[CustomAccumulator] = relationship("CustomAccumulator", back_populates="legs")

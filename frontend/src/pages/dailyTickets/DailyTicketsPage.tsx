@@ -668,7 +668,7 @@ function DecisionSummary({
                 <td>{row.model_probability == null ? "—" : `${(row.model_probability * 100).toFixed(1)}%`}</td>
                 <td>{row.best_odds == null ? "—" : row.best_odds.toFixed(2)}</td>
                 <td className={(row.edge ?? 0) > 0 ? "positive" : "negative"}>{row.edge == null ? "—" : `${(row.edge * 100).toFixed(1)}%`}</td>
-                <td><span className="decision-grade">{row.q_grade ?? "Q"} · {row.q_score}</span></td>
+                <td><span className="decision-grade">{row.q_grade ?? "Q"} · {row.q_score.toFixed(1)}</span></td>
                 <td><span className={`data-quality-pill ${row.data_quality_status ?? "unknown"}`}>{row.data_quality_score == null ? "—" : `${row.data_quality_score.toFixed(0)}/100`}</span></td>
                 <td><span className={`decision-pill ${rowAction.toLowerCase()}`}>{rowAction}</span></td>
               </tr>;
