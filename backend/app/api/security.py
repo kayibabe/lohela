@@ -28,6 +28,8 @@ async def require_research_access(
     request: Request,
     x_research_key: str | None = Header(default=None),
 ) -> None:
+    if getattr(settings, "public_access_enabled", False):
+        return
     configured = _normalize_research_key(settings.research_api_key)
     supplied = _normalize_research_key(x_research_key)
     if configured and supplied:
@@ -71,7 +73,9 @@ async def get_optional_current_user(
 
 async def require_authenticated_user(
     user: User | None = Depends(get_optional_current_user),
-) -> User:
+) -> User | None:
+    if user is None and getattr(settings, "public_access_enabled", False):
+        return None
     if user is None:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Authentication required")
     return user
@@ -84,13 +88,19 @@ async def require_admin_access(
 ) -> None:
     if user and user.role == "admin":
         return
+    if getattr(settings, "public_access_enabled", False) and user is None:
+        return
     # Keep the existing operational key as a temporary service-to-service path.
     await require_research_access(request, x_research_key)
 
 
 async def require_pro_access(
-    user: User = Depends(require_authenticated_user),
-) -> User:
+    user: User | None = Depends(require_authenticated_user),
+) -> User | None:
+    if user is None and getattr(settings, "public_access_enabled", False):
+        return None
+    if user is None:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Authentication required")
     if user.role != "admin" and user.plan != "pro":
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Pro plan required")
     return user

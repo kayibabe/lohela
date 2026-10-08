@@ -82,13 +82,7 @@ export function useAuth() {
 }
 
 export function AuthControls({ onSignedOut }: { onSignedOut?: () => void }) {
-  const { user, loading, error, login, register, logout } = useAuth()
-  const [open, setOpen] = useState(false)
-  const [mode, setMode] = useState<'login' | 'register'>('login')
-  const [username, setUsername] = useState('')
-  const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
-
+  const { user, loading, logout } = useAuth()
   if (loading) return <span className="auth-status">Checking session…</span>
   if (user) {
     return (
@@ -98,29 +92,5 @@ export function AuthControls({ onSignedOut }: { onSignedOut?: () => void }) {
       </div>
     )
   }
-
-  async function submit(event: React.FormEvent) {
-    event.preventDefault()
-    const ok = mode === 'login' ? await login(email, password) : await register(username, email, password)
-    if (ok) { setOpen(false); setPassword('') }
-  }
-
-  return (
-    <div className="auth-control">
-      <button className="theme-btn" onClick={() => setOpen(value => !value)}>{mode === 'login' ? 'Sign in' : 'Create account'}</button>
-      {open && (
-        <form className="auth-popover" onSubmit={submit}>
-          <strong>{mode === 'login' ? 'Sign in to Lohela' : 'Create a free account'}</strong>
-          {mode === 'register' && <input aria-label="Username" autoComplete="username" value={username} onChange={event => setUsername(event.target.value)} placeholder="Username" required />}
-          <input aria-label="Email" type="email" autoComplete="email" value={email} onChange={event => setEmail(event.target.value)} placeholder="Email" required />
-          <input aria-label="Password" type="password" autoComplete={mode === 'login' ? 'current-password' : 'new-password'} value={password} onChange={event => setPassword(event.target.value)} placeholder="Password (6+ characters)" minLength={6} required />
-          {error && <span className="auth-error" role="alert">{error}</span>}
-          <button className="btn-primary" type="submit">{mode === 'login' ? 'Sign in' : 'Register'}</button>
-          <button className="btn-ghost" type="button" onClick={() => setMode(value => value === 'login' ? 'register' : 'login')}>
-            {mode === 'login' ? 'Need an account?' : 'Already have an account?'}
-          </button>
-        </form>
-      )}
-    </div>
-  )
+  return <span className="auth-status">Public workspace</span>
 }

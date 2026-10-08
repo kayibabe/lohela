@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { accumulatorPerformance, latestTicketCohorts, roiFromTotals, simulatorTotals, wilsonInterval } from '../components/PaperLedger'
+import { accumulatorPerformance, accumulatorReturnMultiplier, latestTicketCohorts, roiFromTotals, simulatorTotals, wilsonInterval } from '../components/PaperLedger'
 import type { CustomAccumulator, TicketHistoryItem } from '../lib/api'
 import { groupJournalBets, groupMatchHistory, type Bet } from '../lib/trackerGrouping'
 
@@ -83,6 +83,13 @@ describe('Tracker evidence helpers', () => {
       { settled: true, returnAmount: 43.21 },
     ], 1)
     expect(totals).toEqual({ staked: 1, returned: 43.21, profitLoss: 42.21 })
+  })
+
+  it('uses combined odds when a won accumulator has no stored return', () => {
+    expect(accumulatorReturnMultiplier({ status: 'won', stake: null, actual_return: null, combined_odds: 6.5 })).toBe(6.5)
+    expect(accumulatorReturnMultiplier({ status: 'won', stake: 2, actual_return: 13, combined_odds: 6.5 })).toBe(6.5)
+    expect(accumulatorReturnMultiplier({ status: 'void', stake: 1, actual_return: null, combined_odds: 6.5 })).toBe(1)
+    expect(accumulatorReturnMultiplier({ status: 'lost', stake: 1, actual_return: 0, combined_odds: 6.5 })).toBe(0)
   })
 
   it('groups journal rows once by year, month and date', () => {

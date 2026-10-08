@@ -72,6 +72,16 @@ export function simulatorTotals(rows: Array<{ settled: boolean; returnAmount: nu
   return { staked, returned, profitLoss: returned - staked }
 }
 
+export function accumulatorReturnMultiplier(row: Pick<CustomAccumulator, 'status' | 'stake' | 'actual_return' | 'combined_odds'>): number {
+  if (row.status === 'lost') return 0
+  if (row.status === 'void') return 1
+  if (row.status === 'won') {
+    if (row.actual_return != null && row.stake != null && row.stake > 0) return row.actual_return / row.stake
+    return row.combined_odds
+  }
+  return 0
+}
+
 export function latestTicketCohorts(rows: TicketHistoryItem[]) {
   const latest = new Map<string, TicketHistoryItem>()
   for (const row of rows) {
@@ -243,7 +253,7 @@ export default function PaperLedger() {
     ? simulatorTotals(
       visibleDailyAccumulators.map(row => ({
         settled: row.status === 'won' || row.status === 'lost' || row.status === 'void',
-        returnAmount: row.stake && row.stake > 0 ? (row.actual_return ?? 0) / row.stake : row.actual_return,
+        returnAmount: accumulatorReturnMultiplier(row),
       })),
       stake,
     )

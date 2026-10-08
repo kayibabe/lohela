@@ -42,6 +42,8 @@ TICKET_NAMES = {
 def _can_reveal(user) -> bool:
     # Direct service-level calls are trusted; HTTP requests resolve this dependency
     # to None or an actual User before reaching the handler.
+    if settings.public_access_enabled:
+        return True
     if hasattr(user, "dependency"):
         return True
     return bool(user and (getattr(user, "role", None) == "admin" or getattr(user, "plan", None) == "pro"))
@@ -54,6 +56,8 @@ async def require_internal_ticket_access(
     user=Depends(get_optional_current_user),
 ) -> None:
     """Require the research key when an internal ticket stream is requested."""
+    if settings.public_access_enabled and include_internal:
+        return
     if include_internal and user and (user.role == "admin" or user.plan == "pro"):
         return
     if include_internal:

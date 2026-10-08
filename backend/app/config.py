@@ -63,6 +63,10 @@ class Settings(BaseSettings):
     auth_cookie_name: str = "lohela_session"
     auth_session_days: int = 30
     auth_allow_registration: bool = True
+    # This deployment is intentionally public: the login form is hidden and
+    # every application module/API is available without a browser session.
+    # Set PUBLIC_ACCESS_ENABLED=false before exposing a private deployment.
+    public_access_enabled: bool = True
     log_level: str = "INFO"
 
     # Pipeline windows: 00:15 CAT (22:15 UTC previous day) and 05:00 CAT (03:00 UTC).
