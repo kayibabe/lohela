@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { accumulatorPerformance, accumulatorReturnMultiplier, latestTicketCohorts, roiFromTotals, simulatorTotals, wilsonInterval } from '../components/PaperLedger'
+import { accumulatorPerformance, accumulatorReturnAmount, accumulatorReturnMultiplier, latestTicketCohorts, roiFromTotals, simulatorTotals, wilsonInterval } from '../components/PaperLedger'
 import type { CustomAccumulator, TicketHistoryItem } from '../lib/api'
 import { groupJournalBets, groupMatchHistory, type Bet } from '../lib/trackerGrouping'
 
@@ -83,6 +83,18 @@ describe('Tracker evidence helpers', () => {
       { settled: true, returnAmount: 43.21 },
     ], 1)
     expect(totals).toEqual({ staked: 1, returned: 43.21, profitLoss: 42.21 })
+  })
+
+  it('counts each settled winning stake and its payout when actual return is absent', () => {
+    const row = (id: number, status: CustomAccumulator['status'], odds: number, actualReturn: number | null): CustomAccumulator => ({
+      id, name: `Accu-${id}`, target_date: '2026-10-06', status, stake: 5000, combined_odds: odds,
+      potential_return: status === 'won' ? 5000 * odds : status === 'lost' ? 0 : 5000, actual_return: actualReturn,
+      created_at: '2026-10-06T08:00:00Z', placed_at: '2026-10-06T08:01:00Z', settled_at: '2026-10-06T20:00:00Z', automatic: true,
+      legs: [],
+    })
+    const summary = accumulatorPerformance([row(1, 'lost', 7.09, 0), row(2, 'won', 7.33, null), row(3, 'won', 3.18, null)])
+    expect(summary).toMatchObject({ settled: 3, won: 2, lost: 1, settledStake: 15000, returned: 52550, profitLoss: 37550 })
+    expect(accumulatorReturnAmount(row(2, 'won', 7.33, null))).toBe(36650)
   })
 
   it('uses combined odds when a won accumulator has no stored return', () => {

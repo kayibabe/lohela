@@ -51,11 +51,12 @@ export function accumulatorPerformance(rows: CustomAccumulator[]): AccumulatorPe
     if (settled) {
       summary.settled += 1
       summary.settledStake += stake
-      summary.returned += row.actual_return ?? 0
+      const returned = accumulatorReturnAmount(row)
+      summary.returned += returned
       if (row.status === 'won') summary.won += 1
       if (row.status === 'lost') summary.lost += 1
       if (row.status === 'void') summary.void += 1
-      summary.profitLoss += (row.actual_return ?? 0) - stake
+      summary.profitLoss += returned - stake
     }
     return summary
   }, { tickets: 0, open: 0, settled: 0, won: 0, lost: 0, void: 0, exposure: 0, settledStake: 0, returned: 0, profitLoss: 0 } as AccumulatorPerformanceSummary)
@@ -70,6 +71,18 @@ export function simulatorTotals(rows: Array<{ settled: boolean; returnAmount: nu
   const staked = settledRows.length * stake
   const returned = settledRows.reduce((sum, row) => sum + (row.returnAmount ?? 0) * stake, 0)
   return { staked, returned, profitLoss: returned - staked }
+}
+
+/** Return the settled payout, including the legacy fallback for won rows. */
+export function accumulatorReturnAmount(row: Pick<CustomAccumulator, 'status' | 'stake' | 'actual_return' | 'potential_return' | 'combined_odds'>): number {
+  if (row.status === 'lost') return 0
+  if (row.status === 'void') return row.actual_return ?? row.stake ?? 0
+  if (row.status === 'won') {
+    if (row.actual_return != null) return row.actual_return
+    if (row.potential_return != null) return row.potential_return
+    return row.stake != null && row.stake > 0 ? row.stake * row.combined_odds : 0
+  }
+  return 0
 }
 
 export function accumulatorReturnMultiplier(row: Pick<CustomAccumulator, 'status' | 'stake' | 'actual_return' | 'combined_odds'>): number {
@@ -302,6 +315,7 @@ export default function PaperLedger() {
   function renderAccumulatorRow(row: CustomAccumulator) {
     const outcome = row.status === 'draft' ? 'pending' : row.status
     const metrics = accumulatorMetrics(row)
+    const settledReturn = accumulatorReturnAmount(row)
     const expanded = expandedAccumulatorId === row.id
     const pendingLegs = row.legs.filter(leg => leg.result === 'pending').length
     const statusTone = outcome === 'placed' && pendingLegs > 0 ? 'open' : outcome
@@ -313,7 +327,7 @@ export default function PaperLedger() {
         <div><span>Legs</span><strong>{row.legs.length}</strong></div>
         <div title="Product of the immutable leg probability snapshots"><span>Adjusted P</span><strong>{metrics.combinedProbability == null ? '—' : pct(metrics.combinedProbability)}</strong></div>
         <div title="Transparent accumulator estimate; correlation haircut is not available for personal tickets"><span>Risk</span><strong>{metrics.riskScore == null ? '—' : `${metrics.riskScore.toFixed(0)}/100`}</strong></div>
-        <div className="paper-outcome"><span className={`settlement-pill ${statusTone}`}>{statusLabel}</span>{row.actual_return != null && row.stake != null && <strong className={row.actual_return - row.stake >= 0 ? 'positive' : 'negative'}>{fmtPnl(row.actual_return - row.stake)}</strong>}</div>
+        <div className="paper-outcome"><span className={`settlement-pill ${statusTone}`}>{statusLabel}</span>{outcome === 'won' || outcome === 'lost' || outcome === 'void' ? row.stake != null && <strong className={settledReturn - row.stake >= 0 ? 'positive' : 'negative'}>{fmtPnl(settledReturn - row.stake)}</strong> : null}</div>
         <span className="paper-chevron" aria-hidden="true">{expanded ? '⌃' : '⌄'}</span>
       </button>
       {expanded && <div className="paper-ticket-detail"><div className="paper-version-toolbar"><div><strong>Immutable selection snapshot</strong><span>Generated from the day&apos;s Conservative and Balanced tickets; selections cannot be edited here.</span></div><div><span className="custom-status-badge automatic">Auto merge</span></div></div>{row.source_ticket_snapshots && Object.keys(row.source_ticket_snapshots).length > 0 && <div className="source-ticket-history"><strong>Source ticket versions</strong>{Object.entries(row.source_ticket_snapshots).map(([type, snapshot]) => <span key={type} title={snapshot.publication_hash ? `Publication hash ${snapshot.publication_hash}` : undefined}>{sourceTicketLabel(type)} · v{snapshot.version ?? '—'}{snapshot.model_version ? ` · model ${snapshot.model_version}` : ''}</span>)}</div>}
