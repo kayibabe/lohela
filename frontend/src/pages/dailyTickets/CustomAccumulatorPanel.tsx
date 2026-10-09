@@ -28,6 +28,7 @@ export function CustomAccumulatorPanel({
   onNavigate: (tab: DailyTab) => void;
 }) {
   const [name, setName] = useState("");
+  const [stakeDrafts, setStakeDrafts] = useState<Record<number, string>>({});
   const create = async () => {
     const title = name.trim() || `${formatDate(date)} accumulator`;
     try {
@@ -37,12 +38,24 @@ export function CustomAccumulatorPanel({
       window.alert(error instanceof Error ? error.message : "Unable to save draft");
     }
   };
-  const updateTicket = async (ticket: CustomAccumulator, update: Partial<CustomAccumulator>) => {
+  const updateTicket = async (ticket: CustomAccumulator, update: Partial<CustomAccumulator>): Promise<boolean> => {
     try {
       await onUpdate(ticket, update);
+      return true;
     } catch (error) {
       window.alert(error instanceof Error ? error.message : "Unable to save accumulator");
+      return false;
     }
+  };
+  const commitStake = async (ticket: CustomAccumulator, value: string) => {
+    const stake = value.trim() === "" ? null : Number(value);
+    if (stake !== null && (!Number.isFinite(stake) || stake <= 0)) return;
+    await updateTicket(ticket, { stake });
+    setStakeDrafts((current) => {
+      const next = { ...current };
+      delete next[ticket.id];
+      return next;
+    });
   };
   const clearTicket = (ticket: CustomAccumulator) => {
     if (ticket.status === "placed" || ticket.legs.length === 0) return;
@@ -96,7 +109,10 @@ export function CustomAccumulatorPanel({
               1,
             );
             const potentialReturn = ticket.stake != null ? ticket.stake * odds : null;
-            const canPlace = ticket.legs.length >= 2 && ticket.stake != null && ticket.stake > 0;
+            const hasStakeDraft = Object.prototype.hasOwnProperty.call(stakeDrafts, ticket.id);
+            const stakeText = hasStakeDraft ? stakeDrafts[ticket.id] : ticket.stake != null ? String(ticket.stake) : "";
+            const parsedStake = stakeText.trim() === "" ? null : Number(stakeText);
+            const canPlace = ticket.legs.length >= 2 && parsedStake != null && Number.isFinite(parsedStake) && parsedStake > 0;
             const pendingLegs = ticket.legs.filter((leg) => !leg.result).length;
             const statusLabel = ticket.status === "draft" ? "Draft" : ticket.status === "placed" && pendingLegs > 0 ? `Open · ${pendingLegs} pending` : ticket.status === "placed" ? "Placed" : `Settled · ${ticket.status}`;
             const isLocked = ticket.status !== "draft";
@@ -181,21 +197,33 @@ export function CustomAccumulatorPanel({
                     <input
                       id={`stake-${ticket.id}`}
                       type="number"
-                      min="0"
+                      min="0.01"
                       step="0.01"
                       inputMode="decimal"
-                      value={ticket.stake ?? ""}
+                      value={stakeText}
                       disabled={isLocked}
                       placeholder="0.00"
-                      onChange={(event) => void updateTicket(ticket, { stake: event.target.value ? Number(event.target.value) : null })}
+                      onChange={(event) => setStakeDrafts((current) => ({ ...current, [ticket.id]: event.target.value }))}
+                      onBlur={(event) => void commitStake(ticket, event.currentTarget.value)}
                     />
                   </label>
                   <div className="custom-ticket-actions">
                     <button
+                      type="button"
                       className="btn-primary btn-sm"
                       disabled={isLocked || (ticket.status === "draft" && !canPlace)}
                       title={ticket.status === "draft" && !canPlace ? "Add at least two selections and enter a stake" : undefined}
-                      onClick={() => void updateTicket(ticket, { status: ticket.status === "draft" ? "placed" : "draft" })}
+                      onClick={async () => {
+                        if (ticket.status !== "draft" || parsedStake == null) return;
+                        const saved = await updateTicket(ticket, { stake: parsedStake, status: "placed" });
+                        if (saved) {
+                          setStakeDrafts((current) => {
+                            const next = { ...current };
+                            delete next[ticket.id];
+                            return next;
+                          });
+                        }
+                      }}
                     >
                       {ticket.status === "draft" ? "Mark placed" : ticket.status === "placed" ? "Placed" : `Settled · ${ticket.status}`}
                     </button>

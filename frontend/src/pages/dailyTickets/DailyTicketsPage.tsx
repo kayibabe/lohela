@@ -659,12 +659,20 @@ function DecisionSummary({
           <div className="decision-empty"><strong>No qualified priced opportunities</strong><span>PASS is a valid outcome when odds, provenance, or edge evidence is unavailable.</span></div>
         ) : (
           <table className="decision-table">
-            <thead><tr><th>Match</th><th>Selection</th><th>Model</th><th>Odds</th><th>Edge</th><th>Grade</th><th>Data</th><th>Decision</th></tr></thead>
+            <thead><tr><th>Match</th><th>Selection</th><th>Results</th><th>Model</th><th>Odds</th><th>Edge</th><th>Grade</th><th>Data</th><th>Decision</th></tr></thead>
             <tbody>{matches.map((row) => {
               const rowAction = row.recommendation_status ?? (isBettable(row) ? "BET" : "WATCH");
+              const result = row.result ?? "pending";
+              const resultLabel = result === "pending"
+                ? "Pending"
+                : `${result.charAt(0).toUpperCase()}${result.slice(1)}`;
+              const score = row.home_goals != null && row.away_goals != null
+                ? `${row.home_goals}–${row.away_goals}`
+                : null;
               return <tr key={`${row.match_id}-${row.prediction_id}`}>
                 <td><button className="decision-match" onClick={() => onSelect(row)}>{row.home_team} vs {row.away_team}<small>{row.competition}</small></button></td>
                 <td><span className="decision-market">{row.market}</span><strong>{row.selection}</strong></td>
+                <td><span className={`result-pill ${result}`}>{resultLabel}</span>{score && <small className="result-score">{score}</small>}</td>
                 <td>{row.model_probability == null ? "—" : `${(row.model_probability * 100).toFixed(1)}%`}</td>
                 <td>{row.best_odds == null ? "—" : row.best_odds.toFixed(2)}</td>
                 <td className={(row.edge ?? 0) > 0 ? "positive" : "negative"}>{row.edge == null ? "—" : `${(row.edge * 100).toFixed(1)}%`}</td>
