@@ -141,6 +141,8 @@ async def _apply_payload(db: AsyncSession, row: CustomAccumulator, payload: Cust
     requested_status = payload.status.lower()
     if requested_status not in {"draft", "placed"}:
         raise HTTPException(400, "Only draft and placed are user-controlled statuses")
+    if requested_status == "placed" and payload.stake is None:
+        raise HTTPException(400, "A placed accumulator needs a stake")
     if row.status != CustomAccumulatorStatus.DRAFT and requested_status == "draft":
         raise HTTPException(409, "Settled or placed accumulators cannot be returned to draft")
     if is_daily_accumulator(row):

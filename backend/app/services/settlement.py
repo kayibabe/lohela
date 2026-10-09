@@ -227,6 +227,15 @@ class SettlementService:
         rows = result.scalars().unique().all()
         changed = 0
         for accumulator in rows:
+            if accumulator.stake is None:
+                self.db.add(AuditEvent(
+                    entity_type="custom_accumulator",
+                    entity_id=str(accumulator.id),
+                    event_type="settlement_skipped",
+                    actor=source,
+                    reason="Placed accumulator has no stake",
+                ))
+                continue
             outcomes = []
             for leg in accumulator.legs:
                 match = await self.db.get(Match, leg.match_id)
