@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { fetchCustomAccumulators, fetchTicket, fetchTicketHistory, formatDate, formatKickoff, formatMarket, formatTicketType, type CustomAccumulator, type Ticket, type TicketHistoryItem } from '../lib/api'
+import { fetchCustomAccumulators, fetchTicket, fetchTicketHistory, formatDate, formatKickoff, formatMarket, formatSelection, formatTicketType, type CustomAccumulator, type Ticket, type TicketHistoryItem } from '../lib/api'
 import GradeBadge from './GradeBadge'
 import { fmt, fmtPnl } from '../utils/currency'
 
@@ -142,6 +142,16 @@ export default function PaperLedger() {
     })
       .catch((reason: Error) => setError(reason.message || 'Paper portfolio unavailable'))
       .finally(() => setLoading(false))
+  }, [])
+
+  useEffect(() => {
+    const refreshAccumulatorStatus = () => {
+      fetchCustomAccumulators()
+        .then(rows => setDailyAccumulators(rows.filter(row => row.automatic)))
+        .catch(() => undefined)
+    }
+    const timer = window.setInterval(refreshAccumulatorStatus, 30_000)
+    return () => window.clearInterval(timer)
   }, [])
 
   const latestRows = useMemo(() => latestTicketCohorts(allVersions), [allVersions])
@@ -307,7 +317,7 @@ export default function PaperLedger() {
         <span className="paper-chevron" aria-hidden="true">{expanded ? '⌃' : '⌄'}</span>
       </button>
       {expanded && <div className="paper-ticket-detail"><div className="paper-version-toolbar"><div><strong>Immutable selection snapshot</strong><span>Generated from the day&apos;s Conservative and Balanced tickets; selections cannot be edited here.</span></div><div><span className="custom-status-badge automatic">Auto merge</span></div></div>{row.source_ticket_snapshots && Object.keys(row.source_ticket_snapshots).length > 0 && <div className="source-ticket-history"><strong>Source ticket versions</strong>{Object.entries(row.source_ticket_snapshots).map(([type, snapshot]) => <span key={type} title={snapshot.publication_hash ? `Publication hash ${snapshot.publication_hash}` : undefined}>{sourceTicketLabel(type)} · v{snapshot.version ?? '—'}{snapshot.model_version ? ` · model ${snapshot.model_version}` : ''}</span>)}</div>}
-        <ul>{row.legs.map(leg => <li key={leg.id}><div><strong>{leg.home_team} <span>vs</span> {leg.away_team}</strong><small><span className="paper-kickoff-date">{formatDate(leg.kickoff_at)}</span> · {formatKickoff(leg.kickoff_at)}</small><b className="paper-market-badge">{formatMarket(leg.market)}</b>{leg.source_ticket_type && <b className="source-ticket-badge">{leg.source_conflict ? 'Conservative priority' : sourceTicketLabel(leg.source_ticket_type)}{leg.source_ticket_version ? ` · v${leg.source_ticket_version}` : ''}</b>}</div><div><strong>{leg.odds_snapshot.toFixed(2)}</strong><small>Q {leg.q_score_snapshot == null ? '—' : leg.q_score_snapshot.toFixed(1)} · {leg.home_goals != null && leg.away_goals != null && <><b className="paper-match-score">{leg.home_goals}–{leg.away_goals}</b> · </>}<b className={`paper-leg-result ${leg.result}`}>{leg.result}</b></small></div></li>)}</ul>
+        <ul>{row.legs.map(leg => <li key={leg.id}><div><strong>{leg.home_team} <span>vs</span> {leg.away_team}</strong><small><span className="paper-kickoff-date">{formatDate(leg.kickoff_at)}</span> · {formatKickoff(leg.kickoff_at)}</small><b className="paper-market-badge">{leg.market.startsWith('double_chance_') ? formatSelection(leg.selection) : formatMarket(leg.market)}</b>{leg.source_ticket_type && <b className="source-ticket-badge">{leg.source_conflict ? 'Conservative priority' : sourceTicketLabel(leg.source_ticket_type)}{leg.source_ticket_version ? ` · v${leg.source_ticket_version}` : ''}</b>}</div><div><strong>{leg.odds_snapshot.toFixed(2)}</strong><small>Q {leg.q_score_snapshot == null ? '—' : leg.q_score_snapshot.toFixed(1)} · {leg.home_goals != null && leg.away_goals != null && <><b className="paper-match-score">{leg.home_goals}–{leg.away_goals}</b> · </>}<b className={`paper-leg-result ${leg.result}`}>{leg.result}</b></small></div></li>)}</ul>
         <div className="paper-audit"><span>Auto merge · {row.name}</span><span>Generated {new Date(row.created_at).toLocaleString()}</span></div><div className="paper-version-compare"><strong>Merge policy:</strong> Conservative selections have priority when both source tickets contain the same match. Chance and risk are derived from the immutable leg snapshots.</div>
       </div>}
     </article>
@@ -378,7 +388,7 @@ export default function PaperLedger() {
           </button>
           {expandedId === row.ticket_id && <div className="paper-ticket-detail"><div className="paper-version-toolbar"><div><strong>Immutable versions</strong><span>Select a version to inspect and compare with its predecessor.</span></div><div>{versions.map(version => <button key={version.ticket_id} className={selectedVersion?.ticket_id === version.ticket_id ? 'active' : ''} onClick={() => loadVersion(version)}>v{version.version}</button>)}</div></div>
             {ticketLoading && <div className="odds-state"><span className="spinner" />Loading published selections…</div>}
-            {ticket && <><ul>{ticket.legs.map(leg => <li key={leg.selection_id}><div><strong>{leg.home_team} <span>vs</span> {leg.away_team}</strong><small><span className="paper-kickoff-date">{formatDate(leg.kickoff_at)}</span> · {formatKickoff(leg.kickoff_at)}</small><b className="paper-market-badge">{formatMarket(leg.market)}</b></div><div><strong>{leg.best_odds == null ? 'Pro only' : leg.best_odds.toFixed(2)}</strong><small>Q {leg.q_score == null ? 'Pro only' : leg.q_score.toFixed(1)} · {leg.q_grade && <GradeBadge grade={leg.q_grade} />} · {leg.home_goals != null && leg.away_goals != null && <><b className="paper-match-score">{leg.home_goals}–{leg.away_goals}</b> · </>}<b className={`paper-leg-result ${leg.result}`}>{leg.result}</b></small></div></li>)}</ul><div className="paper-audit"><code title={ticket.publication_hash}>Hash {ticket.publication_hash}</code><span>Published {new Date(ticket.published_at).toLocaleString()}</span></div>{compareTicket ? <div className="paper-version-compare"><strong>Compared with v{compareTicket.version}:</strong> {ticket.legs.filter(a => !compareTicket.legs.some(b => b.match_id === a.match_id && b.market === a.market && b.selection === a.selection)).length} added · {compareTicket.legs.filter(a => !ticket.legs.some(b => b.match_id === a.match_id && b.market === a.market && b.selection === a.selection)).length} removed</div> : <div className="paper-version-compare"><strong>Original publication:</strong> no predecessor exists for this cohort.</div>}</>}
+            {ticket && <><ul>{ticket.legs.map(leg => <li key={leg.selection_id}><div><strong>{leg.home_team} <span>vs</span> {leg.away_team}</strong><small><span className="paper-kickoff-date">{formatDate(leg.kickoff_at)}</span> · {formatKickoff(leg.kickoff_at)}</small><b className="paper-market-badge">{leg.market.startsWith('double_chance_') ? formatSelection(leg.selection) : formatMarket(leg.market)}</b></div><div><strong>{leg.best_odds == null ? 'Pro only' : leg.best_odds.toFixed(2)}</strong><small>Q {leg.q_score == null ? 'Pro only' : leg.q_score.toFixed(1)} · {leg.q_grade && <GradeBadge grade={leg.q_grade} />} · {leg.home_goals != null && leg.away_goals != null && <><b className="paper-match-score">{leg.home_goals}–{leg.away_goals}</b> · </>}<b className={`paper-leg-result ${leg.result}`}>{leg.result}</b></small></div></li>)}</ul><div className="paper-audit"><code title={ticket.publication_hash}>Hash {ticket.publication_hash}</code><span>Published {new Date(ticket.published_at).toLocaleString()}</span></div>{compareTicket ? <div className="paper-version-compare"><strong>Compared with v{compareTicket.version}:</strong> {ticket.legs.filter(a => !compareTicket.legs.some(b => b.match_id === a.match_id && b.market === a.market && b.selection === a.selection)).length} added · {compareTicket.legs.filter(a => !ticket.legs.some(b => b.match_id === a.match_id && b.market === a.market && b.selection === a.selection)).length} removed</div> : <div className="paper-version-compare"><strong>Original publication:</strong> no predecessor exists for this cohort.</div>}</>}
           </div>}
         </article>
           })}

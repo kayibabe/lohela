@@ -209,7 +209,12 @@ class SettlementService:
         source: str,
         now: datetime,
     ) -> int:
-        """Settle placed user accumulators once every leg has an authoritative result."""
+        """Settle placed user accumulators as soon as their outcome is known.
+
+        An accumulator is irreversibly lost once any leg loses, so remaining
+        pending legs must not delay that settlement. Wins and all-void results
+        still require every leg to have an authoritative outcome.
+        """
         result = await self.db.execute(
             select(CustomAccumulator)
             .join(CustomAccumulatorLeg)
@@ -252,10 +257,12 @@ class SettlementService:
                     leg.result = outcome
                     leg.settled_at = now
                 outcomes.append(outcome)
-            if not outcomes or SelectionResult.PENDING in outcomes:
+            if not outcomes:
                 continue
             if SelectionResult.LOST in outcomes:
                 status, actual_return = CustomAccumulatorStatus.LOST, 0.0
+            elif SelectionResult.PENDING in outcomes:
+                continue
             elif all(outcome == SelectionResult.VOID for outcome in outcomes):
                 status, actual_return = CustomAccumulatorStatus.VOID, accumulator.stake or 0.0
             else:

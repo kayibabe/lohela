@@ -2135,6 +2135,8 @@ th[aria-sort="descending"] .table-sort span,
 .decision-table td:nth-child(n+3) { white-space: nowrap; }
 .decision-match { display: grid; gap: 2px; padding: 0; border: 0; background: none; color: var(--text); text-align: left; font-weight: 750; }
 .decision-match:hover { color: var(--accent); }
+.match-date { color: var(--accent); font-weight: 750; }
+.match-kickoff { color: var(--positive); font-weight: 800; }
 .decision-table td:nth-child(2) { display: grid; gap: 2px; }
 .decision-grade { color: var(--text2); font-weight: 750; }
 .result-pill { display: inline-flex; min-width: 58px; justify-content: center; padding: 4px 7px; border-radius: 999px; background: var(--surface2); color: var(--muted); font-size: 10px; font-weight: 800; }

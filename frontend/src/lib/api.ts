@@ -541,8 +541,8 @@ export function formatMarket(market: string): string {
     'under_4.5': 'Under 4.5',
     btts_yes: 'BTTS Yes',
     btts_no: 'BTTS No',
-    double_chance_1x: '1X',
-    double_chance_x2: 'X2',
+    double_chance_1x: 'Double Chance',
+    double_chance_x2: 'Double Chance',
     dnb_home: 'DNB Home',
     dnb_away: 'DNB Away',
   }

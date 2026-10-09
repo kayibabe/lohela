@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import type { Leg, Ticket } from '../lib/api'
-import { formatKickoff, formatMarket } from '../lib/api'
+import { formatKickoff, formatMarket, formatSelection } from '../lib/api'
 import GradeBadge from './GradeBadge'
 import { fmt } from '../utils/currency'
 
@@ -229,7 +229,7 @@ export default function TicketCard({ ticket, tierName, tierDesc, color, research
                     {matchStateLabel(leg)}
                   </span>
                   {leg.home_goals != null && leg.away_goals != null && <span className="live-score-badge" aria-label={`Score ${leg.home_goals} to ${leg.away_goals}`}>{leg.home_goals}–{leg.away_goals}</span>}
-                  <span className="leg-market">{formatMarket(leg.market)}</span>
+                  <span className="leg-market">{leg.market.startsWith('double_chance_') ? formatSelection(leg.selection) : formatMarket(leg.market)}</span>
                 </div>
                 <div className={`leg-outcome ${leg.result}`}>
                   <span className="leg-outcome-label">Pick</span>

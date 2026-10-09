@@ -155,6 +155,41 @@ async def test_unsupported_leg_does_not_abort_custom_accumulator_settlement():
 
 
 @pytest.mark.asyncio
+async def test_custom_accumulator_loses_immediately_when_one_leg_loses():
+    from app.models import CustomAccumulatorStatus, MatchStatus
+
+    losing_leg = SimpleNamespace(id=1, match_id=11, market="home_win", odds_snapshot=2.0, result=None, settled_at=None)
+    pending_leg = SimpleNamespace(id=2, match_id=12, market="away_win", odds_snapshot=1.5, result=None, settled_at=None)
+    accumulator = SimpleNamespace(
+        id=99,
+        status=CustomAccumulatorStatus.PLACED,
+        legs=[losing_leg, pending_leg],
+        stake=10.0,
+        actual_return=None,
+        settled_at=None,
+        settlement_details=None,
+    )
+    db = SimpleNamespace(
+        execute=AsyncMock(return_value=_UniqueRows([accumulator])),
+        get=AsyncMock(side_effect=[
+            SimpleNamespace(id=11, status=MatchStatus.FINISHED, home_goals=0, away_goals=1),
+            SimpleNamespace(id=12, status=MatchStatus.SCHEDULED, home_goals=None, away_goals=None),
+        ]),
+        add=Mock(),
+    )
+
+    changed = await SettlementService(db)._settle_custom_accumulators(
+        {11, 12}, "test", datetime_now_utc()
+    )
+
+    assert changed == 1
+    assert accumulator.status == CustomAccumulatorStatus.LOST
+    assert accumulator.actual_return == 0.0
+    assert losing_leg.result == SelectionResult.LOST
+    assert pending_leg.result is None
+
+
+@pytest.mark.asyncio
 async def test_custom_accumulator_settles_when_all_legs_are_gradeable():
     from app.models import CustomAccumulatorStatus, MatchStatus
 

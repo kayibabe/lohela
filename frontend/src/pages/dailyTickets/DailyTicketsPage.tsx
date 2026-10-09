@@ -9,6 +9,9 @@ import {
   fetchRejectedSelections,
   fetchCustomAccumulators,
   formatDate,
+  formatKickoff,
+  formatMarket,
+  formatSelection,
   updateCustomAccumulator,
   formatStage,
 } from "../../lib/api";
@@ -597,7 +600,7 @@ function PassedMatches({ rows, onSelect }: { rows: SelectionSummary[]; onSelect:
     </div>
     {rows.length === 0 ? <div className="decision-empty"><strong>No rejected candidates recorded</strong><span>When the candidate ledger is empty, there is no pass explanation to display.</span></div> : <div className="passed-matches-list">
       {rows.map(row => <article className="passed-match-row" key={row.prediction_id}>
-        <div className="passed-match-main"><button onClick={() => onSelect(row)}><strong>{row.home_team} vs {row.away_team}</strong><small>{row.competition} · {new Date(row.kickoff_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</small></button><span>{row.market} · {row.selection}</span></div>
+        <div className="passed-match-main"><button onClick={() => onSelect(row)}><strong>{row.home_team} vs {row.away_team}</strong><small>{row.competition} · <span className="match-date">{formatDate(row.kickoff_at)}</span> · <span className="match-kickoff">{formatKickoff(row.kickoff_at)}</span></small></button><span>{formatMarket(row.market)} · {formatSelection(row.selection)}</span></div>
         <div className="passed-match-metrics"><span><small>Q-score</small><b>{row.q_score.toFixed(1)}</b></span><span><small>Odds</small><b>{row.best_odds == null ? "Unavailable" : row.best_odds.toFixed(2)}</b></span><span><small>Edge</small><b>{row.edge == null ? "Unavailable" : `${(row.edge * 100).toFixed(1)}%`}</b></span></div>
         <div className="passed-match-reasons"><strong>PASS because</strong><span>{(row.reason_codes?.length ? row.reason_codes : ["Publication gate did not pass"]).map(reasonLabel).join(" · ")}</span></div>
       </article>)}
@@ -648,8 +651,8 @@ function DecisionSummary({
             <small>{top.competition} · {new Date(top.kickoff_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</small>
           </div>
           <div className="decision-lead-selection">
-            <span>{top.market}</span>
-            <b>{top.selection}</b>
+            <span>{formatMarket(top.market)}</span>
+            <b>{formatSelection(top.selection)}</b>
           </div>
           <button className="btn-ghost btn-sm" onClick={() => onSelect(top)}>Why this?</button>
         </div>
@@ -670,8 +673,8 @@ function DecisionSummary({
                 ? `${row.home_goals}–${row.away_goals}`
                 : null;
               return <tr key={`${row.match_id}-${row.prediction_id}`}>
-                <td><button className="decision-match" onClick={() => onSelect(row)}>{row.home_team} vs {row.away_team}<small>{row.competition}</small></button></td>
-                <td><span className="decision-market">{row.market}</span><strong>{row.selection}</strong></td>
+                <td><button className="decision-match" onClick={() => onSelect(row)}>{row.home_team} vs {row.away_team}<small>{row.competition} · <span className="match-date">{formatDate(row.kickoff_at)}</span> · <span className="match-kickoff">{formatKickoff(row.kickoff_at)}</span></small></button></td>
+                <td><span className="decision-market">{formatMarket(row.market)}</span><strong>{formatSelection(row.selection)}</strong></td>
                 <td><span className={`result-pill ${result}`}>{resultLabel}</span>{score && <small className="result-score">{score}</small>}</td>
                 <td>{row.model_probability == null ? "—" : `${(row.model_probability * 100).toFixed(1)}%`}</td>
                 <td>{row.best_odds == null ? "—" : row.best_odds.toFixed(2)}</td>
