@@ -55,9 +55,36 @@ async def operational_snapshot(db: AsyncSession, now: datetime | None = None) ->
             _finished_refresh_lag_conditions(now),
         )
     )
+    upcoming_recommendation_conditions = and_(
+        Match.status == MatchStatus.SCHEDULED,
+        Match.kickoff_at > now,
+        Match.kickoff_at <= now + timedelta(hours=settings.max_selection_odds_age_hours),
+        Prediction.recommendation_status == "RECOMMEND",
+    )
+    upcoming_recommendations = await db.scalar(
+        select(func.count())
+        .select_from(Prediction)
+        .join(Match)
+        .where(upcoming_recommendation_conditions)
+    )
+    covered_recommendations = await db.scalar(
+        select(func.count())
+        .select_from(Prediction)
+        .join(Match)
+        .where(
+            upcoming_recommendation_conditions,
+            Prediction.source_odds_id.is_not(None),
+            Prediction.source_decimal_odds > 1.0,
+            Prediction.source_odds_at.is_not(None),
+            Prediction.source_odds_at > now - timedelta(hours=settings.max_selection_odds_age_hours),
+            Prediction.source_odds_at < Match.kickoff_at,
+        )
+    )
     active_alerts = await db.scalar(
         select(func.count()).select_from(AutomationAlert).where(AutomationAlert.resolved.is_(False))
     )
+    recommendation_count = int(upcoming_recommendations or 0)
+    covered_count = int(covered_recommendations or 0)
     return {
         "observed_at": now.isoformat(),
         "latest_run": None if latest_run is None else {
@@ -75,6 +102,13 @@ async def operational_snapshot(db: AsyncSession, now: datetime | None = None) ->
             "reason": due_decision.reason,
         },
         "upcoming_stale_odds_predictions": int(upcoming_stale_odds or 0),
+        "upcoming_recommendation_quote_coverage": {
+            "eligible": recommendation_count,
+            "covered": covered_count,
+            "fraction": round(covered_count / recommendation_count, 4)
+            if recommendation_count
+            else None,
+        },
         "finished_match_refresh_lag": int(finished_stale or 0),
         "active_alerts": int(active_alerts or 0),
     }
@@ -86,11 +120,19 @@ async def monitor_operational_health(db: AsyncSession, now: datetime | None = No
     checks = {
         "pipeline_catchup": bool((snapshot.get("latest_due_window") or {}).get("needs_catchup")),
         "stale_odds": snapshot["upcoming_stale_odds_predictions"] > 0,
+        "recommendation_quote_coverage": (
+            snapshot["upcoming_recommendation_quote_coverage"]["eligible"]
+            > snapshot["upcoming_recommendation_quote_coverage"]["covered"]
+        ),
         "settlement_lag": snapshot["finished_match_refresh_lag"] > 0,
     }
     descriptions = {
         "pipeline_catchup": ("Scheduled daily pipeline requires catch-up", snapshot.get("latest_due_window")),
         "stale_odds": ("Upcoming predictions have stale or missing odds", {"count": snapshot["upcoming_stale_odds_predictions"]}),
+        "recommendation_quote_coverage": (
+            "Upcoming recommendations lack a fresh pre-kickoff source quote",
+            snapshot["upcoming_recommendation_quote_coverage"],
+        ),
         "settlement_lag": ("Finished matches have not been refreshed recently", {"count": snapshot["finished_match_refresh_lag"]}),
     }
     for name, active in checks.items():

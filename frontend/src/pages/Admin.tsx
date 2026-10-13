@@ -31,6 +31,7 @@ interface OperationalStatus {
   latest_run: { id: number; target_date: string; run_type: string; status: string; current_stage: string | null; completed_at: string | null } | null
   latest_due_window: { name: string; target_date: string; needs_catchup: boolean; reason: string } | null
   upcoming_stale_odds_predictions: number
+  upcoming_recommendation_quote_coverage: { eligible: number; covered: number; fraction: number | null }
   finished_match_refresh_lag: number
   active_alerts: number
 }
@@ -248,6 +249,7 @@ export default function AdminPage() {
               <div className="admin-info-row"><span className="admin-info-label">Latest pipeline</span><span className={`admin-info-value admin-run-status ${operational.latest_run?.status === 'failed' ? 'negative' : ''}`}>{operational.latest_run ? <><span className={`status-badge status-${operational.latest_run.status}`}>{formatStage(operational.latest_run.status)}</span> · {operational.latest_run.target_date}{operational.latest_run.current_stage ? ` · ${formatStage(operational.latest_run.current_stage)}` : ''}</> : 'No run recorded'}</span></div>
               <div className="admin-info-row"><span className="admin-info-label">Scheduled catch-up</span><span className={`admin-info-value ${operational.latest_due_window?.needs_catchup ? 'negative' : ''}`}>{operational.latest_due_window ? operational.latest_due_window.needs_catchup ? `Required · ${operational.latest_due_window.reason}` : 'Current' : 'No window due'}</span></div>
               <div className="admin-info-row"><span className="admin-info-label">Upcoming price freshness</span><span className={`admin-info-value ${operational.upcoming_stale_odds_predictions ? 'negative' : ''}`}>{operational.upcoming_stale_odds_predictions ? `${operational.upcoming_stale_odds_predictions} stale or missing` : 'Current'}</span></div>
+              <div className="admin-info-row"><span className="admin-info-label">Recommendation quote coverage</span><span className={`admin-info-value ${operational.upcoming_recommendation_quote_coverage.eligible > operational.upcoming_recommendation_quote_coverage.covered ? 'negative' : ''}`}>{operational.upcoming_recommendation_quote_coverage.fraction === null ? 'No upcoming recommendations' : `${operational.upcoming_recommendation_quote_coverage.covered}/${operational.upcoming_recommendation_quote_coverage.eligible} fresh (${Math.round(operational.upcoming_recommendation_quote_coverage.fraction * 100)}%)`}</span></div>
               <div className="admin-info-row"><span className="admin-info-label">Finished-result refresh</span><span className={`admin-info-value ${operational.finished_match_refresh_lag ? 'negative' : ''}`}>{operational.finished_match_refresh_lag ? `${operational.finished_match_refresh_lag} delayed` : 'Current'}</span></div>
               <div className="admin-info-row"><span className="admin-info-label">Active alerts</span><span className={`admin-info-value ${operational.active_alerts ? 'negative' : ''}`}>{operational.active_alerts || 'None'}</span></div>
             </div>
