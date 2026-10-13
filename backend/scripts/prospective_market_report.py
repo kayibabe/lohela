@@ -87,8 +87,9 @@ def _daily_bootstrap(rows: list[dict], iterations: int = 2000) -> dict:
             "iterations": iterations, "seed": 20261013}
 
 
-def summarize(rows: list[tuple]) -> dict:
+def summarize(rows: list[tuple], as_of: datetime | None = None) -> dict:
     """Rows are (ticket, selection, prediction, match[, league]); no writes or fitting."""
+    as_of = _utc(as_of or datetime.now(timezone.utc))
     coverage: Counter[str] = Counter()
     unique: dict[int, tuple] = {}
     for row in rows:
@@ -107,6 +108,7 @@ def summarize(rows: list[tuple]) -> dict:
     market_rows: list[tuple[float, int]] = []
     model_rows: list[tuple[float, int]] = []
     clv: list[float] = []
+    clv_eligible = 0
     by_market: dict[str, tuple[list[tuple[float, int]], list[tuple[float, int]]]] = {}
     by_league: dict[str, tuple[list[tuple[float, int]], list[tuple[float, int]]]] = {}
     scored: list[dict] = []
@@ -119,6 +121,19 @@ def summarize(rows: list[tuple]) -> dict:
         if not (0 < selection.probability_snapshot < 1 and 0 < prediction.model_probability < 1):
             coverage["invalid_probability_excluded"] += 1
             continue
+        if selection.odds_snapshot > 1:
+            if _utc(match.kickoff_at) > as_of:
+                coverage["awaiting_kickoff_for_close"] += 1
+            else:
+                clv_eligible += 1
+            if (_utc(match.kickoff_at) <= as_of
+                    and prediction.closing_decimal_odds is not None
+                    and prediction.closing_odds_at is not None
+                    and _utc(ticket.published_at) < _utc(prediction.closing_odds_at) <= _utc(match.kickoff_at)
+                    and prediction.closing_decimal_odds > 1):
+                clv.append(selection.odds_snapshot / prediction.closing_decimal_odds - 1)
+            elif _utc(match.kickoff_at) <= as_of:
+                coverage["missing_later_pre_kickoff_close"] += 1
         if selection.result == SelectionResult.PENDING:
             coverage["pending"] += 1
             continue
@@ -141,14 +156,6 @@ def summarize(rows: list[tuple]) -> dict:
                        "target_date": getattr(ticket, "target_date", match.kickoff_at.date()).isoformat(),
                        "kickoff": _utc(match.kickoff_at), "odds": selection.odds_snapshot,
                        "outcome": y})
-        if (prediction.closing_decimal_odds is not None
-                and prediction.closing_odds_at is not None
-                and _utc(ticket.published_at) < _utc(prediction.closing_odds_at) <= _utc(match.kickoff_at)
-                and selection.odds_snapshot > 1 and prediction.closing_decimal_odds > 1):
-            clv.append(selection.odds_snapshot / prediction.closing_decimal_odds - 1)
-        else:
-            coverage["missing_later_pre_kickoff_close"] += 1
-
     return {
         "evidence": "prospective_published_market_tickets_only",
         "unique_predictions": len(unique),
@@ -185,9 +192,12 @@ def summarize(rows: list[tuple]) -> dict:
             if scored else None,
         },
         "closing_line": {
+            "eligible_published_prices": clv_eligible,
             "count": len(clv),
+            "coverage": round(len(clv) / clv_eligible, 6) if clv_eligible else None,
             "mean_entry_vs_close": round(sum(clv) / len(clv), 6) if clv else None,
             "beat_close_rate": round(sum(value > 0 for value in clv) / len(clv), 6) if clv else None,
+            "unsettled_selections_included": True,
         },
         "interpretation": "Descriptive paper evidence only; no profitability or promotion claim.",
     }
@@ -210,7 +220,7 @@ async def run(since: date, until: date | None = None) -> dict:
                                                  TicketStatus.VOID)))
             .order_by(AccumulatorTicket.published_at, TicketSelection.id)
         )
-        report = summarize(result.all())
+        report = summarize(result.all(), as_of=datetime.now(timezone.utc))
         report["since_target_date"] = since.isoformat()
         report["until_target_date_exclusive"] = until.isoformat() if until else None
         report["generated_at_utc"] = datetime.now(timezone.utc).isoformat()
