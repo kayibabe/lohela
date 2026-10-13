@@ -408,11 +408,15 @@ class SettlementService:
         )
         ticket = result.scalar_one()
         outcomes = [selection.result for selection in ticket.selections]
-        if not outcomes or SelectionResult.PENDING in outcomes:
+        if not outcomes:
             return False
         if SelectionResult.LOST in outcomes:
             outcome = SelectionResult.LOST
             returned = 0.0
+        elif SelectionResult.PENDING in outcomes:
+            # Any lost accumulator leg settles the ticket as lost immediately;
+            # pending legs remain visible for audit but cannot change its outcome.
+            return False
         elif all(item == SelectionResult.VOID for item in outcomes):
             outcome = SelectionResult.VOID
             returned = 1.0

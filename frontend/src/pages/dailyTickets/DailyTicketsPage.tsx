@@ -593,17 +593,39 @@ export default function DailyTicketsPage({ date, onOpenMatch }: DailyTicketsPage
 }
 
 function PassedMatches({ rows, onSelect }: { rows: SelectionSummary[]; onSelect: (row: SelectionSummary) => void }) {
+  const rejectionOutcome = (result: SelectionSummary["result"]) => {
+    if (result === "lost") return { label: "Passed", tone: "passed" };
+    if (result === "won") return { label: "Failed", tone: "failed" };
+    if (result === "void") return { label: "Void", tone: "void" };
+    return { label: "Pending", tone: "pending" };
+  };
+
   return <section className="passed-matches-panel" aria-labelledby="passed-matches-title">
     <div className="section-heading">
-      <div><span className="eyebrow">Transparent rejection ledger</span><h2 id="passed-matches-title">Passed opportunities and why</h2><span className="section-note">Candidates remain visible so the system teaches the user what failed a publication gate.</span></div>
+      <div><span className="eyebrow">Transparent rejection ledger</span><h2 id="passed-matches-title">Rejected opportunities and why</h2><span className="section-note">A passed rejection avoided a losing selection; a failed rejection excluded a winning selection.</span></div>
       <span className="section-note"><b>{rows.length}</b> reviewed</span>
     </div>
-    {rows.length === 0 ? <div className="decision-empty"><strong>No rejected candidates recorded</strong><span>When the candidate ledger is empty, there is no pass explanation to display.</span></div> : <div className="passed-matches-list">
-      {rows.map(row => <article className="passed-match-row" key={row.prediction_id}>
-        <div className="passed-match-main"><button onClick={() => onSelect(row)}><strong>{row.home_team} vs {row.away_team}</strong><small>{row.competition} · <span className="match-date">{formatDate(row.kickoff_at)}</span> · <span className="match-kickoff">{formatKickoff(row.kickoff_at)}</span></small></button><span>{formatMarket(row.market)} · {formatSelection(row.selection)}</span></div>
-        <div className="passed-match-metrics"><span><small>Q-score</small><b>{row.q_score.toFixed(1)}</b></span><span><small>Odds</small><b>{row.best_odds == null ? "Unavailable" : row.best_odds.toFixed(2)}</b></span><span><small>Edge</small><b>{row.edge == null ? "Unavailable" : `${(row.edge * 100).toFixed(1)}%`}</b></span></div>
-        <div className="passed-match-reasons"><strong>PASS because</strong><span>{(row.reason_codes?.length ? row.reason_codes : ["Publication gate did not pass"]).map(reasonLabel).join(" · ")}</span></div>
-      </article>)}
+    {rows.length === 0 ? <div className="decision-empty"><strong>No rejected candidates recorded</strong><span>When the candidate ledger is empty, there is no pass explanation to display.</span></div> : <div className="decision-table-wrap passed-matches-table-wrap">
+      <table className="decision-table passed-matches-table">
+        <thead><tr><th>Match</th><th>Selection</th><th>Q-score · Odds · Edge</th><th>Rejection reason</th><th>Match result</th><th>Rejection check</th></tr></thead>
+        <tbody>{rows.map(row => {
+          const outcome = rejectionOutcome(row.result);
+          const score = row.home_goals != null && row.away_goals != null
+            ? `${row.home_goals}–${row.away_goals}`
+            : null;
+          const resultLabel = row.result
+            ? `${row.result.charAt(0).toUpperCase()}${row.result.slice(1)}`
+            : (row.match_status?.toLowerCase() === "finished" ? "Unavailable" : "Pending");
+          return <tr key={row.prediction_id}>
+            <td><button className="decision-match" onClick={() => onSelect(row)}>{row.home_team} vs {row.away_team}<small>{row.competition} · <span className="match-date">{formatDate(row.kickoff_at)}</span> · <span className="match-kickoff">{formatKickoff(row.kickoff_at)}</span></small></button></td>
+            <td><span className="decision-market">{formatMarket(row.market)}</span><strong>{formatSelection(row.selection)}</strong></td>
+            <td><div className="passed-match-metrics"><span><small>Q-score</small><b>{row.q_score.toFixed(1)}</b></span><span><small>Odds</small><b>{row.best_odds == null ? "Unavailable" : row.best_odds.toFixed(2)}</b></span><span><small>Edge</small><b>{row.edge == null ? "Unavailable" : `${(row.edge * 100).toFixed(1)}%`}</b></span></div></td>
+            <td className="passed-match-reason-cell">{(row.reason_codes?.length ? row.reason_codes : ["Publication gate did not pass"]).map(reasonLabel).join(" · ")}</td>
+            <td><span className={`result-pill ${row.result ?? "pending"}`}>{resultLabel}</span>{score && <small className="result-score">{score}</small>}</td>
+            <td><span className={`rejection-outcome-pill ${outcome.tone}`}>{outcome.label}</span></td>
+          </tr>;
+        })}</tbody>
+      </table>
     </div>}
   </section>
 }

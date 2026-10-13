@@ -150,6 +150,12 @@ class Leg:
     # Set when a leg is market-priced: the ensemble's own probability, kept
     # for audit only.
     raw_model_probability: Optional[float] = None
+    model_version: str | None = None
+    model_run_id: int | None = None
+    source_odds_id: int | None = None
+    source_bookmaker: str | None = None
+    source_odds_provenance: dict = field(default_factory=dict)
+    feature_snapshot: dict = field(default_factory=dict)
 
 
 def market_priced(leg: Leg) -> Leg:
@@ -532,6 +538,12 @@ class AccumulatorBuilder:
         self, target_date: date, model_run_id: int, pricing: str = "model"
     ) -> list[Leg]:
         legs = await self._load_all_legs(target_date, model_run_id)
+        # A target date is not proof that a fixture is still pre-match. The
+        # daily pipeline can run late or retry after kickoff, so exclude those
+        # fixtures at decision time before either full-strength or relaxed
+        # ticket construction sees them.
+        now = datetime.now(timezone.utc)
+        legs = [leg for leg in legs if _as_utc(leg.kickoff_at) > now]
         if pricing == "market":
             # Unpriceable legs stay in the pool so diagnostics count them as
             # MISSING_FAIR_PRICE; that gate keeps them out of every ticket.
@@ -654,6 +666,13 @@ class AccumulatorBuilder:
                     prediction.expected_value,
                     list(prediction.active_models or []),
                     float((prediction.data_quality_snapshot or {}).get("score", 0.0)),
+                    model_version=prediction.model_version,
+                    model_run_id=prediction.model_run_id,
+                    source_odds_id=prediction.source_odds_id,
+                    source_bookmaker=(prediction.source_odds_provenance or {}).get("bookmaker")
+                    or (odds.bookmaker if odds else None),
+                    source_odds_provenance=dict(prediction.source_odds_provenance or {}),
+                    feature_snapshot=dict(prediction.feature_snapshot or {}),
                 )
             )
         consensus = await self._consensus_fair_probabilities({leg.match_id for leg in legs})
@@ -710,6 +729,10 @@ class AccumulatorBuilder:
 
 
 def selection_rejection_reasons(leg: Leg, spec: TicketSpec, calibration: dict | None = None) -> list[str]:
+    if leg.source_odds_at is not None and _as_utc(leg.source_odds_at) >= _as_utc(leg.kickoff_at):
+        return ["POST_KICKOFF_ODDS"]
+    if leg.source_odds_at is not None and _as_utc(leg.source_odds_at) > datetime.now(timezone.utc):
+        return ["QUOTE_AFTER_DECISION_TIME"]
     if spec.pricing == "market":
         return _market_rejection_reasons(leg, spec)
     reasons: list[str] = []
@@ -982,8 +1005,14 @@ def _evaluate_combo(
 def _odds_age_hours(value: datetime | None) -> float:
     if value is None:
         return math.inf
-    when = value if value.tzinfo else value.replace(tzinfo=timezone.utc)
+    when = _as_utc(value)
     return max(0.0, (datetime.now(timezone.utc) - when).total_seconds() / 3600.0)
+
+
+def _as_utc(value: datetime) -> datetime:
+    if value.tzinfo is None:
+        return value.replace(tzinfo=timezone.utc)
+    return value.astimezone(timezone.utc)
 
 
 def _objective(ticket: Ticket) -> float:

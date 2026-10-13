@@ -3,6 +3,10 @@ import { createRoot } from 'react-dom/client'
 import './index.css'
 import App from './App'
 import { AuthProvider } from './auth'
+import { installTableSorters } from './table-sorters'
+import './table-sorters.css'
+
+installTableSorters()
 
 interface ErrorBoundaryState { hasError: boolean }
 

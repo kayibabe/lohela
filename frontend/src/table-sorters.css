@@ -1,0 +1,5 @@
+th:has(> .auto-sort-button) { padding: 0; }
+.auto-sort-button { display: inline-flex; align-items: center; gap: .4rem; width: 100%; border: 0; padding: .45rem .5rem; background: transparent; color: inherit; font: inherit; text-align: inherit; cursor: pointer; }
+.auto-sort-button:hover, .auto-sort-button:focus-visible { color: var(--accent, currentColor); outline: 2px solid transparent; }
+.auto-sort-indicator { flex: 0 0 auto; opacity: .55; font-size: .8em; }
+.auto-sort-button[data-sort-direction] .auto-sort-indicator { opacity: 1; }

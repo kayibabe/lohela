@@ -6,7 +6,7 @@ import hashlib
 import json
 from datetime import date, datetime, timezone
 
-from sqlalchemy import func, select
+from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -45,6 +45,25 @@ class TicketPublisher:
         pipeline_run_id: int | None = None,
         horizon_dates: list[date] | None = None,
     ) -> TicketGeneration:
+        # Lock the publication date across model runs and concurrent workers.
+        # The first non-empty optimiser publication is the day's immutable set.
+        if self.db.get_bind().dialect.name == "postgresql":
+            await self.db.execute(
+                text("SELECT pg_advisory_xact_lock(hashtext(:key))"),
+                {"key": f"lohela:daily-tickets:{target_date.isoformat()}"},
+            )
+        retained = await self.db.execute(
+            select(TicketGeneration)
+            .where(
+                TicketGeneration.target_date == target_date,
+                TicketGeneration.output_count > 0,
+                TicketGeneration.status.in_([RunStatus.COMPLETED, RunStatus.PARTIAL]),
+            )
+            .order_by(TicketGeneration.id.asc()).limit(1)
+        )
+        daily_generation = retained.scalar_one_or_none()
+        if daily_generation is not None:
+            return daily_generation
         built = await AccumulatorBuilder(self.db).build(
             target_date,
             model_run_id=model_run_id,
@@ -53,6 +72,11 @@ class TicketPublisher:
         )
         if built.model_run_id is None:
             raise ValueError("No completed model run exists for the requested date")
+        decision_at = datetime.now(timezone.utc)
+        self._validate_pre_match_candidates(
+            [built.conservative, built.balanced, built.high_odds],
+            decision_at,
+        )
         await self._validate_pipeline_context(pipeline_run_id, target_date, built.model_run_id)
 
         public_tickets = [built.conservative, built.balanced, built.high_odds]
@@ -155,6 +179,36 @@ class TicketPublisher:
         await self.db.flush()
         return generation
 
+    @staticmethod
+    def _validate_pre_match_candidates(candidates: list[Ticket | None], decision_at: datetime) -> None:
+        """Fail closed if a build contains a leg unavailable at publication time."""
+        def utc(value: datetime) -> datetime:
+            if value.tzinfo is None:
+                return value.replace(tzinfo=timezone.utc)
+            return value.astimezone(timezone.utc)
+
+        for candidate in candidates:
+            if candidate is None:
+                continue
+            for leg in candidate.legs:
+                kickoff = utc(leg.kickoff_at)
+                if kickoff <= decision_at:
+                    raise ValueError("Refusing publication: a candidate kickoff has already passed")
+                if (
+                    leg.source_odds_at is None
+                    or utc(leg.source_odds_at) > decision_at
+                    or utc(leg.source_odds_at) >= kickoff
+                ):
+                    raise ValueError(
+                        "Refusing publication: a candidate lacks a quote available before decision and kickoff"
+                    )
+                if not (
+                    leg.source_odds_id or leg.source_odds_provenance.get("quote_id")
+                ) or not leg.source_bookmaker:
+                    raise ValueError("Refusing publication: a candidate lacks quote ID or bookmaker provenance")
+                if not leg.feature_snapshot:
+                    raise ValueError("Refusing publication: a candidate lacks its model feature snapshot")
+
     async def _validate_pipeline_context(
         self, pipeline_run_id: int | None, target_date: date, model_run_id: int
     ) -> None:
@@ -194,11 +248,14 @@ class TicketPublisher:
             )
         )
         version = int(version_result.scalar() or 0) + 1
-        content = _canonical_ticket_content(generation, candidate, model_version, version)
+        now = datetime.now(timezone.utc)
+        self._validate_pre_match_candidates([candidate], now)
+        content = _canonical_ticket_content(
+            generation, candidate, model_version, version, now
+        )
         publication_hash = hashlib.sha256(
             json.dumps(content, sort_keys=True, separators=(",", ":")).encode("utf-8")
         ).hexdigest()
-        now = datetime.now(timezone.utc)
         ticket = AccumulatorTicket(
             generation_id=generation.id,
             target_date=generation.target_date,
@@ -225,6 +282,12 @@ class TicketPublisher:
         self.db.add(ticket)
         await self.db.flush()
         for position, leg in enumerate(candidate.legs, start=1):
+            decision_snapshot = _pick_decision_snapshot(
+                generation, candidate, leg, model_version, now
+            )
+            decision_snapshot_hash = hashlib.sha256(
+                json.dumps(decision_snapshot, sort_keys=True, separators=(",", ":"), default=str).encode("utf-8")
+            ).hexdigest()
             self.db.add(
                 TicketSelection(
                     ticket_id=ticket.id,
@@ -238,6 +301,13 @@ class TicketPublisher:
                     q_score_snapshot=leg.q_score,
                     edge_snapshot=leg.edge,
                     source_odds_at=leg.source_odds_at,
+                    source_odds_id_snapshot=(
+                        leg.source_odds_id or leg.source_odds_provenance.get("quote_id")
+                    ),
+                    source_bookmaker_snapshot=leg.source_bookmaker,
+                    decision_at=now,
+                    decision_snapshot=decision_snapshot,
+                    decision_snapshot_hash=decision_snapshot_hash,
                 )
             )
         self.db.add(
@@ -321,7 +391,11 @@ async def get_ticket_by_id(db: AsyncSession, ticket_id: int) -> AccumulatorTicke
 
 
 def _canonical_ticket_content(
-    generation: TicketGeneration, candidate: Ticket, model_version: str, version: int
+    generation: TicketGeneration,
+    candidate: Ticket,
+    model_version: str,
+    version: int,
+    decision_at: datetime,
 ) -> dict:
     return {
         "target_date": generation.target_date.isoformat(),
@@ -353,10 +427,49 @@ def _canonical_ticket_content(
                 "raw_model_probability": leg.raw_model_probability,
                 "q_score": leg.q_score,
                 "edge": leg.edge,
-                "source_odds_at": leg.source_odds_at.isoformat() if leg.source_odds_at else None,
+                "decision_snapshot": _pick_decision_snapshot(
+                    generation, candidate, leg, model_version, decision_at
+                ),
             }
             for position, leg in enumerate(candidate.legs, start=1)
         ],
+    }
+
+
+def _pick_decision_snapshot(
+    generation: TicketGeneration,
+    candidate: Ticket,
+    leg,
+    model_version: str,
+    decision_at: datetime,
+) -> dict:
+    """Freeze the prediction, feature, market and quote lineage for one pick."""
+    quote_id = leg.source_odds_id or leg.source_odds_provenance.get("quote_id")
+    return {
+        "schema_version": "lohela.pick-decision.v1",
+        "decision_at": decision_at.isoformat(),
+        "generation_id": generation.id,
+        "model_run_id": leg.model_run_id or generation.model_run_id,
+        "model_version": leg.model_version or model_version,
+        "prediction_id": leg.prediction_id,
+        "feature_snapshot": leg.feature_snapshot,
+        "market": {
+            "market": leg.market,
+            "selection": leg.selection,
+            "ticket_pricing": candidate.pricing,
+            "selected_odds": leg.best_odds,
+            "selected_probability": leg.model_probability,
+            "raw_model_probability": leg.raw_model_probability,
+            "edge": leg.edge,
+            "q_score": leg.q_score,
+        },
+        "quote": {
+            "id": quote_id,
+            "bookmaker": leg.source_bookmaker,
+            "decimal_odds": leg.best_odds,
+            "quoted_at": leg.source_odds_at.isoformat() if leg.source_odds_at else None,
+            "provenance": leg.source_odds_provenance,
+        },
     }
 
 

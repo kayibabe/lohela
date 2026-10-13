@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
-from sqlalchemy import select
+from sqlalchemy import exists, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Match, OddsSnapshot, Prediction
@@ -18,19 +18,35 @@ from app.models import Match, OddsSnapshot, Prediction
 
 async def capture_closing_odds(db: AsyncSession, *, limit: int = 500) -> dict:
     now = datetime.now(timezone.utc)
+    later_quote_exists = exists(
+        select(OddsSnapshot.id).where(
+            OddsSnapshot.match_id == Match.id,
+            OddsSnapshot.market == Prediction.market,
+            OddsSnapshot.selection == Prediction.selection,
+            OddsSnapshot.captured_at > Prediction.source_odds_at,
+            OddsSnapshot.captured_at <= Match.kickoff_at,
+        )
+    )
     result = await db.execute(
         select(Prediction, Match)
         .join(Match, Prediction.match_id == Match.id)
         .where(
             Match.kickoff_at <= now,
             Prediction.source_decimal_odds.is_not(None),
-            Prediction.closing_decimal_odds.is_(None),
+            Prediction.source_odds_at.is_not(None),
+            later_quote_exists,
+            or_(
+                Prediction.clv_percentage.is_(None),
+                Prediction.closing_decimal_odds.is_(None),
+                Prediction.closing_odds_at.is_(None),
+                Prediction.closing_odds_at <= Prediction.source_odds_at,
+                Prediction.closing_odds_at > Match.kickoff_at,
+            ),
         )
         .limit(limit)
     )
     rows = result.all()
     captured = 0
-    skipped_no_snapshot = 0
     for prediction, match in rows:
         snap_result = await db.execute(
             select(OddsSnapshot).where(
@@ -42,17 +58,23 @@ async def capture_closing_odds(db: AsyncSession, *, limit: int = 500) -> dict:
         )
         snapshots = snap_result.scalars().all()
         if not snapshots:
-            # No quote was ever captured before kickoff for this leg — we
-            # genuinely don't know the closing price, so leave it null
-            # rather than fabricate one from a post-kickoff quote.
-            skipped_no_snapshot += 1
+            # A snapshot may disappear between the existence check and load.
+            continue
+
+        # Only a quote observed after the recorded entry price can establish
+        # closing-line movement. The entry snapshot itself is not a close.
+        later_snapshots = [
+            snap for snap in snapshots
+            if snap.captured_at > prediction.source_odds_at
+        ]
+        if not later_snapshots:
             continue
 
         # Last quote per bookmaker as of kickoff, then the best (highest)
         # price across bookmakers — the same "best odds" methodology used
         # to pick the entry price, so the comparison is apples-to-apples.
         latest_per_bookmaker: dict[str, OddsSnapshot] = {}
-        for snap in snapshots:
+        for snap in later_snapshots:
             existing = latest_per_bookmaker.get(snap.bookmaker)
             if existing is None or snap.captured_at > existing.captured_at:
                 latest_per_bookmaker[snap.bookmaker] = snap
@@ -69,4 +91,7 @@ async def capture_closing_odds(db: AsyncSession, *, limit: int = 500) -> dict:
 
     if captured:
         await db.commit()
-    return {"candidates": len(rows), "captured": captured, "skipped_no_snapshot": skipped_no_snapshot}
+    return {
+        "candidates": len(rows),
+        "captured": captured,
+    }

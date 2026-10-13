@@ -222,9 +222,12 @@ async def ensure_band_mix_daily_ledger(
         BandMixDailyPick.target_date == target_date,
         BandMixDailyPick.prediction_id.in_(prediction_ids),
     ))).scalars().all())
+    existing_matches = set((await db.execute(select(BandMixDailyPick.match_id).where(
+        BandMixDailyPick.target_date == target_date,
+    ))).scalars().all())
     inserted = 0
     for row in rows:
-        if row["prediction_id"] in existing:
+        if row["prediction_id"] in existing or row["match_id"] in existing_matches:
             continue
         db.add(BandMixDailyPick(
             target_date=target_date,
@@ -237,6 +240,7 @@ async def ensure_band_mix_daily_ledger(
             result=row.get("result"),
             payload=dict(row),
         ))
+        existing_matches.add(row["match_id"])
         inserted += 1
     return inserted
 
@@ -336,7 +340,13 @@ async def get_or_capture_scan(db: AsyncSession, target_date: date, capture_sourc
         if target_date == cat_today():
             rows = await band_mix_candidates(db, target_date, existing.payload)
             await ensure_band_mix_daily_ledger(db, target_date, rows)
-            await db.commit()
+            try:
+                await db.commit()
+            except IntegrityError:
+                # A concurrent refresh may have recorded a different prediction
+                # for this match first; that earliest committed pick is final.
+                await db.rollback()
+                return await get_or_capture_scan(db, target_date, capture_source)
         return _scan_out(existing, target_date=target_date, evidence_through=existing.evidence_through, payload=existing.payload, provisional=False)
 
     evidence_through, payload = await _compute_scan_payload(db, target_date)

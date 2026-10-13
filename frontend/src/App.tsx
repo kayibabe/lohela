@@ -108,16 +108,6 @@ export default function App() {
         </div>
       </aside>
       <header className="app-header">
-        <div className="header-page-title">
-        <span className="research-status"><span className="status-dot" /> {page === 'tickets' ? 'Decision workspace' : page === 'match' ? 'Match intelligence' : page === 'upgrade' ? 'System' : NAV_META[page].hint}</span>
-          <button className="theme-btn" onClick={cycleTheme} title={`Theme: ${theme}`} aria-label={`Theme: ${theme}. Change theme`}>
-            <span className="theme-auto">{theme === 'system' ? 'Auto' : theme}</span>
-          </button>
-        </div>
-        <div className="header-refresh">
-          <span className="global-updated">Refreshed {lastUpdated.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
-          <button className="global-refresh" onClick={() => { setLastUpdated(new Date()); window.location.reload() }} title="Refresh current page" aria-label="Refresh current page">↻ <span>Refresh</span></button>
-        </div>
         {page === 'tickets' && (
           <div className="date-nav">
             <button className="date-btn" onClick={() => nav(-1)} title="Previous day" aria-label="Previous day">‹</button>
@@ -133,7 +123,16 @@ export default function App() {
             <button className="date-btn" onClick={() => nav(1)} title="Next day" aria-label="Next day">›</button>
           </div>
         )}
-
+        <div className="header-page-title">
+        <span className="research-status"><span className="status-dot" /> {page === 'tickets' ? 'Decision workspace' : page === 'match' ? 'Match intelligence' : page === 'upgrade' ? 'System' : NAV_META[page].hint}</span>
+          <button className="theme-btn" onClick={cycleTheme} title={`Theme: ${theme}`} aria-label={`Theme: ${theme}. Change theme`}>
+            <span className="theme-auto">{theme === 'system' ? 'Auto' : theme}</span>
+          </button>
+        </div>
+        <div className="header-refresh">
+          <span className="global-updated">Refreshed {lastUpdated.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+          <button className="global-refresh" onClick={() => { setLastUpdated(new Date()); window.location.reload() }} title="Refresh current page" aria-label="Refresh current page">↻ <span>Refresh</span></button>
+        </div>
       </header>
 
       <main className="main" id="main-content" tabIndex={-1}>

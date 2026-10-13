@@ -15,7 +15,7 @@ interface ResearchSummary {
   hit_rate: number; hit_rate_confidence_interval_95: [number, number]
   stake: number; return: number; profit_loss: number; roi: number; yield: number
   max_drawdown_units: number; brier_score: number | null; calibration_error: number | null
-  selection_sample_size: number; by_ticket_type: ResearchBreakdown[]; ticket_overlap: TicketOverlap[]
+  selection_sample_size: number; by_ticket_type: ResearchBreakdown[]; my_accumulators: ResearchBreakdown; ticket_overlap: TicketOverlap[]
 }
 interface IndividualRow { label: string; selections: number; settled: number; wins: number; losses: number; voids: number; staked: number; returned: number; pnl: number; roi: number; hit_rate: number }
 interface IndividualSummary { stake: number; unique_selections: number; settled_selections: number; eligible_predictions?: number; settled_predictions?: number; excluded_missing_odds?: number; excluded_post_kickoff_information?: number; excluded_post_kickoff_odds?: number; overall: IndividualRow; by_date: IndividualRow[]; by_month: IndividualRow[]; by_year: IndividualRow[]; by_market: IndividualRow[]; by_competition: IndividualRow[]; by_odds_band?: IndividualRow[]; by_probability_band?: IndividualRow[]; by_grade?: IndividualRow[] }
@@ -528,6 +528,7 @@ function ResearchPerformance({ data }: { data: ResearchSummary | null }) {
   const hasSettled = data.settled_tickets > 0
   const coverage = data.published_tickets ? data.settled_tickets / data.published_tickets : 0
   const [ciLow, ciHigh] = data.hit_rate_confidence_interval_95
+  const portfolioRows = [...data.by_ticket_type, data.my_accumulators]
   return <>
     <div className="validation-strip"><div><span className={`validation-dot ${hasSettled ? 'ready' : ''}`} /><strong>{hasSettled ? 'Settlement evidence available' : 'Paper-trading evidence accumulating'}</strong></div><span>Model {data.current_model_version} · {data.settled_tickets} of {data.published_tickets} tickets settled · {pct(coverage)} coverage</span></div>
     <div className="research-kpis">
@@ -541,7 +542,7 @@ function ResearchPerformance({ data }: { data: ResearchSummary | null }) {
     <div className="analytics-insight-grid">
       <section className="analytics-card">
         <div className="section-header"><div><span className="eyebrow">Portfolio lens</span><h2 className="section-title">By ticket type</h2></div><span className="section-subtitle">Latest settlement version</span></div>
-        {data.by_ticket_type.length === 0 ? <AnalyticsEmpty title="No settled ticket cohorts yet" body="Breakdowns appear after result ingestion." compact /> : <div className="cohort-list">{data.by_ticket_type.map(row => <div className="cohort-row" key={row.ticket_type}><div><span className="badge badge-type">{formatTicketType(row.ticket_type)}</span><small>{row.wins}/{row.tickets} won</small></div><div><span>Hit rate</span><strong>{pct(row.hit_rate)}</strong></div><div><span>ROI</span><strong className={row.roi >= 0 ? 'positive' : 'negative'}>{pct(row.roi)}</strong></div><div><span>P&amp;L</span><strong className={row.profit_loss >= 0 ? 'positive' : 'negative'}>{fmtPnl(row.profit_loss)}</strong></div></div>)}</div>}
+        {portfolioRows.length === 0 ? <AnalyticsEmpty title="No settled ticket cohorts yet" body="Breakdowns appear after result ingestion." compact /> : <div className="cohort-list">{portfolioRows.map(row => <div className="cohort-row" key={row.ticket_type}><div><span className="badge badge-type">{row.ticket_type === 'my_accumulators' ? 'My Accumulators' : formatTicketType(row.ticket_type)}</span><small>{row.wins}/{row.tickets} won</small></div><div><span>Hit rate</span><strong>{pct(row.hit_rate)}</strong></div><div><span>ROI</span><strong className={row.roi >= 0 ? 'positive' : 'negative'}>{pct(row.roi)}</strong></div><div><span>P&amp;L</span><strong className={row.profit_loss >= 0 ? 'positive' : 'negative'}>{fmtPnl(row.profit_loss)}</strong></div></div>)}</div>}
       </section>
       <section className="analytics-card methodology-card">
         <div className="section-header"><div><span className="eyebrow">Interpretation</span><h2 className="section-title">Evidence quality</h2></div></div>

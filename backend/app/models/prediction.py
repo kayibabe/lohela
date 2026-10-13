@@ -80,12 +80,16 @@ class Prediction(Base):
     active_models: Mapped[list] = mapped_column(JSON, default=list, nullable=False)
     data_quality_snapshot: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
     source_odds_id: Mapped[int | None] = mapped_column(
-        Integer, ForeignKey("odds.id", ondelete="SET NULL"), nullable=True
+        Integer, ForeignKey("odds.id", ondelete="SET NULL"), nullable=True, index=True
     )
     source_odds_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     source_decimal_odds: Mapped[float | None] = mapped_column(Float, nullable=True)
     source_implied_probability: Mapped[float | None] = mapped_column(Float, nullable=True)
     source_odds_provenance: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
+    # Exact model/Q-score inputs at scoring time. Empty for legacy predictions
+    # whose original feature state was not persisted.
+    feature_snapshot: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
+    decision_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, index=True)
 
     # Append-only decision contract captured with the prediction. This keeps
     # later UI policy changes from rewriting historical recommendation meaning.

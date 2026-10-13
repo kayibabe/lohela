@@ -2,13 +2,15 @@
 
 from __future__ import annotations
 
+import hmac
+import os
 from datetime import date
 from typing import Optional
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import func, select
+from sqlalchemy import case, func, select
 from sqlalchemy.orm import selectinload
 
 from app.config import cat_today, settings
@@ -29,6 +31,61 @@ from app.services.ticket_publisher import get_latest_published_tickets, get_tick
 from app.services.pipeline_tracker import infer_pipeline_run_type
 
 router = APIRouter(prefix="/tickets", tags=["tickets"])
+
+
+@router.get("/portfolio-export")
+async def export_portfolio_tickets(
+    from_date: date = Query(alias="from"),
+    to_date: date = Query(alias="to"),
+    x_portfolio_token: str | None = Header(default=None),
+    db: AsyncSession = Depends(get_db),
+):
+    """Read-only service export of immutable public ticket snapshots."""
+    expected = os.environ.get("PORTFOLIO_EXPORT_TOKEN", "")
+    if not expected or not x_portfolio_token or not hmac.compare_digest(expected, x_portfolio_token):
+        raise HTTPException(status_code=401, detail="Invalid portfolio service credential")
+    if from_date > to_date:
+        raise HTTPException(status_code=422, detail="from must be before or equal to to")
+    if (to_date - from_date).days > 3660:
+        raise HTTPException(status_code=422, detail="Date range exceeds ten years")
+
+    result = await db.execute(
+        select(AccumulatorTicket)
+        .where(
+            AccumulatorTicket.target_date >= from_date,
+            AccumulatorTicket.target_date <= to_date,
+            AccumulatorTicket.ticket_type.in_(PUBLIC_TICKET_TYPES),
+            AccumulatorTicket.status.in_([
+                TicketStatus.PUBLISHED,
+                TicketStatus.SETTLED,
+                TicketStatus.VOID,
+            ]),
+        )
+        .options(
+            selectinload(AccumulatorTicket.selections),
+            selectinload(AccumulatorTicket.selections).selectinload(TicketSelection.match).selectinload(Match.home_team),
+            selectinload(AccumulatorTicket.selections).selectinload(TicketSelection.match).selectinload(Match.away_team),
+            selectinload(AccumulatorTicket.selections).selectinload(TicketSelection.match).selectinload(Match.competition),
+            selectinload(AccumulatorTicket.selections).selectinload(TicketSelection.prediction),
+            selectinload(AccumulatorTicket.results),
+        )
+        .order_by(
+            AccumulatorTicket.target_date.desc(),
+            AccumulatorTicket.ticket_type,
+            AccumulatorTicket.version.asc(),
+        )
+    )
+    tickets = []
+    seen = set()
+    for ticket in result.scalars().all():
+        key = (ticket.target_date, ticket.ticket_type)
+        if key in seen:
+            continue
+        seen.add(key)
+        snapshot = _ticket(ticket, reveal=True).model_dump(mode="json")
+        snapshot["target_date"] = ticket.target_date.isoformat()
+        tickets.append(snapshot)
+    return {"tickets": tickets}
 
 PUBLIC_TICKET_TYPES = list(BUILDER_PUBLIC_TICKET_TYPES)
 TICKET_NAMES = {
@@ -83,6 +140,11 @@ class LegOut(BaseModel):
     edge: Optional[float]
     expected_value: Optional[float]
     source_odds_at: Optional[str]
+    source_odds_id: Optional[int] = None
+    source_bookmaker: Optional[str] = None
+    decision_at: Optional[str] = None
+    decision_snapshot: dict | None = None
+    decision_snapshot_hash: Optional[str] = None
     result: str
     match_status: str
     home_goals: Optional[int]
@@ -222,7 +284,9 @@ async def get_daily_tickets(
     generation_result = await db.execute(
         select(TicketGeneration)
         .where(TicketGeneration.target_date == target)
-        .order_by(TicketGeneration.id.desc())
+        .order_by((TicketGeneration.output_count > 0).desc(),
+                  case((TicketGeneration.output_count > 0, TicketGeneration.id),
+                       else_=-TicketGeneration.id).asc())
         .limit(1)
     )
     latest_generation = generation_result.scalar_one_or_none()
@@ -593,6 +657,11 @@ def _leg(selection: TicketSelection, *, reveal: bool = True) -> LegOut:
         edge=selection.edge_snapshot if reveal else None,
         expected_value=selection.probability_snapshot * selection.odds_snapshot - 1.0 if reveal else None,
         source_odds_at=selection.source_odds_at.isoformat() if selection.source_odds_at else None,
+        source_odds_id=selection.source_odds_id_snapshot,
+        source_bookmaker=selection.source_bookmaker_snapshot,
+        decision_at=selection.decision_at.isoformat() if selection.decision_at else None,
+        decision_snapshot=selection.decision_snapshot if reveal else None,
+        decision_snapshot_hash=selection.decision_snapshot_hash,
         result=selection.result.value,
         match_status=match.status.value,
         home_goals=match.home_goals,
@@ -600,7 +669,9 @@ def _leg(selection: TicketSelection, *, reveal: bool = True) -> LegOut:
         live_phase=match.live_phase,
         elapsed_minutes=match.elapsed_minutes,
         selection_settled_at=selection.settled_at.isoformat() if selection.settled_at else None,
-        locked_fields=[] if reveal else ["probability", "odds", "q_score", "edge", "expected_value"],
+        locked_fields=[] if reveal else [
+            "probability", "odds", "q_score", "edge", "expected_value", "decision_snapshot"
+        ],
     )
 
 

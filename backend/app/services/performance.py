@@ -9,7 +9,17 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.models import AccumulatorTicket, SelectionResult, TicketSelection, TicketStatus, TicketType, Match, Prediction
+from app.models import (
+    AccumulatorTicket,
+    CustomAccumulator,
+    CustomAccumulatorStatus,
+    SelectionResult,
+    TicketSelection,
+    TicketStatus,
+    TicketType,
+    Match,
+    Prediction,
+)
 from app.services.settlement import evaluate_selection
 from app.config import CURRENT_MODEL_VERSION
 
@@ -124,6 +134,10 @@ async def performance_summary(db: AsyncSession, date_from: date | None = None, d
         bucket["stake"] += item.stake
         bucket["return"] += item.return_amount
     breakdown = []
+    # Keep all public production tiers visible in the portfolio lens, even
+    # when a tier has no settled cohort in the selected scope yet.
+    for ticket_type in (TicketType.BALANCED.value, TicketType.SAFE.value, TicketType.HIGH_ODDS.value):
+        by_type.setdefault(ticket_type, {"tickets": 0, "wins": 0, "stake": 0.0, "return": 0.0})
     for ticket_type, bucket in by_type.items():
         type_pnl = bucket["return"] - bucket["stake"]
         breakdown.append({
@@ -132,10 +146,52 @@ async def performance_summary(db: AsyncSession, date_from: date | None = None, d
             "wins": bucket["wins"],
             "stake": bucket["stake"],
             "return": bucket["return"],
-            "hit_rate": bucket["wins"] / bucket["tickets"],
+            "hit_rate": bucket["wins"] / bucket["tickets"] if bucket["tickets"] else 0.0,
             "roi": type_pnl / bucket["stake"] if bucket["stake"] else 0.0,
             "profit_loss": type_pnl,
         })
+
+    # Personal/daily accumulators are a separate ledger from published ticket
+    # cohorts, but belong in the same portfolio lens. Count only terminal
+    # outcomes; placed and draft rows remain outside settled ROI.
+    accumulator_result = await db.execute(
+        select(CustomAccumulator)
+        .where(CustomAccumulator.status.in_(
+            (
+                CustomAccumulatorStatus.WON,
+                CustomAccumulatorStatus.LOST,
+                CustomAccumulatorStatus.VOID,
+            )
+        ))
+        .order_by(CustomAccumulator.target_date, CustomAccumulator.id)
+    )
+    accumulators = accumulator_result.scalars().all()
+    if date_from:
+        accumulators = [row for row in accumulators if row.target_date >= date_from]
+    if date_to:
+        accumulators = [row for row in accumulators if row.target_date <= date_to]
+    accumulator_stake = sum(row.stake or 0.0 for row in accumulators)
+    accumulator_return = sum(
+        (row.actual_return if row.actual_return is not None else (row.stake or 0.0) * row.combined_odds)
+        if row.status == CustomAccumulatorStatus.WON
+        else (row.actual_return or row.stake or 0.0) if row.status == CustomAccumulatorStatus.VOID
+        else 0.0
+        for row in accumulators
+    )
+    accumulator_pnl = accumulator_return - accumulator_stake
+    my_accumulators = {
+        "ticket_type": "my_accumulators",
+        "tickets": len(accumulators),
+        "wins": sum(row.status == CustomAccumulatorStatus.WON for row in accumulators),
+        "stake": accumulator_stake,
+        "return": accumulator_return,
+        "hit_rate": (
+            sum(row.status == CustomAccumulatorStatus.WON for row in accumulators) / len(accumulators)
+            if accumulators else 0.0
+        ),
+        "roi": accumulator_pnl / accumulator_stake if accumulator_stake else 0.0,
+        "profit_loss": accumulator_pnl,
+    }
 
     official_tickets = tickets
     official_settled_ids = {ticket.id for ticket, _ in settled}
@@ -197,6 +253,7 @@ async def performance_summary(db: AsyncSession, date_from: date | None = None, d
         "calibration_by_pricing": calibration_by_pricing,
         "selection_sample_size": len(outcomes),
         "by_ticket_type": breakdown,
+        "my_accumulators": my_accumulators,
         "ticket_overlap": overlap,
         "evidence_gate": {
             "official_latest_cohorts": len(official_tickets),
@@ -489,7 +546,7 @@ async def clv_summary(db: AsyncSession, date_from: date | None = None, date_to: 
     """
     result = await db.execute(
         select(Prediction).join(Match).options(selectinload(Prediction.match))
-        .where(Prediction.clv_percentage.is_not(None))
+        .where(Prediction.source_decimal_odds.is_not(None))
         .order_by(Prediction.created_at.desc())
     )
     latest: dict[tuple[int, str, str], Prediction] = {}
@@ -503,7 +560,24 @@ async def clv_summary(db: AsyncSession, date_from: date | None = None, date_to: 
         if key not in latest:
             latest[key] = prediction
 
-    rows = list(latest.values())
+    candidates = list(latest.values())
+
+    def valid_close(prediction: Prediction) -> bool:
+        match = prediction.match
+        if (
+            prediction.clv_percentage is None
+            or not _has_pre_kickoff_information(prediction)
+            or prediction.source_odds_at is None
+            or prediction.closing_odds_at is None
+            or match is None
+        ):
+            return False
+        entry_at = _as_utc(prediction.source_odds_at)
+        close_at = _as_utc(prediction.closing_odds_at)
+        kickoff_at = _as_utc(match.kickoff_at)
+        return entry_at < close_at <= kickoff_at
+
+    rows = [prediction for prediction in candidates if valid_close(prediction)]
 
     def aggregate(items: list[Prediction]) -> dict:
         if not items:
@@ -531,6 +605,12 @@ async def clv_summary(db: AsyncSession, date_from: date | None = None, date_to: 
         "by_q_grade": [{"q_grade": k, **aggregate(v)} for k, v in sorted(by_q_grade.items())],
         "by_market": [{"market": k, **aggregate(v)} for k, v in sorted(by_market.items())],
         "by_month": [{"month": k, **aggregate(v)} for k, v in sorted(by_month.items(), reverse=True)],
+        "coverage": {
+            "latest_priced_predictions": len(candidates),
+            "valid_later_pre_kickoff_closes": len(rows),
+            "missing_or_invalid_close": len(candidates) - len(rows),
+            "close_rate": round(len(rows) / len(candidates), 4) if candidates else 0.0,
+        },
     }
 
 

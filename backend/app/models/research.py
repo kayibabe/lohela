@@ -17,6 +17,8 @@ from sqlalchemy import (
     String,
     Text,
     UniqueConstraint,
+    event,
+    inspect,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
@@ -273,6 +275,13 @@ class TicketSelection(Base):
     q_score_snapshot: Mapped[float] = mapped_column(Float, nullable=False)
     edge_snapshot: Mapped[float | None] = mapped_column(Float, nullable=True)
     source_odds_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # Denormalized immutable identifiers: unlike prediction/odds foreign keys,
+    # these snapshots survive cleanup of the mutable source rows.
+    source_odds_id_snapshot: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    source_bookmaker_snapshot: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    decision_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    decision_snapshot: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
+    decision_snapshot_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
     result: Mapped[SelectionResult] = mapped_column(
         SAEnum(SelectionResult), default=SelectionResult.PENDING, nullable=False
     )
@@ -281,6 +290,33 @@ class TicketSelection(Base):
     ticket: Mapped["AccumulatorTicket"] = relationship("AccumulatorTicket", back_populates="selections")
     prediction: Mapped["Prediction"] = relationship("Prediction")
     match: Mapped["Match"] = relationship("Match")
+
+
+@event.listens_for(TicketSelection, "before_update")
+def _prevent_published_pick_provenance_rewrite(_mapper, _connection, selection) -> None:
+    """Allow settlement updates while keeping a published decision immutable."""
+    immutable_fields = (
+        "ticket_id",
+        "prediction_id",
+        "match_id",
+        "position",
+        "market",
+        "selection",
+        "odds_snapshot",
+        "probability_snapshot",
+        "q_score_snapshot",
+        "edge_snapshot",
+        "source_odds_at",
+        "source_odds_id_snapshot",
+        "source_bookmaker_snapshot",
+        "decision_at",
+        "decision_snapshot",
+        "decision_snapshot_hash",
+    )
+    state = inspect(selection)
+    changed = [name for name in immutable_fields if state.attrs[name].history.has_changes()]
+    if changed:
+        raise ValueError(f"Published pick provenance is immutable: {', '.join(changed)}")
 
 
 class TicketResult(Base):
@@ -546,6 +582,7 @@ class BandMixDailyPick(Base):
     __tablename__ = "band_mix_daily_picks"
     __table_args__ = (
         UniqueConstraint("target_date", "prediction_id", name="uq_band_mix_daily_pick"),
+        UniqueConstraint("target_date", "match_id", name="uq_band_mix_daily_pick_match"),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)

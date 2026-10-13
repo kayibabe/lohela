@@ -136,10 +136,14 @@ async def lifespan(app: FastAPI):
             max_instances=1,
         )
     scheduler.start()
+    early_cat_minutes = (settings.pipeline_early_cron_hour * 60 + settings.pipeline_early_cron_minute + 120) % (24 * 60)
+    morning_cat_minutes = (settings.pipeline_morning_cron_hour * 60 + settings.pipeline_morning_cron_minute + 120) % (24 * 60)
     logger.info(
-        "Pipeline scheduled at %02d:%02d UTC and %02d:%02d UTC (00:15 and 05:00 CAT)",
+        "Pipeline scheduled at %02d:%02d UTC and %02d:%02d UTC (%02d:%02d and %02d:%02d CAT)",
         settings.pipeline_early_cron_hour, settings.pipeline_early_cron_minute,
         settings.pipeline_morning_cron_hour, settings.pipeline_morning_cron_minute,
+        early_cat_minutes // 60, early_cat_minutes % 60,
+        morning_cat_minutes // 60, morning_cat_minutes % 60,
     )
     await _seed_competitions_if_empty()
     await _run_startup_automation()
