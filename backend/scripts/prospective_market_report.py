@@ -1,7 +1,7 @@
 """Read-only prospective audit of market-priced public selections.
 
 Run from backend: python -m scripts.prospective_market_report --since 2026-10-13 --until 2026-10-14
-Only publication-time snapshots and later, pre-kickoff closing quotes are used.
+Only publication-time snapshots and later, pre-kickoff observed quotes are used.
 The same prediction appearing on two tickets counts once in probability scores.
 The exclusive upper date boundary freezes a cohort; outputs remain descriptive paper evidence.
 """
@@ -13,6 +13,7 @@ import asyncio
 import json
 import math
 import random
+import statistics
 from collections import Counter
 from datetime import date, datetime, timezone
 
@@ -114,6 +115,7 @@ def summarize(rows: list[tuple], as_of: datetime | None = None,
     market_rows: list[tuple[float, int]] = []
     model_rows: list[tuple[float, int]] = []
     clv: list[float] = []
+    clv_quote_ages: list[float] = []
     clv_eligible = 0
     by_market: dict[str, tuple[list[tuple[float, int]], list[tuple[float, int]]]] = {}
     by_league: dict[str, tuple[list[tuple[float, int]], list[tuple[float, int]]]] = {}
@@ -142,6 +144,7 @@ def summarize(rows: list[tuple], as_of: datetime | None = None,
                 clv.append(selection.odds_snapshot / prediction.closing_decimal_odds - 1)
                 close_odds = prediction.closing_decimal_odds
                 close_at = _utc(prediction.closing_odds_at)
+                clv_quote_ages.append((_utc(match.kickoff_at) - close_at).total_seconds() / 60)
             elif _utc(match.kickoff_at) <= as_of:
                 coverage["missing_later_pre_kickoff_close"] += 1
         if selection.result == SelectionResult.PENDING:
@@ -169,7 +172,8 @@ def summarize(rows: list[tuple], as_of: datetime | None = None,
                        "kickoff": _utc(match.kickoff_at), "odds": selection.odds_snapshot,
                        "market_probability": selection.probability_snapshot,
                        "model_probability": prediction.model_probability,
-                       "closing_odds": close_odds, "closing_at": close_at, "outcome": y})
+                       "last_observed_pre_kickoff_odds": close_odds,
+                       "last_observed_pre_kickoff_at": close_at, "outcome": y})
     report = {
         "evidence": "prospective_published_market_tickets_only",
         "unique_predictions": len(unique),
@@ -205,12 +209,21 @@ def summarize(rows: list[tuple], as_of: datetime | None = None,
             )
             if scored else None,
         },
-        "closing_line": {
+        "last_observed_pre_kickoff_quote": {
             "eligible_published_prices": clv_eligible,
             "count": len(clv),
             "coverage": round(len(clv) / clv_eligible, 6) if clv_eligible else None,
-            "mean_entry_vs_close": round(sum(clv) / len(clv), 6) if clv else None,
-            "beat_close_rate": round(sum(value > 0 for value in clv) / len(clv), 6) if clv else None,
+            "mean_entry_vs_observed_price": round(sum(clv) / len(clv), 6) if clv else None,
+            "beat_observed_price_rate": round(sum(value > 0 for value in clv) / len(clv), 6) if clv else None,
+            "quote_age_at_kickoff_minutes": {
+                "count": len(clv_quote_ages),
+                "median": round(statistics.median(clv_quote_ages), 2) if clv_quote_ages else None,
+                "p90": round(sorted(clv_quote_ages)[int((len(clv_quote_ages) - 1) * 0.9)], 2)
+                if clv_quote_ages else None,
+                "max": round(max(clv_quote_ages), 2) if clv_quote_ages else None,
+                "timestamp_basis": "local OddsSnapshot captured_at; provider cache age is not available",
+            },
+            "qualification": "DESCRIPTIVE_ONLY; close freshness threshold is not pre-registered",
             "unsettled_selections_included": True,
         },
         "interpretation": "Descriptive paper evidence only; no profitability or promotion claim.",
@@ -223,7 +236,13 @@ def summarize(rows: list[tuple], as_of: datetime | None = None,
             "count": len(losses),
             "sort": "highest probability assigned by either market or model first",
             "cases": [{**row, "kickoff": row["kickoff"].isoformat(),
-                       "closing_at": row["closing_at"].isoformat() if row["closing_at"] else None}
+                       "last_observed_pre_kickoff_at": (
+                           row["last_observed_pre_kickoff_at"].isoformat()
+                           if row["last_observed_pre_kickoff_at"] else None
+                       ),
+                       "last_observed_quote_age_minutes": round(
+                           (row["kickoff"] - row["last_observed_pre_kickoff_at"]).total_seconds() / 60, 2
+                       ) if row["last_observed_pre_kickoff_at"] else None}
                       for row in losses],
             "interpretation": "Diagnostic misses only; this retrospective sample is not a tuning or promotion set.",
         }

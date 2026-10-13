@@ -170,6 +170,9 @@ def refresh_live_status(self):
             async with AsyncSessionLocal() as db:
                 refreshed = await FixtureIngestor(db).refresh_live_status()
 
+                from app.services.odds_fetcher import LiveOddsFetcher
+                closing_quote_refresh = await LiveOddsFetcher(db).refresh_published_closing_quotes()
+
                 from app.services.clv import capture_closing_odds
                 clv = await capture_closing_odds(db)
 
@@ -189,7 +192,8 @@ def refresh_live_status(self):
                         source="live_status", since=cat_today() - timedelta(days=1)
                     )
                     await db.commit()
-                return {**refreshed, "settlement": settlement, "clv": clv}
+                return {**refreshed, "closing_quote_refresh": closing_quote_refresh,
+                        "settlement": settlement, "clv": clv}
 
     try:
         return _run_async(_run())
