@@ -151,7 +151,11 @@ class SettlementService:
             match = selection.match
             if match.status in (MatchStatus.POSTPONED, MatchStatus.CANCELLED):
                 outcome = SelectionResult.VOID
-            elif match.home_goals is not None and match.away_goals is not None:
+            elif (
+                match.status == MatchStatus.FINISHED
+                and match.home_goals is not None
+                and match.away_goals is not None
+            ):
                 try:
                     outcome = evaluate_selection(selection.market, match.home_goals, match.away_goals)
                 except ValueError as exc:
@@ -209,17 +213,26 @@ class SettlementService:
         source: str,
         now: datetime,
     ) -> int:
-        """Settle placed user accumulators as soon as their outcome is known.
+        """Reconcile placed and previously settled user accumulators.
 
         An accumulator is irreversibly lost once any leg loses, so remaining
         pending legs must not delay that settlement. Wins and all-void results
-        still require every leg to have an authoritative outcome.
+        still require every leg to have an authoritative outcome. A later
+        authoritative result correction may revise the current state; each
+        revision is recorded in the append-only audit log.
         """
         result = await self.db.execute(
             select(CustomAccumulator)
             .join(CustomAccumulatorLeg)
             .where(
-                CustomAccumulator.status == CustomAccumulatorStatus.PLACED,
+                CustomAccumulator.status.in_(
+                    (
+                        CustomAccumulatorStatus.PLACED,
+                        CustomAccumulatorStatus.WON,
+                        CustomAccumulatorStatus.LOST,
+                        CustomAccumulatorStatus.VOID,
+                    )
+                ),
                 CustomAccumulatorLeg.match_id.in_(match_ids),
             )
             .options(selectinload(CustomAccumulator.legs))
@@ -236,10 +249,16 @@ class SettlementService:
                     reason="Placed accumulator has no stake",
                 ))
                 continue
+            previous_status = accumulator.status
+            previous_return = accumulator.actual_return
+            previous_settled_at = accumulator.settled_at
+            previous_leg_results = [leg.result for leg in accumulator.legs]
             outcomes = []
             for leg in accumulator.legs:
                 match = await self.db.get(Match, leg.match_id)
                 if not match:
+                    leg.result = SelectionResult.PENDING
+                    leg.settled_at = None
                     outcomes.append(SelectionResult.PENDING)
                     continue
                 if match.status in (MatchStatus.POSTPONED, MatchStatus.CANCELLED):
@@ -257,9 +276,13 @@ class SettlementService:
                                 reason=str(exc),
                             )
                         )
+                        leg.result = SelectionResult.PENDING
+                        leg.settled_at = None
                         outcomes.append(SelectionResult.PENDING)
                         continue
                 else:
+                    leg.result = SelectionResult.PENDING
+                    leg.settled_at = None
                     outcomes.append(SelectionResult.PENDING)
                     continue
                 if leg.result != outcome:
@@ -271,16 +294,24 @@ class SettlementService:
             if SelectionResult.LOST in outcomes:
                 status, actual_return = CustomAccumulatorStatus.LOST, 0.0
             elif SelectionResult.PENDING in outcomes:
-                continue
+                status, actual_return = CustomAccumulatorStatus.PLACED, None
             elif all(outcome == SelectionResult.VOID for outcome in outcomes):
                 status, actual_return = CustomAccumulatorStatus.VOID, accumulator.stake or 0.0
             else:
                 status = CustomAccumulatorStatus.WON
                 active_odds = [leg.odds_snapshot for leg, outcome in zip(accumulator.legs, outcomes) if outcome == SelectionResult.WON]
                 actual_return = round((accumulator.stake or 0.0) * self._product(active_odds), 2)
+            current_leg_results = [outcome for outcome in outcomes]
+            settlement_changed = (
+                previous_status != status
+                or previous_return != actual_return
+                or previous_leg_results != current_leg_results
+            )
+            if not settlement_changed:
+                continue
             accumulator.status = status
             accumulator.actual_return = actual_return
-            accumulator.settled_at = now
+            accumulator.settled_at = now if status != CustomAccumulatorStatus.PLACED else None
             # Preserve immutable origin/provenance metadata.  The tracker uses
             # the daily-merge marker to distinguish generated accumulators from
             # user-created ones; replacing the whole JSON object here made a
@@ -293,13 +324,32 @@ class SettlementService:
                 "result": status.value,
                 "legs": [outcome.value for outcome in outcomes],
             }
-            self.db.add(AuditEvent(
-                entity_type="custom_accumulator",
-                entity_id=str(accumulator.id),
-                event_type="settled",
-                actor=source,
-                payload=accumulator.settlement_details,
-            ))
+            self.db.add(
+                AuditEvent(
+                    entity_type="custom_accumulator",
+                    entity_id=str(accumulator.id),
+                    event_type=(
+                        "settled"
+                        if previous_status == CustomAccumulatorStatus.PLACED
+                        else "settlement_adjusted"
+                    ),
+                    actor=source,
+                    payload={
+                        "previous": {
+                            "status": previous_status.value,
+                            "actual_return": previous_return,
+                            "settled_at": previous_settled_at.isoformat() if previous_settled_at else None,
+                            "legs": [result.value if result is not None else None for result in previous_leg_results],
+                        },
+                        "current": {
+                            **accumulator.settlement_details,
+                            "status": status.value,
+                            "actual_return": actual_return,
+                            "legs": [outcome.value for outcome in outcomes],
+                        },
+                    },
+                )
+            )
             changed += 1
         return changed
 
