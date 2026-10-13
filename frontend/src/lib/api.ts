@@ -44,6 +44,7 @@ export interface Ticket {
   avg_edge: number | null
   model_version: string
   published_at: string
+  publication_timing?: 'pre_kickoff' | 'post_kickoff' | 'unknown'
   publication_hash: string
   relaxed_tier: boolean
   relaxation_level: number

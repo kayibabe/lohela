@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import hmac
 import os
-from datetime import date
-from typing import Optional
+from datetime import date, timezone
+from typing import Literal, Optional
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request
 from pydantic import BaseModel, Field
@@ -174,6 +174,7 @@ class TicketOut(BaseModel):
     avg_edge: Optional[float]
     model_version: str
     published_at: str
+    publication_timing: Literal["pre_kickoff", "post_kickoff", "unknown"]
     publication_hash: str
     relaxed_tier: bool
     relaxation_level: int
@@ -588,6 +589,7 @@ def _ticket(ticket: AccumulatorTicket, *, reveal: bool = True) -> TicketOut:
         avg_edge=ticket.average_edge if reveal else None,
         model_version=ticket.model_version,
         published_at=ticket.published_at.isoformat(),
+        publication_timing=_ticket_publication_timing(ticket),
         publication_hash=ticket.publication_hash,
         relaxed_tier=ticket.relaxed_tier,
         relaxation_level=ticket.relaxation_level,
@@ -601,6 +603,27 @@ def _ticket(ticket: AccumulatorTicket, *, reveal: bool = True) -> TicketOut:
         settlement_version=latest_result.version if latest_result else None,
         locked_fields=locked,
     )
+
+
+def _ticket_publication_timing(
+    ticket: AccumulatorTicket,
+) -> Literal["pre_kickoff", "post_kickoff", "unknown"]:
+    """Classify the immutable publication time against the earliest leg kickoff."""
+    kickoffs = [
+        selection.match.kickoff_at
+        for selection in ticket.selections
+        if selection.match is not None and selection.match.kickoff_at is not None
+    ]
+    if not kickoffs or ticket.published_at is None:
+        return "unknown"
+
+    def as_utc(value):
+        if value.tzinfo is None:
+            return value.replace(tzinfo=timezone.utc)
+        return value.astimezone(timezone.utc)
+
+    earliest_kickoff = min(kickoffs, key=as_utc)
+    return "pre_kickoff" if as_utc(ticket.published_at) < as_utc(earliest_kickoff) else "post_kickoff"
 
 
 def _ticket_pricing(ticket: AccumulatorTicket) -> str:

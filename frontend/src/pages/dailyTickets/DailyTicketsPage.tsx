@@ -640,11 +640,26 @@ function DecisionSummary({
   onSelect: (selection: SelectionSummary) => void;
 }) {
   const top = matches[0] ?? null;
+  const kickoffState = (selection: SelectionSummary) => {
+    const kickoff = Date.parse(selection.kickoff_at);
+    return !Number.isFinite(kickoff) ? "unknown" : kickoff <= Date.now() ? "past" : "upcoming";
+  };
   const isBettable = (selection: SelectionSummary) => selection.recommendation_status ? selection.recommendation_status === "BET" : selection.q_score >= 85 && (selection.edge ?? 0) > 0 && selection.data_quality_status === "good" && (selection.active_models?.length ?? 0) > 0;
-  const action = top ? (top.recommendation_status ?? (isBettable(top) ? "BET" : "WATCH")) : "PASS";
+  const topKickoffState = top ? kickoffState(top) : "unknown";
+  const action = top
+    ? topKickoffState === "past"
+      ? "HISTORICAL"
+      : topKickoffState === "unknown"
+        ? "UNAVAILABLE"
+        : top.recommendation_status ?? (isBettable(top) ? "BET" : "WATCH")
+    : "PASS";
   const actionTone = action.toLowerCase();
   const reason = top
-    ? action === "BET"
+    ? action === "HISTORICAL"
+      ? "This selection has already kicked off. It remains available for review and is not an upcoming pick."
+      : action === "UNAVAILABLE"
+        ? "Kickoff time is unavailable, so this selection cannot be labelled as an upcoming decision."
+      : action === "BET"
       ? "Qualified quality score and positive priced edge. Review the risks before logging a decision."
       : "A qualified signal exists, but the evidence is not strong enough for a direct BET label."
     : "No priced selection passed the current publication and evidence gates.";
@@ -686,7 +701,12 @@ function DecisionSummary({
           <table className="decision-table">
             <thead><tr><th>Match</th><th>Selection</th><th>Results</th><th>Model</th><th>Odds</th><th>Edge</th><th>Grade</th><th>Data</th><th>Decision</th></tr></thead>
             <tbody>{matches.map((row) => {
-              const rowAction = row.recommendation_status ?? (isBettable(row) ? "BET" : "WATCH");
+              const rowKickoffState = kickoffState(row);
+              const rowAction = rowKickoffState === "past"
+                ? "HISTORICAL"
+                : rowKickoffState === "unknown"
+                  ? "UNAVAILABLE"
+                  : row.recommendation_status ?? (isBettable(row) ? "BET" : "WATCH");
               const result = row.result ?? "pending";
               const resultLabel = result === "pending"
                 ? "Pending"

@@ -672,6 +672,20 @@ body {
   gap: 8px;
   margin-top: 12px;
 }
+
+.post-kickoff-note {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 12px;
+  border: 1px solid color-mix(in srgb, var(--negative) 34%, var(--border));
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--negative) 8%, var(--surface));
+  color: var(--text2);
+  font-size: 0.82rem;
+}
+
+.post-kickoff-note strong { color: var(--negative); }
 .ticket-summary {
   display: flex;
   align-items: center;
@@ -2119,6 +2133,8 @@ th[aria-sort="descending"] .table-sort span,
 .decision-status.bet, .decision-pill.bet { background: var(--ga-bg); color: var(--ga-text); }
 .decision-status.watch, .decision-pill.watch { background: var(--gb-bg); color: var(--gb-text); }
 .decision-status.pass, .decision-pill.pass { background: var(--gc-bg); color: var(--gc-text); }
+.decision-status.historical, .decision-pill.historical,
+.decision-status.unavailable, .decision-pill.unavailable { background: color-mix(in srgb, var(--warning) 14%, var(--surface)); color: var(--warning); }
 .decision-principles { display: flex; flex-wrap: wrap; gap: 6px 14px; margin-top: 14px; color: var(--muted); font-size: 11px; }
 .decision-principles b { color: var(--text2); }
 .decision-lead { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: 14px; margin-top: 16px; padding: 12px; border: 1px solid var(--border); border-radius: var(--r-sm); background: var(--surface); }

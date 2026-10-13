@@ -187,6 +187,14 @@ export default function TicketCard({ ticket, tierName, tierDesc, color, research
             {settlementPending && <div className="settlement-pending-note"><strong>Settlement action</strong><span>A final score is available, but at least one market outcome still awaits result ingestion.</span></div>}
           </div>
         )}
+        {ticket.publication_timing === 'post_kickoff' && (
+          <div className="ticket-alerts">
+            <div className="post-kickoff-note" role="note">
+              <strong>Historical record</strong>
+              <span>This ticket was published after at least one match kicked off. It is a historical record, not a pre-match prediction or upcoming pick.</span>
+            </div>
+          </div>
+        )}
         <div className="ticket-summary">
           <strong>{ticket.legs.length} legs</strong>
           <div className="ticket-result-counts" aria-label="Leg outcomes">
