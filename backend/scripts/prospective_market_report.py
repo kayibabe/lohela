@@ -94,6 +94,7 @@ def summarize(rows: list[tuple], as_of: datetime | None = None,
     """Rows are (ticket, selection, prediction, match[, league]); no writes or fitting."""
     as_of = _utc(as_of or datetime.now(timezone.utc))
     coverage: Counter[str] = Counter()
+    appearances = list(rows)
     unique: dict[int, tuple] = {}
     for row in rows:
         ticket, selection, prediction, match = row[:4]
@@ -195,6 +196,7 @@ def summarize(rows: list[tuple], as_of: datetime | None = None,
         },
         "paper_flat_unit_leg_return": _paper_returns(scored),
         "daily_bootstrap_roi_95": _daily_bootstrap(scored),
+        "ticket_exposure": _ticket_exposure(appearances),
         "concentration": {
             "largest_market_share": round(
                 max(Counter(row["market"] for row in scored).values()) / len(scored), 6
@@ -247,6 +249,90 @@ def summarize(rows: list[tuple], as_of: datetime | None = None,
             "interpretation": "Diagnostic misses only; this retrospective sample is not a tuning or promotion set.",
         }
     return report
+
+
+def _ticket_exposure(rows: list[tuple]) -> dict:
+    """Reconcile every saved ticket-leg appearance without treating it as unique evidence."""
+    counts: Counter[tuple] = Counter()
+    fixture_picks: dict[int, set[tuple]] = {}
+    ticket_ids: dict[tuple, set[int]] = {}
+    target_dates: dict[tuple, set[str]] = {}
+    labels: dict[tuple, tuple[str, str]] = {}
+    scored_appearances: list[dict] = []
+    pending = void = invalid_time = invalid_probability = 0
+
+    for row in rows:
+        ticket, selection, prediction, match = row[:4]
+        match_id = getattr(selection, "match_id", getattr(match, "id", None))
+        pick_key = (match_id, selection.market,
+                    getattr(selection, "selection", selection.market))
+        fixture_key = match_id
+        counts[pick_key] += 1
+        fixture_picks.setdefault(fixture_key, set()).add(pick_key)
+        ticket_ids.setdefault(pick_key, set()).add(ticket.id)
+        labels[pick_key] = (
+            row[5] if len(row) > 5 else "Unknown",
+            row[6] if len(row) > 6 else "Unknown",
+        )
+        target_dates.setdefault(pick_key, set()).add(
+            str(getattr(ticket, "target_date", match.kickoff_at.date()))
+        )
+
+        if not (_utc(prediction.created_at) <= _utc(ticket.published_at) < _utc(match.kickoff_at)
+                and selection.source_odds_at is not None
+                and _utc(selection.source_odds_at) <= _utc(ticket.published_at)):
+            invalid_time += 1
+            continue
+        if not (0 < selection.probability_snapshot < 1 and 0 < prediction.model_probability < 1):
+            invalid_probability += 1
+            continue
+        if selection.result == SelectionResult.PENDING:
+            pending += 1
+            continue
+        if selection.result == SelectionResult.VOID:
+            void += 1
+            continue
+        scored_appearances.append({
+            "prediction_id": selection.prediction_id,
+            "match_id": match_id,
+            "target_date": getattr(ticket, "target_date", match.kickoff_at.date()).isoformat(),
+            "kickoff": _utc(match.kickoff_at),
+            "odds": selection.odds_snapshot,
+            "outcome": int(selection.result == SelectionResult.WON),
+            "ticket_id": ticket.id,
+        })
+
+    repeated = [key for key, count in counts.items() if count > 1]
+    repeated_picks = []
+    for key in sorted(repeated, key=lambda item: (-counts[item], str(item)))[:20]:
+        home, away = labels[key]
+        repeated_picks.append({
+            "match_id": key[0], "home": home, "away": away,
+            "market": key[1], "selection": key[2],
+            "appearances": counts[key], "ticket_ids": sorted(ticket_ids[key]),
+            "target_dates": sorted(target_dates[key]),
+        })
+
+    fixture_overlap = sum(1 for picks in fixture_picks.values() if len(picks) > 1)
+    return {
+        "basis": "all saved published ticket versions; one simulated unit per settled leg appearance",
+        "published_leg_appearances": len(rows),
+        "distinct_ticket_records": len({row[0].id for row in rows}),
+        "distinct_fixtures": len(fixture_picks),
+        "unique_match_market_selection_picks": len(counts),
+        "repeated_pick_keys": len(repeated),
+        "repeated_leg_appearances": sum(counts[key] - 1 for key in repeated),
+        "max_appearances_per_pick": max(counts.values(), default=0),
+        "fixtures_with_multiple_distinct_picks": fixture_overlap,
+        "settled_nonvoid_leg_appearances": len(scored_appearances),
+        "pending_leg_appearances": pending,
+        "void_leg_appearances": void,
+        "invalid_time_order_appearances": invalid_time,
+        "invalid_probability_appearances": invalid_probability,
+        "paper_flat_unit_leg_appearance_return": _paper_returns(scored_appearances),
+        "top_repeated_picks": repeated_picks,
+        "interpretation": "Version history exposure arithmetic only; tickets may be superseded and are not assumed simultaneous or actually staked.",
+    }
 
 
 async def run(since: date, until: date | None = None,
