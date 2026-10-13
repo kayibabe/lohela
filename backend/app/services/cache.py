@@ -25,6 +25,7 @@ import redis.asyncio as aioredis
 from app.config import settings
 
 logger = logging.getLogger(__name__)
+API_FOOTBALL_QUOTA_KEY = "lohela:ops:api_football_quota"
 
 # Shared connection pool — created lazily on first use
 _redis: aioredis.Redis | None = None
@@ -81,6 +82,16 @@ async def set(key: str, value: Any, ttl: int) -> None:
         logger.debug("Cache SET %s ttl=%ds", key, ttl)
     except Exception as exc:
         logger.warning("Cache set error (%s): %s", key, exc)
+
+
+async def record_api_football_quota(value: dict[str, Any]) -> None:
+    """Keep the latest provider quota headers for the admin health snapshot."""
+    await set(API_FOOTBALL_QUOTA_KEY, value, ttl=36 * 60 * 60)
+
+
+async def get_api_football_quota() -> dict[str, Any] | None:
+    """Return recent provider quota headers, if an API call captured them."""
+    return await get(API_FOOTBALL_QUOTA_KEY)
 
 
 async def delete_prefix(prefix: str) -> int:

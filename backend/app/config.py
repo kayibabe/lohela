@@ -175,6 +175,7 @@ class Settings(BaseSettings):
     auth_register_rate_limit: int = 5
     operational_monitor_enabled: bool = True
     operational_monitor_interval_minutes: int = 15
+    api_football_quota_warning_fraction: float = 0.10
     research_target_hit_rate: float = 0.80
     research_minimum_market_sample: int = 100
     # Published public tiers are alternatives, not duplicate exposure. A

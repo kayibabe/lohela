@@ -74,6 +74,16 @@ class APIFootballClient:
             async with _API_SEMAPHORE:
                 resp = await self._client.get(endpoint, params=params)
 
+            quota = {
+                "daily_limit": resp.headers.get("x-ratelimit-requests-limit"),
+                "daily_remaining": resp.headers.get("x-ratelimit-requests-remaining"),
+                "minute_limit": resp.headers.get("x-ratelimit-limit"),
+                "minute_remaining": resp.headers.get("x-ratelimit-remaining"),
+                "observed_at": datetime.now(timezone.utc).isoformat(),
+            }
+            if any(value is not None for key, value in quota.items() if key != "observed_at"):
+                await _cache.record_api_football_quota(quota)
+
             if resp.status_code == 429:
                 retry_after = int(resp.headers.get("Retry-After", 30))
                 logger.warning("429 rate-limited — waiting %ds (attempt %d/%d)", retry_after, attempt, max_attempts)

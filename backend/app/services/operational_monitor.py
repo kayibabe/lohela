@@ -15,6 +15,7 @@ from app.services.automation_alerts import (
     resolve_automation_alert_by_dedupe_key,
 )
 from app.services.pipeline_tracker import infer_pipeline_run_type
+from app.services import cache as _cache
 
 
 def _upcoming_stale_odds_conditions(now: datetime):
@@ -83,6 +84,15 @@ async def operational_snapshot(db: AsyncSession, now: datetime | None = None) ->
     active_alerts = await db.scalar(
         select(func.count()).select_from(AutomationAlert).where(AutomationAlert.resolved.is_(False))
     )
+    provider_quota = await _cache.get_api_football_quota()
+    if provider_quota:
+        for key in ("daily_limit", "daily_remaining", "minute_limit", "minute_remaining"):
+            raw_value = provider_quota.get(key)
+            try:
+                provider_quota[key] = int(raw_value) if raw_value is not None else None
+            except (TypeError, ValueError):
+                provider_quota[key] = None
+        provider_quota["low"] = _provider_quota_is_low(provider_quota)
     recommendation_count = int(upcoming_recommendations or 0)
     covered_count = int(covered_recommendations or 0)
     return {
@@ -109,6 +119,7 @@ async def operational_snapshot(db: AsyncSession, now: datetime | None = None) ->
             if recommendation_count
             else None,
         },
+        "api_football_quota": provider_quota,
         "finished_match_refresh_lag": int(finished_stale or 0),
         "active_alerts": int(active_alerts or 0),
     }
@@ -124,6 +135,7 @@ async def monitor_operational_health(db: AsyncSession, now: datetime | None = No
             snapshot["upcoming_recommendation_quote_coverage"]["eligible"]
             > snapshot["upcoming_recommendation_quote_coverage"]["covered"]
         ),
+        "provider_quota_low": _provider_quota_is_low(snapshot.get("api_football_quota")),
         "settlement_lag": snapshot["finished_match_refresh_lag"] > 0,
     }
     descriptions = {
@@ -132,6 +144,10 @@ async def monitor_operational_health(db: AsyncSession, now: datetime | None = No
         "recommendation_quote_coverage": (
             "Upcoming recommendations lack a fresh pre-kickoff source quote",
             snapshot["upcoming_recommendation_quote_coverage"],
+        ),
+        "provider_quota_low": (
+            "API-Football daily request quota is low",
+            snapshot.get("api_football_quota"),
         ),
         "settlement_lag": ("Finished matches have not been refreshed recently", {"count": snapshot["finished_match_refresh_lag"]}),
     }
@@ -147,3 +163,13 @@ async def monitor_operational_health(db: AsyncSession, now: datetime | None = No
         else:
             await resolve_automation_alert_by_dedupe_key(db, key)
     return snapshot
+
+
+def _provider_quota_is_low(quota: dict | None) -> bool:
+    if not quota:
+        return False
+    limit = quota.get("daily_limit")
+    remaining = quota.get("daily_remaining")
+    if not isinstance(limit, int) or limit <= 0 or not isinstance(remaining, int):
+        return False
+    return remaining / limit <= settings.api_football_quota_warning_fraction
