@@ -17,11 +17,12 @@ from collections import Counter
 from datetime import date, datetime, timezone
 
 from sqlalchemy import select, text
+from sqlalchemy.orm import aliased
 
 from app.database import AsyncSessionLocal
 from app.models import (
     AccumulatorTicket, Competition, Match, Prediction, SelectionResult,
-    TicketSelection, TicketStatus, TicketType,
+    Team, TicketSelection, TicketStatus, TicketType,
 )
 from app.services.accumulator_builder import PUBLIC_TICKET_TYPES
 
@@ -87,7 +88,8 @@ def _daily_bootstrap(rows: list[dict], iterations: int = 2000) -> dict:
             "iterations": iterations, "seed": 20261013}
 
 
-def summarize(rows: list[tuple], as_of: datetime | None = None) -> dict:
+def summarize(rows: list[tuple], as_of: datetime | None = None,
+             include_loss_audit: bool = False) -> dict:
     """Rows are (ticket, selection, prediction, match[, league]); no writes or fitting."""
     as_of = _utc(as_of or datetime.now(timezone.utc))
     coverage: Counter[str] = Counter()
@@ -96,14 +98,18 @@ def summarize(rows: list[tuple], as_of: datetime | None = None) -> dict:
         ticket, selection, prediction, match = row[:4]
         league = (row[4] if len(row) > 4 else
                   getattr(getattr(match, "competition", None), "name", "Unknown"))
+        home_name = row[5] if len(row) > 5 else "Unknown"
+        away_name = row[6] if len(row) > 6 else "Unknown"
         coverage["published_selections"] += 1
         if selection.prediction_id in unique:
             coverage["duplicate_prediction_excluded"] += 1
             if (unique[selection.prediction_id][1].result == SelectionResult.PENDING
                     and selection.result != SelectionResult.PENDING):
-                unique[selection.prediction_id] = (ticket, selection, prediction, match, league)
+                unique[selection.prediction_id] = (ticket, selection, prediction, match, league,
+                                                   home_name, away_name)
             continue
-        unique[selection.prediction_id] = (ticket, selection, prediction, match, league)
+        unique[selection.prediction_id] = (ticket, selection, prediction, match, league,
+                                           home_name, away_name)
 
     market_rows: list[tuple[float, int]] = []
     model_rows: list[tuple[float, int]] = []
@@ -112,7 +118,7 @@ def summarize(rows: list[tuple], as_of: datetime | None = None) -> dict:
     by_market: dict[str, tuple[list[tuple[float, int]], list[tuple[float, int]]]] = {}
     by_league: dict[str, tuple[list[tuple[float, int]], list[tuple[float, int]]]] = {}
     scored: list[dict] = []
-    for ticket, selection, prediction, match, league in unique.values():
+    for ticket, selection, prediction, match, league, home_name, away_name in unique.values():
         if not (_utc(prediction.created_at) <= _utc(ticket.published_at) < _utc(match.kickoff_at)
                 and selection.source_odds_at is not None
                 and _utc(selection.source_odds_at) <= _utc(ticket.published_at)):
@@ -121,6 +127,8 @@ def summarize(rows: list[tuple], as_of: datetime | None = None) -> dict:
         if not (0 < selection.probability_snapshot < 1 and 0 < prediction.model_probability < 1):
             coverage["invalid_probability_excluded"] += 1
             continue
+        close_odds = None
+        close_at = None
         if selection.odds_snapshot > 1:
             if _utc(match.kickoff_at) > as_of:
                 coverage["awaiting_kickoff_for_close"] += 1
@@ -132,6 +140,8 @@ def summarize(rows: list[tuple], as_of: datetime | None = None) -> dict:
                     and _utc(ticket.published_at) < _utc(prediction.closing_odds_at) <= _utc(match.kickoff_at)
                     and prediction.closing_decimal_odds > 1):
                 clv.append(selection.odds_snapshot / prediction.closing_decimal_odds - 1)
+                close_odds = prediction.closing_decimal_odds
+                close_at = _utc(prediction.closing_odds_at)
             elif _utc(match.kickoff_at) <= as_of:
                 coverage["missing_later_pre_kickoff_close"] += 1
         if selection.result == SelectionResult.PENDING:
@@ -151,12 +161,16 @@ def summarize(rows: list[tuple], as_of: datetime | None = None) -> dict:
         league_model_group.append((prediction.model_probability, y))
         scored.append({"prediction_id": selection.prediction_id,
                        "match_id": getattr(selection, "match_id", getattr(match, "id", selection.prediction_id)),
+                       "home": home_name, "away": away_name,
                        "market": selection.market,
+                       "selection": getattr(selection, "selection", selection.market),
                        "league": str(league or "Unknown"),
                        "target_date": getattr(ticket, "target_date", match.kickoff_at.date()).isoformat(),
                        "kickoff": _utc(match.kickoff_at), "odds": selection.odds_snapshot,
-                       "outcome": y})
-    return {
+                       "market_probability": selection.probability_snapshot,
+                       "model_probability": prediction.model_probability,
+                       "closing_odds": close_odds, "closing_at": close_at, "outcome": y})
+    report = {
         "evidence": "prospective_published_market_tickets_only",
         "unique_predictions": len(unique),
         "coverage": dict(sorted(coverage.items())),
@@ -201,17 +215,36 @@ def summarize(rows: list[tuple], as_of: datetime | None = None) -> dict:
         },
         "interpretation": "Descriptive paper evidence only; no profitability or promotion claim.",
     }
+    if include_loss_audit:
+        losses = sorted((row for row in scored if row["outcome"] == 0),
+                        key=lambda row: (max(row["market_probability"], row["model_probability"]),
+                                         row["kickoff"]), reverse=True)
+        report["loss_audit"] = {
+            "count": len(losses),
+            "sort": "highest probability assigned by either market or model first",
+            "cases": [{**row, "kickoff": row["kickoff"].isoformat(),
+                       "closing_at": row["closing_at"].isoformat() if row["closing_at"] else None}
+                      for row in losses],
+            "interpretation": "Diagnostic misses only; this retrospective sample is not a tuning or promotion set.",
+        }
+    return report
 
 
-async def run(since: date, until: date | None = None) -> dict:
+async def run(since: date, until: date | None = None,
+              include_loss_audit: bool = False) -> dict:
     async with AsyncSessionLocal() as db:
         await db.execute(text("SET TRANSACTION READ ONLY"))
+        home_team = aliased(Team)
+        away_team = aliased(Team)
         result = await db.execute(
-            select(AccumulatorTicket, TicketSelection, Prediction, Match, Competition.name)
+            select(AccumulatorTicket, TicketSelection, Prediction, Match, Competition.name,
+                   home_team.name, away_team.name)
             .join(TicketSelection, TicketSelection.ticket_id == AccumulatorTicket.id)
             .join(Prediction, Prediction.id == TicketSelection.prediction_id)
             .join(Match, Match.id == TicketSelection.match_id)
             .join(Competition, Competition.id == Match.competition_id)
+            .join(home_team, home_team.id == Match.home_team_id)
+            .join(away_team, away_team.id == Match.away_team_id)
             .where(AccumulatorTicket.pricing == "market",
                    AccumulatorTicket.target_date >= since,
                    *([AccumulatorTicket.target_date < until] if until is not None else []),
@@ -220,7 +253,8 @@ async def run(since: date, until: date | None = None) -> dict:
                                                  TicketStatus.VOID)))
             .order_by(AccumulatorTicket.published_at, TicketSelection.id)
         )
-        report = summarize(result.all(), as_of=datetime.now(timezone.utc))
+        report = summarize(result.all(), as_of=datetime.now(timezone.utc),
+                            include_loss_audit=include_loss_audit)
         report["since_target_date"] = since.isoformat()
         report["until_target_date_exclusive"] = until.isoformat() if until else None
         report["generated_at_utc"] = datetime.now(timezone.utc).isoformat()
@@ -233,10 +267,13 @@ def main() -> None:
     parser.add_argument("--since", type=date.fromisoformat, default=date(2026, 9, 23))
     parser.add_argument("--until", type=date.fromisoformat,
                         help="Exclusive target-date boundary to freeze a cohort")
+    parser.add_argument("--include-loss-audit", action="store_true",
+                        help="Include resolved losses and their captured evidence")
     args = parser.parse_args()
     if args.until is not None and args.until <= args.since:
         parser.error("--until must be later than --since")
-    print(json.dumps(asyncio.run(run(args.since, args.until)), indent=2, sort_keys=True))
+    print(json.dumps(asyncio.run(run(args.since, args.until, args.include_loss_audit)),
+                     indent=2, sort_keys=True))
 
 
 if __name__ == "__main__":
