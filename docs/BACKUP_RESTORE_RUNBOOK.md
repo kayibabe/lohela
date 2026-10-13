@@ -32,10 +32,11 @@ what was asked.
   restoring into the current state of the target (errors loudly on any
   conflicting object) — pass `--clean` only when you intend to drop and
   recreate everything in the dump.
-- [`backend/Dockerfile`](../backend/Dockerfile) now installs
-  `postgresql-client-18` (via PGDG's apt repo, since Debian trixie's own
-  repos top out at 17), so both scripts run inside the deployed `web`/
-  `worker` containers once that image ships.
+- [`backend/Dockerfile`](../backend/Dockerfile) installs
+  `postgresql-client-15` and `postgresql-client-18` (via PGDG's apt repo,
+  since Debian trixie's own repos top out at 17). Backup and restore scripts
+  detect the server major and select a matching client, avoiding incompatible
+  dump/restore settings across server versions.
 - **Automated daily backups**: a Railway Volume (`backups`, declared in
   [`.railway/railway.ts`](../.railway/railway.ts)) mounted on the `worker`
   service at `/data/backups`. `app/main.py`'s APScheduler queues a new Celery
@@ -95,6 +96,20 @@ parameter is v17+ only), not a bug in the scripts. This is exactly the
 failure mode `postgresql-client-18` in the Dockerfile is pinned to avoid
 against production's actual v18 server.
 
+## Local supervisor backup destination
+
+The Windows supervisor Compose file at
+D:\WebApps\local-server\apps\lohela\compose.yaml bind-mounts
+D:\WebApps\local-server\backups\lohela to /data/backups on the Celery
+worker. This path is outside the worker container and Docker-managed volumes,
+so container recreation does not remove scheduled dumps. It remains on the same
+Windows host; it is not off-machine redundancy.
+
+The local backend scheduler is configured for 19:30 UTC (21:30 CAT). The
+scheduled task writes lohela_scheduled_*.dump to /data/backups, validates each
+dump with the matching PostgreSQL client, and retains the latest 14 scheduled
+dumps.
+
 ## Running against production
 
 Production's `DATABASE_URL` points at `postgres.railway.internal`, which is
@@ -143,6 +158,8 @@ is the plan for the *next* one, not a fix for an outstanding backlog.
 
 | Date | Action | Result |
 | --- | --- | --- |
+| 2026-10-13 | Local supervisor bind mount + backup rehearsal | Verified — host directory D:\WebApps\local-server\backups\lohela, 6,434,280-byte dump, 39 public tables; restored to a disposable postgres:15-alpine database and all 39 table row counts matched. |
+| 2026-10-13 | Cross-version restore check | Initial PostgreSQL 18 client restore into local PostgreSQL 15 failed on transaction_timeout; backup/restore tools now select matching major clients, and the PostgreSQL 15 restore completed cleanly. |
 | 2026-09-20 | Confirmed prod Postgres version via read-only query | 18.6 (Debian 18.6-1.pgdg13+2) — dev is 15.17 |
 | 2026-09-20 | `backup_db.py` against local dev DB (v15 client) | Verified — 1,273,253 bytes, 32 tables with data, validated via `pg_restore --list` |
 | 2026-09-20 | `restore_db.py` into disposable throwaway container (v15 client) | Verified — restore completed clean, row counts matched source exactly (predictions 2496/2496, matches 8280/8280) |

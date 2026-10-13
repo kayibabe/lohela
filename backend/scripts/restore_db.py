@@ -1,5 +1,7 @@
 """Restore a pg_dump (custom format) into a target Postgres database.
 
+The tool selects pg_restore matching the destination server major.
+
 Usage:
     python scripts/restore_db.py --file DUMP --target-url URL --yes [--clean]
 
@@ -31,6 +33,37 @@ def _redact(url: str) -> str:
     return f"{host}/{db}"
 
 
+def _server_major(dsn: str) -> int | None:
+    """Read the destination server major to select a compatible pg_restore."""
+    psql = shutil.which("psql")
+    if psql is None:
+        return None
+    proc = subprocess.run(
+        [psql, dsn, "--no-psqlrc", "--tuples-only", "--no-align", "--command", "SHOW server_version_num"],
+        capture_output=True,
+        text=True,
+    )
+    if proc.returncode != 0:
+        return None
+    try:
+        return int(proc.stdout.strip()) // 10000
+    except ValueError:
+        return None
+
+
+def _matching_tool(name: str, server_major: int) -> str | None:
+    """Prefer the versioned PostgreSQL client matching the destination."""
+    versioned = Path(f"/usr/lib/postgresql/{server_major}/bin") / name
+    if versioned.is_file():
+        return str(versioned)
+    executable = shutil.which(name)
+    if executable is None:
+        return None
+    proc = subprocess.run([executable, "--version"], capture_output=True, text=True)
+    match = re.search(r"\b(\d+)\.", proc.stdout)
+    return executable if proc.returncode == 0 and match and int(match.group(1)) == server_major else None
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--file", required=True, help="Path to a pg_dump custom-format file")
@@ -49,11 +82,19 @@ def main() -> int:
         print(f"error: dump file not found: {dump_path}", file=sys.stderr)
         return 2
 
-    if shutil.which("pg_restore") is None:
-        print("error: 'pg_restore' is not on PATH (install postgresql-client)", file=sys.stderr)
+    dsn = _to_libpq_url(args.target_url)
+    server_major = _server_major(dsn)
+    if server_major is None:
+        print("error: could not identify the target server version with psql", file=sys.stderr)
+        return 2
+    pg_restore = _matching_tool("pg_restore", server_major)
+    if pg_restore is None:
+        print(
+            f"error: matching PostgreSQL {server_major} client 'pg_restore' is not installed",
+            file=sys.stderr,
+        )
         return 2
 
-    dsn = _to_libpq_url(args.target_url)
     target = _redact(dsn)
 
     print(f"Target: {target}")
@@ -71,7 +112,7 @@ def main() -> int:
         return 3
 
     cmd = [
-        "pg_restore",
+        pg_restore,
         "--no-owner",
         "--no-privileges",
         "--exit-on-error",

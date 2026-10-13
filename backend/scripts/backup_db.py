@@ -6,10 +6,11 @@ Usage:
 `--url` defaults to $DATABASE_URL. The dump never touches stdout/logs with
 the connection string (only the host/db name are printed, for audit trail).
 
+The script selects pg_dump and pg_restore clients matching the server major.
 Exit code 0 + a JSON summary on stdout means the dump was written AND
-validated (pg_restore --list ran clean against it). Any other outcome is a
-failure — the partial file is removed rather than left looking like a good
-backup.
+validated (the matching pg_restore --list ran clean against it). Any other
+outcome is a failure — the partial file is removed rather than left looking
+like a good backup.
 """
 
 import argparse
@@ -36,6 +37,37 @@ def _redact(url: str) -> str:
     return f"{host}/{db}"
 
 
+def _server_major(dsn: str) -> int | None:
+    """Read the target server major so dumps use a matching client toolchain."""
+    psql = shutil.which("psql")
+    if psql is None:
+        return None
+    proc = subprocess.run(
+        [psql, dsn, "--no-psqlrc", "--tuples-only", "--no-align", "--command", "SHOW server_version_num"],
+        capture_output=True,
+        text=True,
+    )
+    if proc.returncode != 0:
+        return None
+    try:
+        return int(proc.stdout.strip()) // 10000
+    except ValueError:
+        return None
+
+
+def _matching_tool(name: str, server_major: int) -> str | None:
+    """Prefer the versioned PostgreSQL client matching the target server."""
+    versioned = Path(f"/usr/lib/postgresql/{server_major}/bin") / name
+    if versioned.is_file():
+        return str(versioned)
+    executable = shutil.which(name)
+    if executable is None:
+        return None
+    proc = subprocess.run([executable, "--version"], capture_output=True, text=True)
+    match = re.search(r"\b(\d+)\.", proc.stdout)
+    return executable if proc.returncode == 0 and match and int(match.group(1)) == server_major else None
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--url", default=os.environ.get("DATABASE_URL"))
@@ -47,13 +79,21 @@ def main() -> int:
         print("error: no --url given and DATABASE_URL is not set", file=sys.stderr)
         return 2
 
-    for tool in ("pg_dump", "pg_restore"):
-        if shutil.which(tool) is None:
-            print(f"error: '{tool}' is not on PATH (install postgresql-client)", file=sys.stderr)
-            return 2
-
     dsn = _to_libpq_url(args.url)
     target = _redact(dsn)
+    server_major = _server_major(dsn)
+    if server_major is None:
+        print("error: could not identify the database server version with psql", file=sys.stderr)
+        return 2
+    pg_dump = _matching_tool("pg_dump", server_major)
+    pg_restore = _matching_tool("pg_restore", server_major)
+    if pg_dump is None or pg_restore is None:
+        missing = "pg_dump" if pg_dump is None else "pg_restore"
+        print(
+            f"error: matching PostgreSQL {server_major} client '{missing}' is not installed",
+            file=sys.stderr,
+        )
+        return 2
 
     output_dir = Path(args.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -65,7 +105,7 @@ def main() -> int:
     started = datetime.now(timezone.utc)
     proc = subprocess.run(
         [
-            "pg_dump",
+            pg_dump,
             "--format=custom",
             "--no-owner",
             "--no-privileges",
@@ -86,7 +126,7 @@ def main() -> int:
 
     # Validate: a corrupt/truncated dump fails pg_restore --list immediately.
     listing = subprocess.run(
-        ["pg_restore", "--list", str(dump_path)],
+        [pg_restore, "--list", str(dump_path)],
         capture_output=True,
         text=True,
     )
