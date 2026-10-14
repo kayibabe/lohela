@@ -8,23 +8,30 @@ import ToolsPage from './pages/Tools'
 import AdminPage from './pages/Admin'
 import UpgradePage from './pages/Upgrade'
 import MatchIntelligencePage from './pages/MatchIntelligencePage'
-import { AuthControls } from './auth'
+import { AuthControls, useAuth } from './auth'
 
 type Theme = 'dark' | 'light' | 'system'
-type ModulePage = 'tickets' | 'tracker' | 'analytics' | 'tools' | 'admin'
+type ModulePage = 'tickets' | 'matches' | 'research' | 'tracker' | 'analytics' | 'tools' | 'admin'
 type Page = ModulePage | 'match' | 'upgrade'
 
-// Keep primary navigation aligned to the user's decision loop. Utilities
-// remain routable for backwards compatibility, but are not a peer destination
-// to recommendations, evidence, and validation.
+// Until account ownership is implemented for the ledgers, the customer shell
+// exposes only published recommendations. Research and system controls stay internal.
 const NAV: { id: ModulePage; label: string }[] = [
   { id: 'tickets',   label: 'Today'     },
-  { id: 'tracker',   label: 'Track'     },
-  { id: 'analytics', label: 'Validate'  },
+]
+const INTERNAL_NAV: { id: ModulePage; label: string }[] = [
+  { id: 'matches', label: 'Matches' },
+  { id: 'research', label: 'Research' },
+  { id: 'tracker', label: 'Track' },
+  { id: 'analytics', label: 'Validate' },
+  { id: 'tools', label: 'Tools' },
+  { id: 'admin', label: 'Admin' },
 ]
 
 const NAV_META: Record<ModulePage, { icon: string; hint: string }> = {
-  tickets: { icon: 'sparkles', hint: 'Today’s published research' },
+  tickets: { icon: 'sparkles', hint: 'Published recommendations' },
+  matches: { icon: 'search', hint: 'Explore qualified match candidates' },
+  research: { icon: 'flask', hint: 'Research models and selection policies' },
   tracker: { icon: 'list', hint: 'Evidence and personal journal' },
   analytics: { icon: 'chart', hint: 'Performance and model validation' },
   tools: { icon: 'wrench', hint: 'Calculators and research utilities' },
@@ -36,6 +43,8 @@ function NavIcon({ name }: { name: string }) {
     sparkles: <><path d="m12 3-1.2 4.1L7 8.3l3.8 1.2L12 13l1.2-3.5L17 8.3l-3.8-1.2L12 3Z" /><path d="m5 14-.7 2.3L2 17l2.3.7L5 20l.7-2.3L8 17l-2.3-.7L5 14Z" /></>,
     list: <><path d="m4 6 1.5 1.5L8 5" /><path d="M11 6h9M11 12h9M11 18h9" /><path d="m4 12 1.5 1.5L8 11" /><path d="m4 18 1.5 1.5L8 17" /></>,
     chart: <><path d="M5 20V10M12 20V4M19 20v-7" /></>,
+    search: <><circle cx="10.8" cy="10.8" r="6.6" /><path d="m16 16 4.5 4.5" /></>,
+    flask: <><path d="M9 3h6M10 3v6l-5.2 8.5A2.3 2.3 0 0 0 6.8 21h10.4a2.3 2.3 0 0 0 2-3.5L14 9V3" /><path d="M7.7 15h8.6" /></>,
     wrench: <><path d="m14.7 6.3 3-3a5 5 0 0 0-6.4 6.4L3 18a2 2 0 1 0 3 3l8.3-8.3a5 5 0 0 0 6.4-6.4l-3 3-3-3Z" /></>,
     shield: <><path d="M12 3 20 6v5c0 5-3.4 8.6-8 10-4.6-1.4-8-5-8-10V6l8-3Z" /><path d="m9 12 2 2 4-4" /></>,
   }
@@ -43,6 +52,8 @@ function NavIcon({ name }: { name: string }) {
 }
 
 export default function App() {
+  const { user, loading: authLoading } = useAuth()
+  const isInternal = user?.role === 'admin'
   const [page, setPage] = useState<Page>(() => routePage(window.location.pathname))
   const [matchId, setMatchId] = useState<number | null>(() => routeMatchId(window.location.pathname))
   const [date, setDate] = useState(TODAY)
@@ -54,6 +65,13 @@ export default function App() {
     window.addEventListener('popstate', onPopState)
     return () => window.removeEventListener('popstate', onPopState)
   }, [])
+
+  useEffect(() => {
+    if (authLoading || isInternal || !isInternalPage(page)) return
+    setPage('tickets')
+    setMatchId(null)
+    window.history.replaceState({}, '', '/tickets')
+  }, [authLoading, isInternal, page])
 
   function navigate(next: Page, _requested?: ModulePage, replace = false) {
     setPage(next)
@@ -93,22 +111,26 @@ export default function App() {
         </a>
         <nav className="sidebar-nav" aria-label="Primary navigation">
           <span className="sidebar-label">Workspace</span>
-          {NAV.slice(0, 4).map(n => (
+          {NAV.map(n => (
             <button key={n.id} className={`nav-tab${page === n.id ? ' active' : ''}`} onClick={() => goTo(n.id)} title={NAV_META[n.id].hint}>
               <span className="nav-icon"><NavIcon name={NAV_META[n.id].icon} /></span>{n.label}
             </button>
           ))}
-          <span className="sidebar-label sidebar-label-admin">System</span>
-          <button className={`nav-tab${page === 'admin' ? ' active' : ''}`} onClick={() => goTo('admin')} title={NAV_META.admin.hint}>
-            <span className="nav-icon"><NavIcon name={NAV_META.admin.icon} /></span>Admin
-          </button>
+          {isInternal && <>
+            <span className="sidebar-label sidebar-label-evidence">Internal workspace</span>
+            {INTERNAL_NAV.map(n => (
+              <button key={n.id} className={`nav-tab${page === n.id ? ' active' : ''}`} onClick={() => goTo(n.id)} title={NAV_META[n.id].hint}>
+                <span className="nav-icon"><NavIcon name={NAV_META[n.id].icon} /></span>{n.label}
+              </button>
+            ))}
+          </>}
         </nav>
         <div className="sidebar-account">
           <AuthControls onSignedOut={() => navigate('tickets', undefined, true)} />
         </div>
       </aside>
       <header className="app-header">
-        {page === 'tickets' && (
+        {(page === 'tickets' || (isInternalPage(page) && isInternal)) && (page === 'tickets' || page === 'matches' || page === 'research') && (
           <div className="date-nav">
             <button className="date-btn" onClick={() => nav(-1)} title="Previous day" aria-label="Previous day">‹</button>
             <div className="date-center">
@@ -137,17 +159,19 @@ export default function App() {
 
       <main className="main" id="main-content" tabIndex={-1}>
         {page === 'upgrade' && <UpgradePage onBack={() => goTo('tickets')} />}
-        {page === 'tickets' && <DailyTicketsPage key={date} date={date} onOpenMatch={navigateToMatch} />}
-        {page === 'match' && matchId != null && <MatchIntelligencePage matchId={matchId} onBack={() => navigate('tickets')} />}
-        {page === 'tracker' && <TrackerPage onOpenTickets={(targetDate) => { if (targetDate) setDate(targetDate); goTo('tickets') }} />}
-        {page === 'analytics' && <AnalyticsPage />}
-        {page === 'tools' && <ToolsPage />}
-        {page === 'admin' && <AdminPage />}
+        {page === 'tickets' && <DailyTicketsPage key={`${date}-${page}`} date={date} initialTab="tickets" onOpenMatch={navigateToMatch} />}
+        {isInternal && page === 'matches' && <DailyTicketsPage key={`${date}-${page}`} date={date} initialTab="matches" onOpenMatch={navigateToMatch} />}
+        {isInternal && page === 'research' && <DailyTicketsPage key={`${date}-${page}`} date={date} initialTab="odds-policy" onOpenMatch={navigateToMatch} />}
+        {page === 'match' && matchId != null && (isInternal || authLoading) && <MatchIntelligencePage matchId={matchId} onBack={() => navigate('tickets')} />}
+        {isInternal && page === 'tracker' && <TrackerPage onOpenTickets={(targetDate) => { if (targetDate) setDate(targetDate); goTo('tickets') }} />}
+        {isInternal && page === 'analytics' && <AnalyticsPage />}
+        {isInternal && page === 'tools' && <ToolsPage />}
+        {isInternal && page === 'admin' && <AdminPage />}
       </main>
 
 
-      <nav className="bottom-nav" aria-label="Primary navigation">
-        {NAV.map(item => (
+      <nav className={`bottom-nav ${isInternal ? 'internal' : 'public'}`} aria-label="Primary navigation">
+        {(isInternal ? [...NAV, ...INTERNAL_NAV] : NAV).map(item => (
           <button
             key={item.id}
             className={page === item.id ? 'active' : ''}
@@ -168,7 +192,7 @@ function routePage(pathname: string): Page {
   if (path === '/login') return 'tickets'
   if (path === '/upgrade') return 'upgrade'
   if (/^\/match\/\d+$/.test(path)) return 'match'
-  if (path === '/tickets') return 'tickets'
+  if (path === '/tickets' || path === '/matches' || path === '/research') return path.slice(1) as ModulePage
   if (path === '/tracker' || path === '/analytics' || path === '/tools' || path === '/admin') return path.slice(1) as ModulePage
   return 'tickets'
 }
@@ -176,4 +200,8 @@ function routePage(pathname: string): Page {
 function routeMatchId(pathname: string): number | null {
   const match = pathname.replace(/\/$/, '').match(/^\/match\/(\d+)$/)
   return match ? Number(match[1]) : null
+}
+
+function isInternalPage(page: Page): boolean {
+  return page === 'matches' || page === 'research' || page === 'tracker' || page === 'analytics' || page === 'tools' || page === 'admin' || page === 'match'
 }

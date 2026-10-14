@@ -2,10 +2,11 @@ import type { SelectionSummary } from "../../lib/api";
 
 export interface DailyTicketsPageProps {
   date: string;
+  initialTab?: DailyTab;
 }
 
 export type DailyTab =
-  "tickets" | "best-mix" | "odds-policy" | "passed" | "my-accumulators";
+  "tickets" | "matches" | "best-mix" | "odds-policy" | "passed" | "my-accumulators";
 
 export type MatchDisplayState =
   "finished" | "live" | "scheduled" | "postponed" | "cancelled";

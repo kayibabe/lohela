@@ -8,7 +8,7 @@ from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.api.security import require_pro_access
+from app.api.security import require_pro_access, require_research_access
 from app.config import cat_today
 from app.database import get_db
 from app.models import (
@@ -28,6 +28,7 @@ from app.services.daily_accumulator import is_daily_accumulator
 router = APIRouter(
     prefix="/custom-accumulators",
     tags=["custom-accumulators"],
+    dependencies=[Depends(require_research_access)],
 )
 
 

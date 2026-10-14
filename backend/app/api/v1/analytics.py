@@ -6,12 +6,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import AsyncSessionLocal
 from app.models.bet import Bet, BetStatus
-from app.api.security import require_pro_access
+from app.api.security import require_research_access
 
 router = APIRouter(
     prefix="/analytics",
     tags=["analytics"],
-    dependencies=[Depends(require_pro_access)],
+    dependencies=[Depends(require_research_access)],
 )
 
 

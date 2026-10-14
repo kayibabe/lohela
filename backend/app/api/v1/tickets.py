@@ -99,8 +99,6 @@ TICKET_NAMES = {
 def _can_reveal(user) -> bool:
     # Direct service-level calls are trusted; HTTP requests resolve this dependency
     # to None or an actual User before reaching the handler.
-    if settings.public_access_enabled:
-        return True
     if hasattr(user, "dependency"):
         return True
     return bool(user and (getattr(user, "role", None) == "admin" or getattr(user, "plan", None) == "pro"))
@@ -113,12 +111,8 @@ async def require_internal_ticket_access(
     user=Depends(get_optional_current_user),
 ) -> None:
     """Require the research key when an internal ticket stream is requested."""
-    if settings.public_access_enabled and include_internal:
-        return
-    if include_internal and user and (user.role == "admin" or user.plan == "pro"):
-        return
     if include_internal:
-        await require_research_access(request, x_research_key)
+        await require_research_access(request, x_research_key, user)
 
 
 class LegOut(BaseModel):
@@ -563,7 +557,7 @@ async def get_ticket(
     if ticket is None:
         raise HTTPException(status_code=404, detail="Ticket not found")
     if ticket.ticket_type == TicketType.BEST_VALUE and not _can_reveal(user):
-        await require_research_access(request, x_research_key)
+        await require_research_access(request, x_research_key, user)
     reveal = _can_reveal(user)
     return _ticket(ticket, reveal=reveal)
 

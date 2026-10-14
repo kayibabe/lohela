@@ -22,13 +22,26 @@ export function AllMatches({
   onAdd: (row: SelectionSummary) => void;
 }) {
   const [statusFilter, setStatusFilter] = useState<"all" | MatchDisplayState>("all");
+  const [query, setQuery] = useState("");
+  const [leagueFilter, setLeagueFilter] = useState("all");
+  const [marketFilter, setMarketFilter] = useState("all");
   const [sort, setSort] = useState<{
     key: "match" | "kickoff" | "league" | "q" | "markets" | "spread";
     direction: "asc" | "desc";
   }>({ key: "kickoff", direction: "asc" });
+  const leagues = [...new Set(rows.map(([, selections]) => selections[0]?.competition).filter(Boolean))].sort();
+  const markets = [...new Set(rows.flatMap(([, selections]) => selections.map((row) => formatMarket(row.market))))].sort();
+  const queryText = query.trim().toLocaleLowerCase();
+  const discoveredRows = rows.flatMap(([id, selections]) => {
+    const first = selections[0];
+    const matchesText = !queryText || `${first.home_team} ${first.away_team} ${first.competition}`.toLocaleLowerCase().includes(queryText);
+    const marketRows = marketFilter === "all" ? selections : selections.filter((row) => formatMarket(row.market) === marketFilter);
+    if (!matchesText || (leagueFilter !== "all" && first.competition !== leagueFilter) || marketRows.length === 0) return [];
+    return [[id, marketRows] as [number, SelectionSummary[]]];
+  });
   const filteredRows = statusFilter === "all"
-    ? rows
-    : rows.filter(([, selections]) => matchDisplayState(selections[0]) === statusFilter);
+    ? discoveredRows
+    : discoveredRows.filter(([, selections]) => matchDisplayState(selections[0]) === statusFilter);
   const sortedRows = [...filteredRows].sort(([, a], [, b]) => {
     const left = a[0];
     const right = b[0];
@@ -68,7 +81,7 @@ export function AllMatches({
       )}
     </button>
   );
-  const statusCounts = rows.reduce<Record<MatchDisplayState, number>>(
+  const statusCounts = discoveredRows.reduce<Record<MatchDisplayState, number>>(
     (counts, [, selections]) => {
       counts[matchDisplayState(selections[0])] += 1;
       return counts;
@@ -100,7 +113,7 @@ export function AllMatches({
           </span>
         </div>
         <span className="section-note match-count-summary">
-          <b>{rows.length}</b> matches
+          <b>{discoveredRows.length}</b> matches
           {statusCounts.finished > 0 && <> · <b>{statusCounts.finished}</b> finished</>}
           {statusCounts.live > 0 && <> · <b>{statusCounts.live}</b> live</>}
           {statusCounts.scheduled > 0 && <> · <b>{statusCounts.scheduled}</b> upcoming</>}
@@ -113,8 +126,13 @@ export function AllMatches({
       ) : (
         <>
           <div className="match-toolbar">
+            <div className="match-explorer-controls">
+              <label className="match-search"><span className="sr-only">Search team or competition</span><input type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Team or competition" /></label>
+              <label><span className="sr-only">Filter by league</span><select value={leagueFilter} onChange={(event) => setLeagueFilter(event.target.value)}><option value="all">All competitions</option>{leagues.map((league) => <option key={league} value={league}>{league}</option>)}</select></label>
+              <label><span className="sr-only">Filter by market</span><select value={marketFilter} onChange={(event) => setMarketFilter(event.target.value)}><option value="all">All markets</option>{markets.map((market) => <option key={market} value={market}>{market}</option>)}</select></label>
+            </div>
             <div className="match-status-filters" aria-label="Filter matches by status">
-              {filterButton("all", "All", rows.length)}
+              {filterButton("all", "All", discoveredRows.length)}
               {filterButton("finished", "Finished", statusCounts.finished)}
               {filterButton("live", "In play", statusCounts.live)}
               {filterButton("scheduled", "Pending", statusCounts.scheduled)}
@@ -132,7 +150,7 @@ export function AllMatches({
             </div>
           </div>
           {sortedRows.length === 0 ? (
-            <p className="panel-empty">No matches have this status.</p>
+            <p className="panel-empty">No qualified matches match these filters.</p>
           ) : (
             <div className="match-card-grid">
               {sortedRows.map(([matchId, selections]) => (

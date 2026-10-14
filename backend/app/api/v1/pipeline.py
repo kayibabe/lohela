@@ -3,10 +3,11 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.security import require_research_access
 from app.database import get_db
 from app.services.pipeline_tracker import get_pipeline_run
 
-router = APIRouter(prefix="/pipeline", tags=["pipeline"])
+router = APIRouter(prefix="/pipeline", tags=["pipeline"], dependencies=[Depends(require_research_access)])
 
 
 @router.get("/runs/{run_id}")

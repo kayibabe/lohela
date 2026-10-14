@@ -4,11 +4,12 @@ from datetime import date
 from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.security import require_research_access
 from app.config import cat_today
 from app.database import get_db
 from app.services.loss_review import review_losses
 
-router = APIRouter(prefix="/performance", tags=["performance"])
+router = APIRouter(prefix="/performance", tags=["performance"], dependencies=[Depends(require_research_access)])
 
 
 @router.get("/loss-review")

@@ -24,29 +24,6 @@ def _normalize_research_key(value: str | None) -> str:
     return value.strip().lstrip("\ufeff").lstrip("ï»¿").strip()
 
 
-async def require_research_access(
-    request: Request,
-    x_research_key: str | None = Header(default=None),
-) -> None:
-    if getattr(settings, "public_access_enabled", False):
-        return
-    configured = _normalize_research_key(settings.research_api_key)
-    supplied = _normalize_research_key(x_research_key)
-    if configured and supplied:
-        try:
-            if configured.isascii() and supplied.isascii() and hmac.compare_digest(configured, supplied):
-                return
-        except TypeError:
-            # Never turn malformed secret material into a 500 response.
-            pass
-    if settings.app_env == "development" and not configured:
-        return
-    raise HTTPException(
-        status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Valid X-Research-Key required",
-    )
-
-
 async def get_optional_current_user(
     request: Request,
     db: AsyncSession = Depends(get_db),
@@ -71,6 +48,28 @@ async def get_optional_current_user(
     return user
 
 
+async def require_research_access(
+    request: Request,
+    x_research_key: str | None = Header(default=None),
+    user: User | None = Depends(get_optional_current_user),
+) -> None:
+    if user and user.role == "admin":
+        return
+    configured = _normalize_research_key(settings.research_api_key)
+    supplied = _normalize_research_key(x_research_key)
+    if configured and supplied:
+        try:
+            if configured.isascii() and supplied.isascii() and hmac.compare_digest(configured, supplied):
+                return
+        except TypeError:
+            # Never turn malformed secret material into a 500 response.
+            pass
+    raise HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Administrator authentication or valid X-Research-Key required",
+    )
+
+
 async def require_authenticated_user(
     user: User | None = Depends(get_optional_current_user),
 ) -> User | None:
@@ -88,10 +87,16 @@ async def require_admin_access(
 ) -> None:
     if user and user.role == "admin":
         return
-    if getattr(settings, "public_access_enabled", False) and user is None:
+    # Internal automation may use the same key, but public-access mode never
+    # grants access to administration routes.
+    configured = _normalize_research_key(settings.research_api_key)
+    supplied = _normalize_research_key(x_research_key)
+    if configured and supplied and configured.isascii() and supplied.isascii() and hmac.compare_digest(configured, supplied):
         return
-    # Keep the existing operational key as a temporary service-to-service path.
-    await require_research_access(request, x_research_key)
+    raise HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Administrator authentication or valid X-Research-Key required",
+    )
 
 
 async def require_pro_access(

@@ -9,7 +9,7 @@ from sqlalchemy import select, func
 from pydantic import BaseModel, Field
 
 from app.database import get_db
-from app.api.security import require_pro_access
+from app.api.security import require_pro_access, require_research_access
 from app.models import BandMixPairState, MarketPolicyShadowSnapshot, Prediction, Match, MatchStatus, Team, Competition, Odds, ModelRun, RunStatus, TicketType
 from app.config import cat_day_bounds_utc, cat_today
 from app.services.accumulator_builder import AccumulatorBuilder
@@ -23,11 +23,7 @@ from app.services.band_mix_picks import (
 from app.services.parameter_sweep import get_or_capture_parameter_sweep, parameter_sweep_candidates
 from app.services.settlement import evaluate_selection
 
-router = APIRouter(
-    prefix="/selections",
-    tags=["selections"],
-    dependencies=[Depends(require_pro_access)],
-)
+router = APIRouter(prefix="/selections", tags=["selections"])
 
 
 def _finished_selection_result(match: Match, market: str) -> str | None:
@@ -171,7 +167,7 @@ class MatchIntelligenceOut(BaseModel):
     evidence_note: str
 
 
-@router.get("/qualified", response_model=list[SelectionOut])
+@router.get("/qualified", response_model=list[SelectionOut], dependencies=[Depends(require_research_access)])
 async def get_qualified_selections(
     date: Optional[date] = Query(default=None, description="Target date (default: today)"),
     min_qscore: float = Query(default=75.0, ge=0, le=100),
@@ -302,7 +298,7 @@ async def get_qualified_selections(
     return output
 
 
-@router.get("/match-intelligence/{match_id}", response_model=MatchIntelligenceOut)
+@router.get("/match-intelligence/{match_id}", response_model=MatchIntelligenceOut, dependencies=[Depends(require_research_access)])
 async def get_match_intelligence(match_id: int, db: AsyncSession = Depends(get_db)):
     """Return one evidence-linked, pre-kickoff match intelligence record.
 
@@ -394,7 +390,7 @@ async def get_match_intelligence(match_id: int, db: AsyncSession = Depends(get_d
     )
 
 
-@router.get("/band-mix")
+@router.get("/band-mix", dependencies=[Depends(require_research_access)])
 async def get_band_mix_selections(
     date: Optional[date] = Query(default=None, description="Target date (default: today)"),
     db: AsyncSession = Depends(get_db),
@@ -419,7 +415,7 @@ async def get_band_mix_selections(
     }
 
 
-@router.get("/band-mix/lifecycle")
+@router.get("/band-mix/lifecycle", dependencies=[Depends(require_research_access)])
 async def get_band_mix_lifecycle(
     date_from: Optional[date] = Query(default=None),
     date_to: Optional[date] = Query(default=None),
@@ -447,7 +443,7 @@ async def get_band_mix_lifecycle(
     }
 
 
-@router.get("/market-policy-shadow")
+@router.get("/market-policy-shadow", dependencies=[Depends(require_research_access)])
 async def get_market_policy_shadow(
     date: Optional[date] = Query(default=None, description="Target date (default: today)"),
     db: AsyncSession = Depends(get_db),
@@ -479,7 +475,7 @@ async def get_market_policy_shadow(
     }
 
 
-@router.get("/parameter-sweep")
+@router.get("/parameter-sweep", dependencies=[Depends(require_research_access)])
 async def get_parameter_sweep_selections(
     date: Optional[date] = Query(default=None, description="Target date (default: today)"),
     db: AsyncSession = Depends(get_db),
@@ -516,7 +512,7 @@ async def get_parameter_sweep_selections(
     }
 
 
-@router.get("/rejected", response_model=list[RejectedSelectionOut])
+@router.get("/rejected", response_model=list[RejectedSelectionOut], dependencies=[Depends(require_research_access)])
 async def get_rejected_selections(
     date: Optional[date] = Query(default=None, description="Target date (default: today)"),
     ticket_type: TicketType = Query(default=TicketType.SAFE),
@@ -552,7 +548,7 @@ async def get_rejected_selections(
     return output
 
 
-@router.get("/match-context/{match_id}", response_model=MatchContextOut)
+@router.get("/match-context/{match_id}", response_model=MatchContextOut, dependencies=[Depends(require_research_access)])
 async def get_match_context(match_id: int, db: AsyncSession = Depends(get_db)):
     match = await db.get(Match, match_id)
     if not match:
@@ -579,7 +575,7 @@ async def get_match_context(match_id: int, db: AsyncSession = Depends(get_db)):
     return MatchContextOut(home=await form_for(match.home_team_id, home.name if home else "Home"), away=await form_for(match.away_team_id, away.name if away else "Away"), h2h=h2h)
 
 
-@router.get("/{prediction_id}/odds", response_model=list[OddsQuoteOut])
+@router.get("/{prediction_id}/odds", response_model=list[OddsQuoteOut], dependencies=[Depends(require_pro_access)])
 async def get_selection_odds(
     prediction_id: int,
     db: AsyncSession = Depends(get_db),

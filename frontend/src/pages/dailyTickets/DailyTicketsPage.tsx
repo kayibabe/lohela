@@ -24,6 +24,7 @@ import { BandMixPicks } from "./BandMixPicks";
 import { ParameterSweepPicks } from "./ParameterSweepPicks";
 import { CustomAccumulatorPanel } from "./CustomAccumulatorPanel";
 import { TicketGridSkeleton } from "./TicketGridSkeleton";
+import { AllMatches } from "./AllMatches";
 import {
   accumulatorBlockers,
   apiAccumulatorToUi,
@@ -34,13 +35,13 @@ import {
 } from "./helpers";
 import type { CustomAccumulator, DailyTab, DailyTicketsPageProps } from "./types";
 
-export default function DailyTicketsPage({ date, onOpenMatch }: DailyTicketsPageProps & { onOpenMatch?: (matchId: number) => void }) {
+export default function DailyTicketsPage({ date, initialTab = "tickets", onOpenMatch }: DailyTicketsPageProps & { onOpenMatch?: (matchId: number) => void }) {
   const { user } = useAuth();
   const isAdmin = user?.role === "admin";
   const [data, setData] = useState<DailyTickets | null>(null);
   const [rejected, setRejected] = useState<SelectionSummary[]>([]);
   const [matches, setMatches] = useState<SelectionSummary[]>([]);
-  const [tab, setTab] = useState<DailyTab>("tickets");
+  const [tab, setTab] = useState<DailyTab>(initialTab);
   const [custom, setCustom] = useState<CustomAccumulator[]>(() => {
     return [];
   });
@@ -75,9 +76,9 @@ export default function DailyTicketsPage({ date, onOpenMatch }: DailyTicketsPage
     try {
       const [tickets, allRows, rejectedRows, customRows] = await Promise.all([
         fetchDailyTickets(targetDate),
-        fetchQualifiedSelections(targetDate),
-        fetchRejectedSelections(targetDate),
-        fetchCustomAccumulators(targetDate),
+        isAdmin ? fetchQualifiedSelections(targetDate) : Promise.resolve([]),
+        isAdmin ? fetchRejectedSelections(targetDate) : Promise.resolve([]),
+        isAdmin ? fetchCustomAccumulators(targetDate) : Promise.resolve([]),
       ]);
       const evidencedRows = withRejectionEvidence(allRows, rejectedRows);
       setData(tickets);
@@ -91,7 +92,7 @@ export default function DailyTicketsPage({ date, onOpenMatch }: DailyTicketsPage
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [isAdmin]);
 
   useEffect(() => {
     load(date);
@@ -237,6 +238,17 @@ export default function DailyTicketsPage({ date, onOpenMatch }: DailyTicketsPage
         data.high_odds,
       ].filter((ticket): ticket is Ticket => ticket != null)
     : [];
+  const canUseAccumulator = isAdmin;
+  const dailyTabs: [DailyTab, string][] = [
+    ["tickets", "Recommendations"],
+    ...(isAdmin ? [
+      ["matches", "Matches"],
+      ["best-mix", "Best-mix picks"],
+      ["odds-policy", "Research policy"],
+      ["passed", "Passed / why"],
+    ] as [DailyTab, string][] : []),
+    ...(canUseAccumulator ? [["my-accumulators", "My accumulators"] as [DailyTab, string]] : []),
+  ];
   const publicationTimes = publicPublishedTickets
     .map((ticket) => ticket.published_at)
     .filter(Boolean)
@@ -309,6 +321,10 @@ export default function DailyTicketsPage({ date, onOpenMatch }: DailyTicketsPage
     .filter((row) => row.best_odds != null)
     .sort((left, right) => (right.edge ?? -1) - (left.edge ?? -1))
     .slice(0, 6);
+  const matchGroups = Object.entries(matches.reduce<Record<number, SelectionSummary[]>>((groups, row) => {
+    (groups[row.match_id] ??= []).push(row);
+    return groups;
+  }, {})).map(([id, rows]) => [Number(id), rows] as [number, SelectionSummary[]]);
 
   return (
     <>
@@ -318,11 +334,12 @@ export default function DailyTicketsPage({ date, onOpenMatch }: DailyTicketsPage
             {data ? formatDate(data.target_date) : formatDate(date)}
           </h1>
           <p className="research-disclaimer">
-            Internal research and paper trading only. No ticket is a promise of
-            profit.
+            {isAdmin
+              ? "Internal research and paper trading only. No ticket is a promise of profit."
+              : "Recommendations are informational. Football outcomes are uncertain; no result is guaranteed."}
           </p>
         </div>
-        {data && (
+        {isAdmin && data && (
           <div className="meta-context" aria-label="Publication context">
             <span className="meta-pool">
               {data.qualified_pool} strict candidates
@@ -402,7 +419,7 @@ export default function DailyTicketsPage({ date, onOpenMatch }: DailyTicketsPage
       {error && (
         <div className="error-bar" role="alert">
           <div>
-            <strong>Research ledger unavailable</strong>
+            <strong>{isAdmin ? "Internal research ledger unavailable" : "Recommendations unavailable"}</strong>
             <span>{error}</span>
           </div>
           <button onClick={() => load(date)}>Try again</button>
@@ -414,15 +431,7 @@ export default function DailyTicketsPage({ date, onOpenMatch }: DailyTicketsPage
       ) : (
         <>
           <nav className="daily-tabs" aria-label="Daily ticket workspace">
-            {(
-              [
-                ["tickets", "Recommendations"],
-                ["best-mix", "Best-mix picks"],
-                ["odds-policy", "Dynamic odds policy"],
-                ["passed", "Passed / why"],
-                ["my-accumulators", "My accumulators"],
-              ] as [DailyTab, string][]
-            ).map(([key, label]) => (
+            {dailyTabs.map(([key, label]) => (
               <button
                 key={key}
                 className={tab === key ? "active" : ""}
@@ -453,26 +462,27 @@ export default function DailyTicketsPage({ date, onOpenMatch }: DailyTicketsPage
             </div>
           */}
           {tab === "tickets" && <div className="settlement-legend" aria-label="Settlement legend"><span><b>Score</b> = match result</span><span><b>Market</b> = selected outcome</span><span><b>Ticket</b> = accumulator result</span></div>}
+          {isAdmin && tab === "matches" && <div className="view-intro"><div><span className="eyebrow">Internal candidate explorer</span><h2 className="section-title">Qualified matches</h2></div><p>Search candidate markets for analysis. This view does not represent every scheduled fixture or a release-approved recommendation.</p></div>}
+          {isAdmin && tab === "matches" && <AllMatches rows={matchGroups} onSelect={openSelection} onAdd={addToAccumulator} />}
           {tab === "tickets" && (
             <div className="view-intro">
               <div>
-                <span className="eyebrow">Primary research output</span>
+                <span className="eyebrow">{isAdmin ? "Internal view" : "Published output"}</span>
                 <h2 className="section-title">Published recommendations</h2>
               </div>
-              <p>
-                Start with a ticket tier. Open any leg for the supporting model
-                evidence before making a manual tracker decision.
-              </p>
+              <p>{isAdmin
+                ? "Review published tickets alongside internal model candidates and evidence."
+                : "Only tickets published through the existing evidence and publication gates are shown."}</p>
             </div>
           )}
-          {tab === "tickets" && (
+          {isAdmin && tab === "tickets" && (
             <DecisionSummary
               date={date}
               matches={decisionRows}
               onSelect={openSelection}
             />
           )}
-          {tab === "best-mix" && (
+          {isAdmin && tab === "best-mix" && (
             <BandMixPicks
               date={date}
               rejectedRows={rejected}
@@ -480,19 +490,19 @@ export default function DailyTicketsPage({ date, onOpenMatch }: DailyTicketsPage
               onAdd={addToAccumulator}
             />
           )}
-          {tab === "odds-policy" && (
+          {isAdmin && tab === "odds-policy" && (
             <ParameterSweepPicks
               date={date}
               onSelect={openSelection}
               onAdd={addToAccumulator}
             />
           )}
-          {tab === "passed" && (
+          {isAdmin && tab === "passed" && (
             <PassedMatches rows={rejected} onSelect={openSelection} />
           )}
           {tab === "tickets" && (
             <>
-              {generationUnavailable && (
+              {isAdmin && generationUnavailable && (
                 <section className="publication-diagnostics" role="status" aria-label="Pipeline diagnostics">
                   <div className="publication-diagnostics-heading">
                     <div>
@@ -512,7 +522,7 @@ export default function DailyTicketsPage({ date, onOpenMatch }: DailyTicketsPage
                   </p>
                 </section>
               )}
-              {generationFinishedWithoutTickets && (
+              {isAdmin && generationFinishedWithoutTickets && (
                 <section className="publication-diagnostics" role="status" aria-label="Publication diagnostics">
                   <div className="publication-diagnostics-heading">
                     <div>
@@ -545,12 +555,12 @@ export default function DailyTicketsPage({ date, onOpenMatch }: DailyTicketsPage
                   <p>Personal drafts cannot accept stale, invalid, or already-started selections.</p>
                 </section>
               )}
-              {(data?.superseded_versions?.length ?? 0) > 0 && (
+              {isAdmin && (data?.superseded_versions?.length ?? 0) > 0 && (
                 <div className="ticket-version-notice">
                   <strong>Latest versions shown.</strong> Earlier published tickets remain immutable in history; regenerated tickets may have different legs.
                 </div>
               )}
-              {!((generationFinishedWithoutTickets || generationUnavailable) && publicPublishedTickets.length === 0) && <div className="ticket-grid public-ticket-grid">
+              {publicPublishedTickets.length > 0 && <div className="ticket-grid public-ticket-grid">
               {publicTiers.map((tier) => (
                 <TicketCard
                   key={tier.key}
@@ -566,7 +576,14 @@ export default function DailyTicketsPage({ date, onOpenMatch }: DailyTicketsPage
             </>
           )}
 
-          {tab === "my-accumulators" && (
+          {!isAdmin && tab === "tickets" && !error && data && publicPublishedTickets.length === 0 && (
+            <section className="publication-diagnostics" role="status">
+              <div className="publication-diagnostics-heading"><h3>No published recommendations for this date</h3></div>
+              <p>Recommendations appear here only when the publication process has produced a ticket for the selected date.</p>
+            </section>
+          )}
+
+          {isAdmin && tab === "my-accumulators" && (
             <CustomAccumulatorPanel
               date={date}
               tickets={custom.filter((ticket) => ticket.date === date)}
@@ -585,7 +602,7 @@ export default function DailyTicketsPage({ date, onOpenMatch }: DailyTicketsPage
           publishedAt={detail.publishedAt}
           pricing={detail.pricing}
           onClose={() => setDetail(null)}
-          onOpenMatch={onOpenMatch}
+          onOpenMatch={isAdmin ? onOpenMatch : undefined}
         />
       )}
     </>
