@@ -2156,6 +2156,11 @@ th[aria-sort="descending"] .table-sort span,
 .decision-lead small, .decision-match small { color: var(--muted); font-size: 11px; }
 .decision-lead-selection { display: grid; gap: 2px; min-width: 150px; }
 .decision-lead-selection span, .decision-market { color: var(--muted); font-size: 10px; text-transform: uppercase; letter-spacing: .05em; }
+.decision-final-result { display: flex; align-items: center; flex-wrap: wrap; gap: 7px; }
+.decision-pick-outcome { padding: 2px 7px; border-radius: 999px; font-size: 10px; text-transform: uppercase; }
+.decision-pick-outcome.won { background: var(--ga-bg); color: var(--ga-text); }
+.decision-pick-outcome.lost { background: color-mix(in srgb, var(--negative) 10%, var(--surface)); color: var(--negative); }
+.decision-pick-outcome.void { background: var(--gb-bg); color: var(--gb-text); }
 .decision-table-wrap { overflow-x: auto; margin-top: 14px; border: 1px solid var(--border); border-radius: var(--r-sm); background: var(--surface); }
 .decision-table { width: 100%; min-width: 780px; border-collapse: collapse; font-size: 12px; }
 .decision-table th { padding: 9px 10px; color: var(--muted); background: var(--surface2); font-size: 10px; text-align: left; text-transform: uppercase; letter-spacing: .05em; }
@@ -3219,19 +3224,17 @@ th[aria-sort="descending"] .table-sort span,
 .pipeline-banner-message { margin: -6px 0 14px; padding: 9px 12px; border: 1px solid currentColor; border-radius: var(--r-md); background: var(--panel2); font-size: 11px; }
 .tickets-banner-actions { display: flex; align-items: center; gap: 8px; margin-left: auto; }
 
-.ticket-analysis-control,
 .ticket-operations-control {
   display: grid;
   gap: 5px;
 }
-.ticket-analysis-control summary {
-  cursor: pointer;
-  color: var(--muted);
-  font-size: 11px;
-  font-weight: 700;
-  list-style-position: outside;
-}
-.ticket-analysis-control summary:hover { color: var(--accent); }
+.stake-planner { margin: 0 0 12px; border: 1px solid var(--border); border-radius: var(--r-sm); background: var(--surface); }
+.stake-planner summary { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 10px; padding: 10px 12px; cursor: pointer; list-style-position: inside; }
+.stake-planner summary strong { color: var(--text); font-size: 12px; }
+.stake-planner summary span, .stake-planner-controls > span { color: var(--muted); font-size: 11px; }
+.stake-planner summary:hover strong { color: var(--accent); }
+.stake-planner[open] summary { border-bottom: 1px solid var(--border); }
+.stake-planner-controls { display: flex; align-items: center; flex-wrap: wrap; gap: 10px 18px; padding: 10px 12px; }
 .action-group-label {
   color: var(--muted);
   font-size: 9px;
@@ -3399,8 +3402,9 @@ th[aria-sort="descending"] .table-sort span,
 
 @media (max-width: 760px) {
   .tickets-banner-actions,
-  .ticket-analysis-control,
   .ticket-operations-control { width: 100%; }
+  .stake-planner summary { align-items: flex-start; }
+  .stake-planner-controls { align-items: flex-start; flex-direction: column; }
   .ticket-operations-control > div { display: grid; grid-template-columns: 1fr; }
   .ticket-operations-control button { width: 100%; }
   .publication-diagnostics-heading { flex-direction: column; gap: 7px; }
@@ -4290,6 +4294,9 @@ body { line-height: 1.6; }
 .fixture-favorites-filter { display: inline-flex; align-items: center; gap: 6px; }
 .fixture-favorites-filter > span { color: var(--warning); }
 .fixture-row-wrap .fixture-row { min-width: 0; }
+.match-favorite { display: grid; flex: 0 0 34px; width: 34px; height: 34px; place-items: center; border: 1px solid var(--border); border-radius: 9px; background: var(--surface); color: var(--muted); font-size: 17px; cursor: pointer; }
+.match-favorite:hover,.match-favorite.active { border-color: color-mix(in srgb, var(--warning) 45%, var(--border)); color: var(--warning); background: color-mix(in srgb, var(--warning) 9%, var(--surface)); }
+.match-favorite:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .fixture-row { overflow: hidden; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); }
 .fixture-row > summary { display: grid; grid-template-columns: minmax(150px, .8fr) minmax(220px, 1.6fr) auto auto; align-items: center; gap: 14px; padding: 13px 16px; cursor: pointer; list-style: none; }
 .fixture-row > summary::-webkit-details-marker { display: none; }
@@ -4345,3 +4352,74 @@ body { line-height: 1.6; }
   .fixture-row > summary strong { grid-column: 1 / -1; }
   .fixture-pro-note { margin-left: 0; flex-basis: 100%; }
 }
+
+/* Present candidate matches as a full-width row list, retaining every summary metric. */
+.match-card-grid { grid-template-columns: minmax(0, 1fr); }
+@media (min-width: 1101px) {
+  .match-card summary.match-card-summary {
+    display: grid;
+    grid-template-columns: minmax(230px, 1.15fr) minmax(340px, 1.8fr) minmax(165px, .8fr);
+    align-items: center;
+    gap: 14px;
+    padding: 12px 16px;
+  }
+  .match-card-heading {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 8px 10px;
+  }
+  .match-card-heading .summary-match { grid-column: 1 / -1; }
+  .match-card-heading .summary-match-status { justify-self: start; }
+  .match-card-heading .match-favorite { justify-self: end; }
+  .match-card-metrics { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; margin-top: 0; }
+  .match-card-metrics > span { padding: 7px 8px; }
+  .match-card-statuses { justify-content: flex-end; align-content: center; margin-top: 0; }
+  .match-card-expand { margin-left: 0; white-space: nowrap; }
+}
+
+/* Compact selectable match dates in the header. */
+.app-header .date-nav { gap: 5px; }
+.date-strip { display: flex; align-items: center; gap: 3px; padding: 3px; border: 1px solid var(--border); border-radius: 11px; background: var(--surface2); }
+.date-strip-day { display: grid; place-items: center; gap: 1px; min-width: 42px; height: 42px; padding: 2px 5px; border: 1px solid transparent; border-radius: 8px; color: var(--muted); background: transparent; cursor: pointer; line-height: 1.1; }
+.date-strip-day span { font-size: 9px; text-transform: uppercase; font-weight: 750; }
+.date-strip-day b { font-size: 14px; color: var(--text); }
+.date-strip-day.today span { color: var(--accent); }
+.date-strip-day.active { border-color: var(--accent); background: var(--accent-bg); color: var(--accent); }
+.date-strip-day.active b { color: var(--accent); }
+.date-strip-day:focus-visible, .date-nav-tools button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.date-nav-tools { display: flex; align-items: center; gap: 5px; }
+.date-picker-control { position: relative; display: grid; width: 36px; height: 36px; place-items: center; border: 1px solid var(--border); border-radius: var(--r-sm); color: var(--text2); background: var(--surface2); cursor: pointer; }
+.date-picker-control > span { pointer-events: none; font-size: 16px; }
+.date-picker-control .date-input { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; }
+.app-header .today-btn:disabled { opacity: .55; cursor: default; }
+@media (max-width: 1100px) {
+  .date-strip-day { min-width: 37px; }
+  .date-nav-tools .today-btn { display: none; }
+}
+@media (max-width: 760px) {
+  .app-header .date-nav { justify-content: flex-start; overflow-x: auto; }
+  .date-strip, .date-nav-tools { flex: 0 0 auto; }
+}
+.match-clear-filters { min-height: 34px; padding: 6px 10px; border: 1px solid var(--border); border-radius: 8px; color: var(--accent); background: var(--surface); font: inherit; font-size: 12px; font-weight: 700; white-space: nowrap; cursor: pointer; }
+.match-clear-filters:disabled { color: var(--muted); opacity: .65; cursor: default; }
+.match-clear-filters:not(:disabled):hover { border-color: var(--accent); background: var(--accent-bg); }
+.match-clear-filters:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.match-copy-link { min-height: 34px; padding: 6px 10px; border: 1px solid var(--border); border-radius: 8px; color: var(--text2); background: var(--surface); font: inherit; font-size: 12px; font-weight: 700; white-space: nowrap; cursor: pointer; }
+.match-copy-link:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-bg); }
+.match-copy-link:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.market-quick-filters { display: flex; align-items: center; gap: 6px; max-width: 100%; overflow-x: auto; scrollbar-width: thin; }
+.market-quick-filters button { display: inline-flex; flex: 0 0 auto; align-items: center; gap: 6px; min-height: 38px; padding: 6px 11px; border: 1px solid var(--border); border-radius: 999px; background: var(--surface2); color: var(--text2); font: inherit; font-size: 12px; font-weight: 700; white-space: nowrap; cursor: pointer; }
+.market-quick-filters button:hover,.market-quick-filters button.active { border-color: color-mix(in srgb, var(--accent) 48%, var(--border)); background: var(--accent-bg); color: var(--accent); }
+.market-quick-filters button span { color: var(--muted); font-size: 11px; }
+.market-quick-filters button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.fixture-list { gap: 14px; }
+.fixture-league-group { min-width: 0; }
+.fixture-league-title { margin: 0; }
+.fixture-league-heading { display: flex; width: 100%; align-items: center; gap: 10px; min-height: 40px; padding: 8px 12px; border: 1px solid var(--border); border-radius: 9px; background: var(--surface2); color: var(--text); text-align: left; font: inherit; cursor: pointer; }
+.fixture-league-heading > span:first-child { overflow: hidden; font-size: 13px; font-weight: 800; text-overflow: ellipsis; white-space: nowrap; }
+.fixture-league-heading > b { margin-left: auto; color: var(--muted); font-size: 11px; white-space: nowrap; }
+.fixture-group-chevron { width: 16px; color: var(--accent); font-size: 19px; line-height: 1; text-align: center; }
+.fixture-league-heading:hover { border-color: color-mix(in srgb, var(--accent) 40%, var(--border)); }
+.fixture-league-heading:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.fixture-league-rows { display: grid; gap: 8px; margin-top: 7px; }

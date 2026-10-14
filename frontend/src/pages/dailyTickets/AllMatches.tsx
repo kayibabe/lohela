@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { SelectionSummary } from "../../lib/api";
 import { formatKickoff, formatMarket, formatSelection } from "../../lib/api";
 import {
@@ -11,6 +11,15 @@ import {
   spreadTone,
 } from "./helpers";
 import type { MatchDisplayState } from "./types";
+import { useFavoriteMatches } from "./useFavoriteMatches";
+
+type MatchSortKey = "match" | "kickoff" | "league" | "q" | "markets" | "spread";
+const MATCH_STATUSES: MatchDisplayState[] = ["finished", "live", "scheduled", "postponed", "cancelled"];
+const MATCH_SORT_KEYS: MatchSortKey[] = ["match", "kickoff", "league", "q", "markets", "spread"];
+
+function matchUrlParam(name: string) {
+  return new URLSearchParams(window.location.search).get(`match_${name}`);
+}
 
 function quoteFreshness(row: SelectionSummary) {
   if (!row.source_odds_at) return { label: "Quote time unavailable", state: "unknown" };
@@ -46,14 +55,41 @@ export function AllMatches({
   onAdd: (row: SelectionSummary) => void;
   allowAdd?: boolean;
 }) {
-  const [statusFilter, setStatusFilter] = useState<"all" | MatchDisplayState>("all");
-  const [query, setQuery] = useState("");
-  const [leagueFilter, setLeagueFilter] = useState("all");
-  const [marketFilter, setMarketFilter] = useState("all");
-  const [sort, setSort] = useState<{
-    key: "match" | "kickoff" | "league" | "q" | "markets" | "spread";
-    direction: "asc" | "desc";
-  }>({ key: "kickoff", direction: "asc" });
+  const [statusFilter, setStatusFilter] = useState<"all" | MatchDisplayState>(() => {
+    const value = matchUrlParam("status");
+    return value && MATCH_STATUSES.includes(value as MatchDisplayState) ? value as MatchDisplayState : "all";
+  });
+  const [query, setQuery] = useState(() => matchUrlParam("q") ?? "");
+  const [leagueFilter, setLeagueFilter] = useState(() => matchUrlParam("league") ?? "all");
+  const [marketFilter, setMarketFilter] = useState(() => matchUrlParam("market") ?? "all");
+  const [favoriteOnly, setFavoriteOnly] = useState(false);
+  const { favorites, favoriteIds, toggleFavorite } = useFavoriteMatches();
+  const [sort, setSort] = useState<{ key: MatchSortKey; direction: "asc" | "desc" }>(() => {
+    const key = matchUrlParam("sort");
+    const direction = matchUrlParam("order");
+    return {
+      key: key && MATCH_SORT_KEYS.includes(key as MatchSortKey) ? key as MatchSortKey : "kickoff",
+      direction: direction === "desc" ? "desc" : "asc",
+    };
+  });
+  const [copyState, setCopyState] = useState<"idle" | "copied" | "failed">("idle");
+  useEffect(() => {
+    if (window.location.pathname !== "/matches") return;
+    const url = new URL(window.location.href);
+    const params: Record<string, string | null> = {
+      match_q: query.trim() || null,
+      match_league: leagueFilter === "all" ? null : leagueFilter,
+      match_market: marketFilter === "all" ? null : marketFilter,
+      match_status: statusFilter === "all" ? null : statusFilter,
+      match_sort: sort.key === "kickoff" && sort.direction === "asc" ? null : sort.key,
+      match_order: sort.key === "kickoff" && sort.direction === "asc" ? null : sort.direction,
+    };
+    for (const [key, value] of Object.entries(params)) {
+      if (value) url.searchParams.set(key, value);
+      else url.searchParams.delete(key);
+    }
+    window.history.replaceState(window.history.state, "", `${url.pathname}${url.search}${url.hash}`);
+  }, [query, leagueFilter, marketFilter, statusFilter, sort]);
   const leagues = [...new Set(rows.map(([, selections]) => selections[0]?.competition).filter(Boolean))].sort();
   const leagueCounts = rows.reduce<Record<string, number>>((counts, [, selections]) => {
     const league = selections[0]?.competition;
@@ -62,6 +98,16 @@ export function AllMatches({
   }, {});
   const topLeagues = Object.entries(leagueCounts).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).slice(0, 8);
   const markets = [...new Set(rows.flatMap(([, selections]) => selections.map((row) => formatMarket(row.market))))].sort();
+  const marketCounts = rows.reduce<Record<string, number>>((counts, [, selections]) => {
+    for (const market of new Set(selections.map((row) => formatMarket(row.market)))) {
+      counts[market] = (counts[market] ?? 0) + 1;
+    }
+    return counts;
+  }, {});
+  const quickMarkets = Object.entries(marketCounts)
+    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+    .slice(0, 4)
+    .map(([market]) => market);
   const queryText = query.trim().toLocaleLowerCase();
   const discoveredRows = rows.flatMap(([id, selections]) => {
     const first = selections[0];
@@ -70,9 +116,15 @@ export function AllMatches({
     if (!matchesText || (leagueFilter !== "all" && first.competition !== leagueFilter) || marketRows.length === 0) return [];
     return [[id, marketRows] as [number, SelectionSummary[]]];
   });
-  const filteredRows = statusFilter === "all"
+  const filteredRows = (statusFilter === "all"
     ? discoveredRows
-    : discoveredRows.filter(([, selections]) => matchDisplayState(selections[0]) === statusFilter);
+    : discoveredRows.filter(([, selections]) => matchDisplayState(selections[0]) === statusFilter))
+    .filter(([matchId]) => !favoriteOnly || favoriteIds.has(matchId));
+  const activeFilterCount = Number(Boolean(query.trim()))
+    + Number(leagueFilter !== "all")
+    + Number(marketFilter !== "all")
+    + Number(statusFilter !== "all")
+    + Number(favoriteOnly);
   const sortedRows = [...filteredRows].sort(([, a], [, b]) => {
     const left = a[0];
     const right = b[0];
@@ -95,12 +147,28 @@ export function AllMatches({
     const result = first < second ? -1 : first > second ? 1 : 0;
     return sort.direction === "asc" ? result : -result;
   });
-  const changeSort = (key: typeof sort.key) =>
+  const changeSort = (key: MatchSortKey) =>
     setSort((current) =>
       current.key === key
         ? { key, direction: current.direction === "asc" ? "desc" : "asc" }
         : { key, direction: key === "kickoff" ? "asc" : "desc" },
     );
+  const clearFilters = () => {
+    setStatusFilter("all");
+    setQuery("");
+    setLeagueFilter("all");
+    setMarketFilter("all");
+    setFavoriteOnly(false);
+  };
+  const copyViewLink = async () => {
+    try {
+      await navigator.clipboard.writeText(window.location.href);
+      setCopyState("copied");
+    } catch {
+      setCopyState("failed");
+    }
+    window.setTimeout(() => setCopyState("idle"), 2000);
+  };
   const sortButton = (key: typeof sort.key, label: string) => (
     <button
       className={sort.key === key ? "active" : ""}
@@ -144,7 +212,7 @@ export function AllMatches({
           </span>
         </div>
         <span className="section-note match-count-summary">
-          <b>{discoveredRows.length}</b> matches
+          Showing <b>{sortedRows.length}</b> of <b>{rows.length}</b> matches
           {statusCounts.finished > 0 && <> · <b>{statusCounts.finished}</b> finished</>}
           {statusCounts.live > 0 && <> · <b>{statusCounts.live}</b> live</>}
           {statusCounts.scheduled > 0 && <> · <b>{statusCounts.scheduled}</b> upcoming</>}
@@ -178,7 +246,19 @@ export function AllMatches({
             <div className="match-explorer-controls">
               <label className="match-search"><span className="sr-only">Search team or competition</span><input type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Team or competition" /></label>
               <label><span className="sr-only">Filter by league</span><select value={leagueFilter} onChange={(event) => setLeagueFilter(event.target.value)}><option value="all">All competitions</option>{leagues.map((league) => <option key={league} value={league}>{league}</option>)}</select></label>
-              <label><span className="sr-only">Filter by market</span><select value={marketFilter} onChange={(event) => setMarketFilter(event.target.value)}><option value="all">All markets</option>{markets.map((market) => <option key={market} value={market}>{market}</option>)}</select></label>
+              <div className="market-quick-filters" role="group" aria-label="Quick market filters">
+                <button className={marketFilter === "all" ? "active" : ""} onClick={() => setMarketFilter("all")} aria-pressed={marketFilter === "all"}>All markets</button>
+                {quickMarkets.map((market) => (
+                  <button key={market} className={marketFilter === market ? "active" : ""} onClick={() => setMarketFilter(market)} aria-pressed={marketFilter === market}>
+                    {market}<span>{marketCounts[market]}</span>
+                  </button>
+                ))}
+              </div>
+              {markets.some((market) => !quickMarkets.includes(market)) && (
+                <label><span className="sr-only">Filter by another market</span><select value={quickMarkets.includes(marketFilter) || marketFilter === "all" ? "" : marketFilter} onChange={(event) => { if (event.target.value) setMarketFilter(event.target.value); }}>
+                  <option value="">More markets…</option>{markets.filter((market) => !quickMarkets.includes(market)).map((market) => <option key={market} value={market}>{market}</option>)}
+                </select></label>
+              )}
             </div>
             <div className="match-status-filters" aria-label="Filter matches by status">
               {filterButton("all", "All", discoveredRows.length)}
@@ -187,6 +267,9 @@ export function AllMatches({
               {filterButton("scheduled", "Pending", statusCounts.scheduled)}
               {statusCounts.postponed > 0 && filterButton("postponed", "Postponed", statusCounts.postponed)}
               {statusCounts.cancelled > 0 && filterButton("cancelled", "Cancelled", statusCounts.cancelled)}
+              <button className={`fixture-favorites-filter${favoriteOnly ? " active" : ""}`} onClick={() => setFavoriteOnly((current) => !current)} aria-pressed={favoriteOnly} title="Favourites are saved in this browser">
+                <span aria-hidden="true">★</span> Favourites <b>{favorites.length}</b>
+              </button>
             </div>
             <div className="match-sort-controls" aria-label="Sort matches">
               <span>Sort</span>
@@ -197,9 +280,15 @@ export function AllMatches({
               {sortButton("markets", "Markets")}
               {sortButton("spread", "Spread")}
             </div>
+            <button className="match-clear-filters" onClick={clearFilters} disabled={activeFilterCount === 0}>
+              Clear filters{activeFilterCount > 0 ? ` · ${activeFilterCount}` : ""}
+            </button>
+            <button className="match-copy-link" onClick={copyViewLink} title="Copy a link with the selected date and filters">
+              {copyState === "copied" ? "Link copied" : copyState === "failed" ? "Copy unavailable" : "Copy view link"}
+            </button>
           </div>
           {sortedRows.length === 0 ? (
-            <p className="panel-empty">No qualified matches match these filters.</p>
+            <p className="panel-empty">{favoriteOnly && favorites.length === 0 ? "No favourites yet. Select a star beside a match to save it here." : "No qualified matches match these filters."}</p>
           ) : (
             <div className="match-card-grid">
               {sortedRows.map(([matchId, selections]) => (
@@ -209,6 +298,8 @@ export function AllMatches({
                   onSelect={onSelect}
                   onAdd={onAdd}
                   allowAdd={allowAdd}
+                  isFavorite={favoriteIds.has(matchId)}
+                  onToggleFavorite={() => toggleFavorite(matchId)}
                 />
               ))}
             </div>
@@ -225,11 +316,15 @@ function MatchMarketGroup({
   onSelect,
   onAdd,
   allowAdd,
+  isFavorite,
+  onToggleFavorite,
 }: {
   selections: SelectionSummary[];
   onSelect: (row: SelectionSummary) => void;
   onAdd: (row: SelectionSummary) => void;
   allowAdd: boolean;
+  isFavorite: boolean;
+  onToggleFavorite: () => void;
 }) {
   const [sort, setSort] = useState<{
     key: "market" | "q" | "odds" | "spread" | "edge";
@@ -293,6 +388,14 @@ function MatchMarketGroup({
           <small className={`summary-match-status ${displayState}`}>
             {matchStatusText(first)}
           </small>
+          <button
+            type="button"
+            className={`match-favorite${isFavorite ? " active" : ""}`}
+            onClick={(event) => { event.preventDefault(); event.stopPropagation(); onToggleFavorite(); }}
+            aria-label={`${isFavorite ? "Remove" : "Add"} ${first.home_team} vs ${first.away_team} ${isFavorite ? "from" : "to"} favourites`}
+            aria-pressed={isFavorite}
+            title={isFavorite ? "Remove from favourites" : "Add to favourites"}
+          >★</button>
         </div>
         <div className="match-card-metrics">
           <span><small>Kickoff</small><b>{formatKickoff(first.kickoff_at)}</b></span>

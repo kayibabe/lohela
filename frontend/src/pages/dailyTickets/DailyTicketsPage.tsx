@@ -375,20 +375,6 @@ export default function DailyTicketsPage({ date, initialTab = "tickets", onOpenM
           </div>
         )}
         <div className="tickets-banner-actions">
-          <details className="ticket-analysis-control">
-            <summary>Plan stake</summary>
-            <label className="bankroll-input">
-              Bankroll{" "}
-              <input
-                type="number"
-                min="0"
-                step="0.01"
-                value={bankroll}
-                onChange={(event) => setBankroll(event.target.value)}
-                placeholder="e.g. 1000"
-              />
-            </label>
-          </details>
           {isAdmin && <div className="ticket-operations-control">
             <span className="action-group-label">Operations</span>
             <div>
@@ -567,6 +553,28 @@ export default function DailyTicketsPage({ date, initialTab = "tickets", onOpenM
                   <strong>Latest versions shown.</strong> Earlier published tickets remain immutable in history; regenerated tickets may have different legs.
                 </div>
               )}
+              {publicPublishedTickets.length > 0 && (
+                <details className="stake-planner">
+                  <summary>
+                    <strong>Stake planner</strong>
+                    <span>Set a bankroll to see a suggested amount on eligible ticket cards.</span>
+                  </summary>
+                  <div className="stake-planner-controls">
+                    <label className="bankroll-input">
+                      Bankroll
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={bankroll}
+                        onChange={(event) => setBankroll(event.target.value)}
+                        placeholder="e.g. 1000"
+                      />
+                    </label>
+                    <span>Planning estimate only · half-Kelly sizing, capped at 5% of bankroll · does not place a bet.</span>
+                  </div>
+                </details>
+              )}
               {publicPublishedTickets.length > 0 && <div className="ticket-grid public-ticket-grid">
               {publicTiers.map((tier) => (
                 <TicketCard
@@ -671,6 +679,17 @@ function DecisionSummary({
   };
   const isBettable = (selection: SelectionSummary) => selection.recommendation_status ? selection.recommendation_status === "BET" : selection.q_score >= 85 && (selection.edge ?? 0) > 0 && selection.data_quality_status === "good" && (selection.active_models?.length ?? 0) > 0;
   const topKickoffState = top ? kickoffState(top) : "unknown";
+  const topFinished = top?.match_status?.toLowerCase() === "finished";
+  const topScore = top?.home_goals != null && top.away_goals != null
+    ? `${top.home_goals}–${top.away_goals}`
+    : null;
+  const pickOutcome = top?.result === "won"
+    ? "won"
+    : top?.result === "lost"
+      ? "lost"
+      : top?.result === "void"
+        ? "void"
+        : null;
   const action = top
     ? topKickoffState === "past"
       ? "HISTORICAL"
@@ -680,13 +699,17 @@ function DecisionSummary({
     : "PASS";
   const actionTone = action.toLowerCase();
   const reason = top
-    ? action === "HISTORICAL"
-      ? "This selection has already kicked off. It remains available for review and is not an upcoming pick."
-      : action === "UNAVAILABLE"
-        ? "Kickoff time is unavailable, so this selection cannot be labelled as an upcoming decision."
-      : action === "BET"
-      ? "Qualified quality score and positive priced edge. Review the risks before logging a decision."
-      : "A qualified signal exists, but the evidence is not strong enough for a direct BET label."
+    ? topFinished && topScore && pickOutcome
+      ? `Full time: ${top.home_team} ${topScore} ${top.away_team}. Our pick ${pickOutcome}.`
+      : topFinished
+        ? "This match has finished, but its final score or pick outcome is not available yet."
+        : action === "HISTORICAL"
+          ? "This selection has already kicked off. It remains available for review and is not an upcoming pick."
+          : action === "UNAVAILABLE"
+            ? "Kickoff time is unavailable, so this selection cannot be labelled as an upcoming decision."
+            : action === "BET"
+              ? "Qualified quality score and positive priced edge. Review the risks before logging a decision."
+              : "A qualified signal exists, but the evidence is not strong enough for a direct BET label."
     : "No priced selection passed the current publication and evidence gates.";
 
   return (
@@ -711,6 +734,10 @@ function DecisionSummary({
           <div>
             <strong>{top.home_team} <span>vs</span> {top.away_team}</strong>
             <small>{top.competition} · {new Date(top.kickoff_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</small>
+            {topFinished && <small className="decision-final-result">
+              {topScore ? `Full time · ${topScore}` : "Full time · Score unavailable"}
+              {pickOutcome && <b className={`decision-pick-outcome ${pickOutcome}`}>Pick {pickOutcome}</b>}
+            </small>}
           </div>
           <div className="decision-lead-selection">
             <span>{formatMarket(top.market)}</span>

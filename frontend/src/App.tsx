@@ -15,6 +15,20 @@ type Theme = 'dark' | 'light' | 'system'
 type ModulePage = 'tickets' | 'matches' | 'research' | 'tracker' | 'analytics' | 'tools' | 'admin'
 type Page = ModulePage | 'match' | 'upgrade' | 'login'
 
+function dateFromSearch(search: string): string {
+  const value = new URLSearchParams(search).get('date')
+  if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return TODAY
+  const [year, month, day] = value.split('-').map(Number)
+  const parsed = new Date(year, month - 1, day)
+  return parsed.getFullYear() === year && parsed.getMonth() === month - 1 && parsed.getDate() === day
+    ? value
+    : TODAY
+}
+
+function datePath(path: string, date: string): string {
+  return date === TODAY ? path : `${path}?date=${encodeURIComponent(date)}`
+}
+
 // Until account ownership is implemented for the ledgers, the customer shell
 // exposes only published recommendations. Research and system controls stay internal.
 const NAV: { id: ModulePage; label: string }[] = [
@@ -57,12 +71,23 @@ export default function App() {
   const isInternal = user?.role === 'admin'
   const [page, setPage] = useState<Page>(() => routePage(window.location.pathname))
   const [matchId, setMatchId] = useState<number | null>(() => routeMatchId(window.location.pathname))
-  const [date, setDate] = useState(TODAY)
+  const [date, setDate] = useState(() => dateFromSearch(window.location.search))
   const [theme, setTheme] = useState<Theme>('system')
   const [lastUpdated, setLastUpdated] = useState(() => new Date())
 
   useEffect(() => {
-    const onPopState = () => { setPage(routePage(window.location.pathname)); setMatchId(routeMatchId(window.location.pathname)) }
+    const url = new URL(window.location.href)
+    if (date === TODAY) url.searchParams.delete('date')
+    else url.searchParams.set('date', date)
+    window.history.replaceState(window.history.state, '', `${url.pathname}${url.search}${url.hash}`)
+  }, [date])
+
+  useEffect(() => {
+    const onPopState = () => {
+      setPage(routePage(window.location.pathname))
+      setMatchId(routeMatchId(window.location.pathname))
+      setDate(dateFromSearch(window.location.search))
+    }
     window.addEventListener('popstate', onPopState)
     return () => window.removeEventListener('popstate', onPopState)
   }, [])
@@ -90,13 +115,13 @@ export default function App() {
   function navigate(next: Page, _requested?: ModulePage, replace = false) {
     setPage(next)
     const path = next === 'upgrade' ? '/upgrade' : `/${next}`
-    window.history[replace ? 'replaceState' : 'pushState']({}, '', path)
+    window.history[replace ? 'replaceState' : 'pushState']({}, '', datePath(path, date))
   }
 
   function navigateToMatch(nextMatchId: number) {
     setMatchId(nextMatchId)
     setPage('match')
-    window.history.pushState({}, '', `/match/${nextMatchId}`)
+    window.history.pushState({}, '', datePath(`/match/${nextMatchId}`, date))
   }
 
   function goTo(next: ModulePage) {
@@ -158,14 +183,35 @@ export default function App() {
         {(page === 'tickets' || (isInternalPage(page) && isInternal)) && (page === 'tickets' || page === 'matches' || page === 'research') && (
           <div className="date-nav">
             <button className="date-btn" onClick={() => nav(-1)} title="Previous day" aria-label="Previous day">‹</button>
-            <div className="date-center">
+            <div className="date-strip" role="group" aria-label="Choose match date">
+              {[-2, -1, 0, 1, 2].map(offset => {
+                const value = addDays(date, offset)
+                const localDate = new Date(`${value}T12:00:00`)
+                const label = localDate.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'long', year: 'numeric' })
+                return <button
+                  key={value}
+                  className={`date-strip-day${date === value ? ' active' : ''}${value === TODAY ? ' today' : ''}`}
+                  onClick={() => setDate(value)}
+                  aria-label={label}
+                  aria-pressed={date === value}
+                >
+                  <span>{value === TODAY ? 'Today' : localDate.toLocaleDateString('en-GB', { weekday: 'short' })}</span>
+                  <b>{localDate.getDate()}</b>
+                </button>
+              })}
+            </div>
+            <div className="date-nav-tools">
+              <button className="today-btn" onClick={() => setDate(TODAY)} disabled={date === TODAY}>Today</button>
+              <label className="date-picker-control" title="Choose any date">
+                <span aria-hidden="true">▦</span>
               <input
                 className="date-input"
                 type="date"
                 value={date}
+                aria-label="Choose any date"
                 onChange={e => setDate(e.target.value)}
               />
-              <button className="today-btn" onClick={() => setDate(TODAY)}>Today</button>
+              </label>
             </div>
             <button className="date-btn" onClick={() => nav(1)} title="Next day" aria-label="Next day">›</button>
           </div>
