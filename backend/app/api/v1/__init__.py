@@ -16,6 +16,9 @@ from app.api.v1 import (
     backtests,
     custom_accumulators,
     singles,
+    match_favorites,
+    match_filters,
+    insights,
 )
 from app.api import auth
 
@@ -37,3 +40,6 @@ router.include_router(pipeline.router)
 router.include_router(backtests.router)
 router.include_router(custom_accumulators.router)
 router.include_router(singles.router)
+router.include_router(match_favorites.router)
+router.include_router(match_filters.router)
+router.include_router(insights.router)

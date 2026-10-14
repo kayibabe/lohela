@@ -324,6 +324,122 @@ export async function fetchMatchFixtures(date: string): Promise<MatchFixture[]> 
   return res.json()
 }
 
+export async function fetchMatchFavoriteIds(): Promise<number[]> {
+  const res = await fetch('/api/v1/match-favorites')
+  if (!res.ok) throw new Error(`API error ${res.status}`)
+  const data: { match_ids: number[] } = await res.json()
+  return data.match_ids
+}
+
+export async function addMatchFavorite(matchId: number): Promise<number[]> {
+  const res = await fetch('/api/v1/match-favorites', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ match_id: matchId }),
+  })
+  if (!res.ok) throw new Error(`API error ${res.status}`)
+  const data: { match_ids: number[] } = await res.json()
+  return data.match_ids
+}
+
+export async function removeMatchFavorite(matchId: number): Promise<number[]> {
+  const res = await fetch(`/api/v1/match-favorites/${matchId}`, { method: 'DELETE' })
+  if (!res.ok) throw new Error(`API error ${res.status}`)
+  const data: { match_ids: number[] } = await res.json()
+  return data.match_ids
+}
+
+export interface MatchFilterCriteria {
+  query: string
+  competition: string
+  market: string
+  status: 'all' | 'finished' | 'live' | 'scheduled' | 'postponed' | 'cancelled'
+  favorite_only: boolean
+  min_probability: number | null
+  max_probability: number | null
+  min_odds: number | null
+  max_odds: number | null
+  min_edge: number | null
+  min_q_score: number
+  max_q_score: number | null
+}
+
+export interface MatchFilterPreset {
+  id: number
+  name: string
+  criteria: MatchFilterCriteria
+  created_at: string
+}
+
+export async function fetchMatchFilterPresets(): Promise<MatchFilterPreset[]> {
+  const res = await fetch('/api/v1/match-filters')
+  if (!res.ok) throw new Error(`API error ${res.status}`)
+  return res.json()
+}
+
+export async function createMatchFilterPreset(name: string, criteria: MatchFilterCriteria): Promise<MatchFilterPreset> {
+  const res = await fetch('/api/v1/match-filters', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name, criteria }),
+  })
+  if (!res.ok) throw new Error(`API error ${res.status}`)
+  return res.json()
+}
+
+export async function deleteMatchFilterPreset(presetId: number): Promise<void> {
+  const res = await fetch(`/api/v1/match-filters/${presetId}`, { method: 'DELETE' })
+  if (!res.ok) throw new Error(`API error ${res.status}`)
+}
+
+export interface InsightsCompetition {
+  id: number
+  name: string
+  country: string
+  seasons: string[]
+  completed_matches: number
+}
+
+export interface LeagueInsights {
+  competitions: InsightsCompetition[]
+  competition_id: number | null
+  season: string | null
+  summary: {
+    played: number
+    average_goals: number | null
+    home_win_pct: number | null
+    draw_pct: number | null
+    away_win_pct: number | null
+    btts_pct: number | null
+    over_2_5_pct: number | null
+    xg_coverage_pct: number | null
+  } | null
+  teams: Array<{
+    team_id: number
+    team: string
+    played: number
+    won: number
+    drawn: number
+    lost: number
+    goals_for: number
+    goals_against: number
+    goal_difference: number
+    points: number
+    avg_xg: number | null
+    recent_form: string
+  }>
+}
+
+export async function fetchLeagueInsights(competitionId?: number, season?: string): Promise<LeagueInsights> {
+  const params = new URLSearchParams()
+  if (competitionId != null) params.set('competition_id', String(competitionId))
+  if (season) params.set('season', season)
+  const query = params.toString()
+  const res = await fetch(`/api/v1/insights${query ? `?${query}` : ''}`)
+  if (!res.ok) throw new Error(`API error ${res.status}`)
+  return res.json()
+}
+
 export async function fetchSelectionOdds(predictionId: number): Promise<OddsQuote[]> {
   const res = await fetch(`/api/v1/selections/${predictionId}/odds`)
   if (!res.ok) throw new Error(`API error ${res.status}`)
@@ -585,6 +701,18 @@ export function formatSelection(selection: string): string {
     draw: 'Draw',
   }
   return labels[selection] ?? selection.replace(/_/g, ' ').replace(/\b\w/g, character => character.toUpperCase())
+}
+
+export function selectionTone(selection: string): string {
+  const value = selection.trim().toLowerCase().replace(/[\s-]+/g, '_')
+  if (value.startsWith('over') || value.includes('_over') || value === 'btts_yes' || value === 'yes') return 'market-pick-over'
+  if (value.startsWith('under') || value.includes('_under')) return 'market-pick-under'
+  if (value === 'home' || value === 'home_win' || value === 'dnb_home') return 'market-pick-home'
+  if (value === 'draw') return 'market-pick-draw'
+  if (value === 'away' || value === 'away_win' || value === 'dnb_away') return 'market-pick-away'
+  if (value === 'btts_no' || value === 'no') return 'market-pick-no'
+  if (value.includes('double_chance')) return 'market-pick-cover'
+  return 'market-pick-other'
 }
 
 export function formatTicketType(type: string): string {

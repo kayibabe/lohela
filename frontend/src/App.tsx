@@ -9,10 +9,11 @@ import AdminPage from './pages/Admin'
 import UpgradePage from './pages/Upgrade'
 import MatchIntelligencePage from './pages/MatchIntelligencePage'
 import LoginPage from './pages/Login'
+import InsightsPage from './pages/Insights'
 import { AuthControls, useAuth } from './auth'
 
 type Theme = 'dark' | 'light' | 'system'
-type ModulePage = 'tickets' | 'matches' | 'research' | 'tracker' | 'analytics' | 'tools' | 'admin'
+type ModulePage = 'tickets' | 'matches' | 'insights' | 'research' | 'tracker' | 'analytics' | 'tools' | 'admin'
 type Page = ModulePage | 'match' | 'upgrade' | 'login'
 
 function dateFromSearch(search: string): string {
@@ -29,13 +30,12 @@ function datePath(path: string, date: string): string {
   return date === TODAY ? path : `${path}?date=${encodeURIComponent(date)}`
 }
 
-// Until account ownership is implemented for the ledgers, the customer shell
-// exposes only published recommendations. Research and system controls stay internal.
 const NAV: { id: ModulePage; label: string }[] = [
-  { id: 'tickets',   label: 'Today'     },
+  { id: 'tickets', label: 'Today' },
+  { id: 'matches', label: 'Matches' },
+  { id: 'insights', label: 'Stats & trends' },
 ]
 const INTERNAL_NAV: { id: ModulePage; label: string }[] = [
-  { id: 'matches', label: 'Matches' },
   { id: 'research', label: 'Research' },
   { id: 'tracker', label: 'Track' },
   { id: 'analytics', label: 'Validate' },
@@ -45,7 +45,8 @@ const INTERNAL_NAV: { id: ModulePage; label: string }[] = [
 
 const NAV_META: Record<ModulePage, { icon: string; hint: string }> = {
   tickets: { icon: 'sparkles', hint: 'Published recommendations' },
-  matches: { icon: 'search', hint: 'Explore qualified match candidates' },
+  matches: { icon: 'search', hint: 'Browse fixtures and qualified match markets' },
+  insights: { icon: 'chart', hint: 'League results and team trends' },
   research: { icon: 'flask', hint: 'Research models and selection policies' },
   tracker: { icon: 'list', hint: 'Evidence and personal journal' },
   analytics: { icon: 'chart', hint: 'Performance and model validation' },
@@ -157,7 +158,7 @@ export default function App() {
           <img className="brand-logo" src="/lohela-compact.png" alt="Lohela — Intelligence beyond numbers" />
         </a>
         <nav className="sidebar-nav" aria-label="Primary navigation">
-          <span className="sidebar-label">Tools</span>
+          <span className="sidebar-label">Football</span>
           {NAV.map(n => (
             <button key={n.id} className={`nav-tab${page === n.id ? ' active' : ''}`} onClick={() => goTo(n.id)} title={NAV_META[n.id].hint}>
               <span className="nav-icon"><NavIcon name={NAV_META[n.id].icon} /></span>{n.label}
@@ -180,7 +181,7 @@ export default function App() {
         <a className="topbar-brand" href="/tickets" aria-label="Lohela home" onClick={(event) => { event.preventDefault(); goTo('tickets') }}>
           <span className="topbar-mark" aria-hidden="true">L</span><span>LOHELA</span>
         </a>
-        {(page === 'tickets' || (isInternalPage(page) && isInternal)) && (page === 'tickets' || page === 'matches' || page === 'research') && (
+        {(page === 'tickets' || page === 'matches' || (page === 'research' && isInternal)) && (
           <div className="date-nav">
             <button className="date-btn" onClick={() => nav(-1)} title="Previous day" aria-label="Previous day">‹</button>
             <div className="date-strip" role="group" aria-label="Choose match date">
@@ -235,7 +236,10 @@ export default function App() {
         {page === 'login' && <LoginPage onSuccess={() => navigate('tickets', undefined, true)} />}
         {page === 'upgrade' && <UpgradePage onBack={() => goTo('tickets')} />}
         {page === 'tickets' && <DailyTicketsPage key={`${date}-${page}`} date={date} initialTab="tickets" onOpenMatch={navigateToMatch} />}
-        {isInternal && page === 'matches' && <DailyTicketsPage key={`${date}-${page}`} date={date} initialTab="matches" onOpenMatch={navigateToMatch} />}
+        {page === 'matches' && <DailyTicketsPage key={`${date}-${page}`} date={date} initialTab="matches" onOpenMatch={navigateToMatch} />}
+        {page === 'insights' && (user.plan === 'pro' || isInternal
+          ? <InsightsPage />
+          : <section className="insights-access-card"><h1>Stats &amp; trends</h1><p>League results and team tables are available on Pro.</p><button className="btn-primary" onClick={() => navigate('upgrade')}>View Pro access</button></section>)}
         {isInternal && page === 'research' && <DailyTicketsPage key={`${date}-${page}`} date={date} initialTab="odds-policy" onOpenMatch={navigateToMatch} />}
         {page === 'match' && matchId != null && (isInternal || authLoading) && <MatchIntelligencePage matchId={matchId} onBack={() => navigate('tickets')} />}
         {isInternal && page === 'tracker' && <TrackerPage onOpenTickets={(targetDate) => { if (targetDate) setDate(targetDate); goTo('tickets') }} />}
@@ -267,9 +271,13 @@ function routePage(pathname: string): Page {
   if (path === '/login') return 'login'
   if (path === '/upgrade') return 'upgrade'
   if (/^\/match\/\d+$/.test(path)) return 'match'
-  if (path === '/tickets' || path === '/matches' || path === '/research') return path.slice(1) as ModulePage
+  if (path === '/tickets' || path === '/matches' || path === '/insights' || path === '/research') return path.slice(1) as ModulePage
   if (path === '/tracker' || path === '/analytics' || path === '/tools' || path === '/admin') return path.slice(1) as ModulePage
   return 'tickets'
+}
+
+function isInternalPage(page: Page): boolean {
+  return page === 'research' || page === 'tracker' || page === 'analytics' || page === 'tools' || page === 'admin' || page === 'match'
 }
 
 function routeMatchId(pathname: string): number | null {
@@ -277,6 +285,3 @@ function routeMatchId(pathname: string): number | null {
   return match ? Number(match[1]) : null
 }
 
-function isInternalPage(page: Page): boolean {
-  return page === 'matches' || page === 'research' || page === 'tracker' || page === 'analytics' || page === 'tools' || page === 'admin' || page === 'match'
-}

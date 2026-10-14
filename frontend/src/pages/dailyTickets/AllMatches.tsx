@@ -1,6 +1,13 @@
 import { useEffect, useState } from "react";
-import type { SelectionSummary } from "../../lib/api";
-import { formatKickoff, formatMarket, formatSelection } from "../../lib/api";
+import type { MatchFilterCriteria, MatchFilterPreset, SelectionSummary } from "../../lib/api";
+import {
+  createMatchFilterPreset,
+  deleteMatchFilterPreset,
+  fetchMatchFilterPresets,
+  formatKickoff,
+  formatMarket,
+  formatSelection,
+} from "../../lib/api";
 import {
   accumulatorBlockers,
   gradeTone,
@@ -13,12 +20,25 @@ import {
 import type { MatchDisplayState } from "./types";
 import { useFavoriteMatches } from "./useFavoriteMatches";
 
-type MatchSortKey = "match" | "kickoff" | "league" | "q" | "markets" | "spread";
+type MatchSortKey = "match" | "kickoff" | "league" | "q" | "markets" | "spread" | "edge";
 const MATCH_STATUSES: MatchDisplayState[] = ["finished", "live", "scheduled", "postponed", "cancelled"];
-const MATCH_SORT_KEYS: MatchSortKey[] = ["match", "kickoff", "league", "q", "markets", "spread"];
+const MATCH_SORT_KEYS: MatchSortKey[] = ["match", "kickoff", "league", "q", "markets", "spread", "edge"];
 
 function matchUrlParam(name: string) {
   return new URLSearchParams(window.location.search).get(`match_${name}`);
+}
+
+function numberParam(name: string, fallback = "") {
+  const value = matchUrlParam(name);
+  if (value == null || value.trim() === "") return fallback;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? String(parsed) : fallback;
+}
+
+function numberOrNull(value: string): number | null {
+  if (!value.trim()) return null;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
 }
 
 function quoteFreshness(row: SelectionSummary) {
@@ -62,8 +82,19 @@ export function AllMatches({
   const [query, setQuery] = useState(() => matchUrlParam("q") ?? "");
   const [leagueFilter, setLeagueFilter] = useState(() => matchUrlParam("league") ?? "all");
   const [marketFilter, setMarketFilter] = useState(() => matchUrlParam("market") ?? "all");
-  const [favoriteOnly, setFavoriteOnly] = useState(false);
+  const [favoriteOnly, setFavoriteOnly] = useState(() => matchUrlParam("favorites") === "1");
+  const [minProbability, setMinProbability] = useState(() => numberParam("pmin"));
+  const [maxProbability, setMaxProbability] = useState(() => numberParam("pmax"));
+  const [minOdds, setMinOdds] = useState(() => numberParam("omin"));
+  const [maxOdds, setMaxOdds] = useState(() => numberParam("omax"));
+  const [minEdge, setMinEdge] = useState(() => numberParam("emin"));
+  const [minQScore, setMinQScore] = useState(() => numberParam("qmin", "75"));
+  const [maxQScore, setMaxQScore] = useState(() => numberParam("qmax"));
   const { favorites, favoriteIds, toggleFavorite } = useFavoriteMatches();
+  const [presets, setPresets] = useState<MatchFilterPreset[]>([]);
+  const [presetId, setPresetId] = useState("");
+  const [presetName, setPresetName] = useState("");
+  const [presetMessage, setPresetMessage] = useState("");
   const [sort, setSort] = useState<{ key: MatchSortKey; direction: "asc" | "desc" }>(() => {
     const key = matchUrlParam("sort");
     const direction = matchUrlParam("order");
@@ -74,13 +105,20 @@ export function AllMatches({
   });
   const [copyState, setCopyState] = useState<"idle" | "copied" | "failed">("idle");
   useEffect(() => {
-    if (window.location.pathname !== "/matches") return;
     const url = new URL(window.location.href);
     const params: Record<string, string | null> = {
       match_q: query.trim() || null,
       match_league: leagueFilter === "all" ? null : leagueFilter,
       match_market: marketFilter === "all" ? null : marketFilter,
       match_status: statusFilter === "all" ? null : statusFilter,
+      match_favorites: favoriteOnly ? "1" : null,
+      match_pmin: minProbability || null,
+      match_pmax: maxProbability || null,
+      match_omin: minOdds || null,
+      match_omax: maxOdds || null,
+      match_emin: minEdge || null,
+      match_qmin: minQScore === "75" ? null : minQScore || null,
+      match_qmax: maxQScore || null,
       match_sort: sort.key === "kickoff" && sort.direction === "asc" ? null : sort.key,
       match_order: sort.key === "kickoff" && sort.direction === "asc" ? null : sort.direction,
     };
@@ -89,7 +127,18 @@ export function AllMatches({
       else url.searchParams.delete(key);
     }
     window.history.replaceState(window.history.state, "", `${url.pathname}${url.search}${url.hash}`);
-  }, [query, leagueFilter, marketFilter, statusFilter, sort]);
+  }, [query, leagueFilter, marketFilter, statusFilter, favoriteOnly, minProbability, maxProbability, minOdds, maxOdds, minEdge, minQScore, maxQScore, sort]);
+  useEffect(() => {
+    let active = true;
+    fetchMatchFilterPresets().then((items) => {
+      if (active) {
+        setPresets(items);
+      }
+    }).catch(() => {
+      if (active) setPresetMessage("Saved filters could not be loaded.");
+    });
+    return () => { active = false; };
+  }, []);
   const leagues = [...new Set(rows.map(([, selections]) => selections[0]?.competition).filter(Boolean))].sort();
   const leagueCounts = rows.reduce<Record<string, number>>((counts, [, selections]) => {
     const league = selections[0]?.competition;
@@ -112,7 +161,23 @@ export function AllMatches({
   const discoveredRows = rows.flatMap(([id, selections]) => {
     const first = selections[0];
     const matchesText = !queryText || `${first.home_team} ${first.away_team} ${first.competition}`.toLocaleLowerCase().includes(queryText);
-    const marketRows = marketFilter === "all" ? selections : selections.filter((row) => formatMarket(row.market) === marketFilter);
+    const marketRows = (marketFilter === "all" ? selections : selections.filter((row) => formatMarket(row.market) === marketFilter))
+      .filter((row) => {
+        const probability = numberOrNull(minProbability);
+        const probabilityMax = numberOrNull(maxProbability);
+        const odds = numberOrNull(minOdds);
+        const oddsMax = numberOrNull(maxOdds);
+        const edge = numberOrNull(minEdge);
+        const qMin = numberOrNull(minQScore) ?? 75;
+        const qMax = numberOrNull(maxQScore);
+        if (probability != null && (row.model_probability == null || row.model_probability < probability / 100)) return false;
+        if (probabilityMax != null && (row.model_probability == null || row.model_probability > probabilityMax / 100)) return false;
+        if (odds != null && (row.best_odds == null || row.best_odds < odds)) return false;
+        if (oddsMax != null && (row.best_odds == null || row.best_odds > oddsMax)) return false;
+        if (edge != null && (row.edge == null || row.edge < edge / 100)) return false;
+        if (row.q_score < qMin || (qMax != null && row.q_score > qMax)) return false;
+        return true;
+      });
     if (!matchesText || (leagueFilter !== "all" && first.competition !== leagueFilter) || marketRows.length === 0) return [];
     return [[id, marketRows] as [number, SelectionSummary[]]];
   });
@@ -124,7 +189,8 @@ export function AllMatches({
     + Number(leagueFilter !== "all")
     + Number(marketFilter !== "all")
     + Number(statusFilter !== "all")
-    + Number(favoriteOnly);
+    + Number(favoriteOnly)
+    + Number(Boolean(minProbability || maxProbability || minOdds || maxOdds || minEdge || (minQScore && minQScore !== "75") || maxQScore));
   const sortedRows = [...filteredRows].sort(([, a], [, b]) => {
     const left = a[0];
     const right = b[0];
@@ -142,6 +208,7 @@ export function AllMatches({
         ],
         markets: [a.length, b.length],
         spread: [a[0].model_agreement ?? 999, b[0].model_agreement ?? 999],
+        edge: [Math.max(...a.map((row) => row.edge ?? -999)), Math.max(...b.map((row) => row.edge ?? -999))],
       };
     const [first, second] = values[sort.key];
     const result = first < second ? -1 : first > second ? 1 : 0;
@@ -159,6 +226,69 @@ export function AllMatches({
     setLeagueFilter("all");
     setMarketFilter("all");
     setFavoriteOnly(false);
+    setMinProbability("");
+    setMaxProbability("");
+    setMinOdds("");
+    setMaxOdds("");
+    setMinEdge("");
+    setMinQScore("75");
+    setMaxQScore("");
+    setPresetId("");
+  };
+  const currentCriteria: MatchFilterCriteria = {
+    query: query.trim(),
+    competition: leagueFilter,
+    market: marketFilter,
+    status: statusFilter,
+    favorite_only: favoriteOnly,
+    min_probability: numberOrNull(minProbability) == null ? null : Number(minProbability) / 100,
+    max_probability: numberOrNull(maxProbability) == null ? null : Number(maxProbability) / 100,
+    min_odds: numberOrNull(minOdds),
+    max_odds: numberOrNull(maxOdds),
+    min_edge: numberOrNull(minEdge) == null ? null : Number(minEdge) / 100,
+    min_q_score: numberOrNull(minQScore) ?? 75,
+    max_q_score: numberOrNull(maxQScore),
+  };
+  const applyPreset = (preset: MatchFilterPreset) => {
+    const criteria = preset.criteria;
+    setQuery(criteria.query);
+    setLeagueFilter(criteria.competition);
+    setMarketFilter(criteria.market);
+    setStatusFilter(criteria.status);
+    setFavoriteOnly(criteria.favorite_only);
+    setMinProbability(criteria.min_probability == null ? "" : String(criteria.min_probability * 100));
+    setMaxProbability(criteria.max_probability == null ? "" : String(criteria.max_probability * 100));
+    setMinOdds(criteria.min_odds == null ? "" : String(criteria.min_odds));
+    setMaxOdds(criteria.max_odds == null ? "" : String(criteria.max_odds));
+    setMinEdge(criteria.min_edge == null ? "" : String(criteria.min_edge * 100));
+    setMinQScore(String(criteria.min_q_score));
+    setMaxQScore(criteria.max_q_score == null ? "" : String(criteria.max_q_score));
+  };
+  const savePreset = async () => {
+    if (!presetName.trim()) return;
+    setPresetMessage("");
+    try {
+      const preset = await createMatchFilterPreset(presetName.trim(), currentCriteria);
+      setPresets((current) => [preset, ...current]);
+      setPresetId(String(preset.id));
+      setPresetName("");
+      setPresetMessage("Filter saved to your account.");
+    } catch {
+      setPresetMessage("Could not save this filter. Check your connection and try again.");
+    }
+  };
+  const removePreset = async () => {
+    const selected = presets.find((item) => String(item.id) === presetId);
+    if (!selected) return;
+    setPresetMessage("");
+    try {
+      await deleteMatchFilterPreset(selected.id);
+      setPresets((current) => current.filter((item) => item.id !== selected.id));
+      setPresetId("");
+      setPresetMessage("Saved filter removed.");
+    } catch {
+      setPresetMessage("Could not remove this filter. Check your connection and try again.");
+    }
   };
   const copyViewLink = async () => {
     try {
@@ -267,7 +397,7 @@ export function AllMatches({
               {filterButton("scheduled", "Pending", statusCounts.scheduled)}
               {statusCounts.postponed > 0 && filterButton("postponed", "Postponed", statusCounts.postponed)}
               {statusCounts.cancelled > 0 && filterButton("cancelled", "Cancelled", statusCounts.cancelled)}
-              <button className={`fixture-favorites-filter${favoriteOnly ? " active" : ""}`} onClick={() => setFavoriteOnly((current) => !current)} aria-pressed={favoriteOnly} title="Favourites are saved in this browser">
+              <button className={`fixture-favorites-filter${favoriteOnly ? " active" : ""}`} onClick={() => setFavoriteOnly((current) => !current)} aria-pressed={favoriteOnly} title="Save matches to your account when signed in">
                 <span aria-hidden="true">★</span> Favourites <b>{favorites.length}</b>
               </button>
             </div>
@@ -279,6 +409,7 @@ export function AllMatches({
               {sortButton("q", "Q-score")}
               {sortButton("markets", "Markets")}
               {sortButton("spread", "Spread")}
+              {sortButton("edge", "Model edge")}
             </div>
             <button className="match-clear-filters" onClick={clearFilters} disabled={activeFilterCount === 0}>
               Clear filters{activeFilterCount > 0 ? ` · ${activeFilterCount}` : ""}
@@ -286,6 +417,29 @@ export function AllMatches({
             <button className="match-copy-link" onClick={copyViewLink} title="Copy a link with the selected date and filters">
               {copyState === "copied" ? "Link copied" : copyState === "failed" ? "Copy unavailable" : "Copy view link"}
             </button>
+            <div className="match-filter-presets">
+              <label><span>Saved filters</span><select value={presetId} onChange={(event) => {
+                setPresetId(event.target.value);
+                const selected = presets.find((item) => String(item.id) === event.target.value);
+                if (selected) applyPreset(selected);
+              }}>
+                <option value="">Choose a saved filter</option>
+                {presets.map((preset) => <option key={preset.id} value={preset.id}>{preset.name}</option>)}
+              </select></label>
+              <label><span className="sr-only">Name this filter</span><input value={presetName} onChange={(event) => setPresetName(event.target.value)} maxLength={80} placeholder="Name this filter" /></label>
+              <button className="match-copy-link" onClick={savePreset} disabled={!presetName.trim()}>Save filter</button>
+              <button className="match-clear-filters" onClick={removePreset} disabled={!presetId}>Delete saved filter</button>
+              {presetMessage && <span className="match-filter-message" role="status">{presetMessage}</span>}
+            </div>
+            <div className="match-advanced-filters" aria-label="Advanced match filters">
+              <label><span>Model probability min %</span><input type="number" min="0" max="100" step="1" value={minProbability} onChange={(event) => setMinProbability(event.target.value)} placeholder="Any" /></label>
+              <label><span>Model probability max %</span><input type="number" min="0" max="100" step="1" value={maxProbability} onChange={(event) => setMaxProbability(event.target.value)} placeholder="Any" /></label>
+              <label><span>Odds min</span><input type="number" min="1" max="1000" step="0.01" value={minOdds} onChange={(event) => setMinOdds(event.target.value)} placeholder="Any" /></label>
+              <label><span>Odds max</span><input type="number" min="1" max="1000" step="0.01" value={maxOdds} onChange={(event) => setMaxOdds(event.target.value)} placeholder="Any" /></label>
+              <label><span>Edge min %</span><input type="number" min="-100" max="100" step="0.1" value={minEdge} onChange={(event) => setMinEdge(event.target.value)} placeholder="Any" /></label>
+              <label><span>Q-score min</span><input type="number" min="0" max="100" step="1" value={minQScore} onChange={(event) => setMinQScore(event.target.value)} /></label>
+              <label><span>Q-score max</span><input type="number" min="0" max="100" step="1" value={maxQScore} onChange={(event) => setMaxQScore(event.target.value)} placeholder="Any" /></label>
+            </div>
           </div>
           {sortedRows.length === 0 ? (
             <p className="panel-empty">{favoriteOnly && favorites.length === 0 ? "No favourites yet. Select a star beside a match to save it here." : "No qualified matches match these filters."}</p>
