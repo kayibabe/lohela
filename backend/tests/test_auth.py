@@ -6,7 +6,7 @@ import pytest
 from fastapi import HTTPException
 from starlette.requests import Request
 
-from app.api.security import get_optional_current_user, require_admin_access, require_pro_access, require_research_access
+from app.api.security import get_optional_current_user, require_admin_access, require_authenticated_user, require_pro_access, require_research_access
 from app.services.auth import hash_password, session_token_hash, verify_password
 
 
@@ -38,6 +38,13 @@ def test_session_token_is_stored_as_a_sha256_digest():
     assert len(digest) == 64
     assert digest != token
     assert digest == session_token_hash(token)
+
+
+@pytest.mark.asyncio
+async def test_anonymous_users_are_rejected_by_authenticated_routes():
+    with pytest.raises(HTTPException) as error:
+        await require_authenticated_user(None)
+    assert error.value.status_code == 401
 
 
 @pytest.mark.asyncio

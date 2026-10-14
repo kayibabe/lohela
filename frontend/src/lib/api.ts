@@ -160,8 +160,10 @@ export interface SelectionSummary {
   source_conflict?: boolean
   expected_value?: number | null
   best_odds: number | null
+  source_bookmaker?: string | null
   bookmaker_count?: number | null
   avg_implied?: number | null
+  source_implied_probability?: number | null
   match_status?: string
   home_goals?: number | null
   away_goals?: number | null
@@ -300,6 +302,26 @@ export interface OddsQuote {
   source_type: string
   is_fallback: boolean
   is_best: boolean
+}
+
+export interface MatchFixture {
+  match_id: number
+  home_team: string
+  away_team: string
+  competition: string
+  kickoff_at: string
+  status: 'scheduled' | 'live' | 'finished' | 'postponed' | 'cancelled'
+  live_phase?: string | null
+  elapsed_minutes?: number | null
+  home_goals?: number | null
+  away_goals?: number | null
+}
+
+export async function fetchMatchFixtures(date: string): Promise<MatchFixture[]> {
+  const params = new URLSearchParams({ date })
+  const res = await fetch(`/api/v1/selections/fixtures?${params}`)
+  if (!res.ok) throw new Error(`API error ${res.status}`)
+  return res.json()
 }
 
 export async function fetchSelectionOdds(predictionId: number): Promise<OddsQuote[]> {

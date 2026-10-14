@@ -51,7 +51,7 @@ class UserOut(BaseModel):
 
 
 class AuthResponse(BaseModel):
-    user: UserOut
+    user: UserOut | None
 
 
 def _user_out(user: User) -> UserOut:
@@ -144,5 +144,5 @@ async def logout(request: Request, response: Response, db: AsyncSession = Depend
 
 
 @router.get("/me", response_model=AuthResponse)
-async def me(user: User = Depends(require_authenticated_user)):
-    return AuthResponse(user=_user_out(user))
+async def me(user: User | None = Depends(require_authenticated_user)):
+    return AuthResponse(user=_user_out(user) if user else None)

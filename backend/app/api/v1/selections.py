@@ -6,10 +6,11 @@ from typing import Optional
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
+from sqlalchemy.orm import aliased
 from pydantic import BaseModel, Field
 
 from app.database import get_db
-from app.api.security import require_pro_access, require_research_access
+from app.api.security import require_authenticated_user, require_pro_access, require_research_access
 from app.models import BandMixPairState, MarketPolicyShadowSnapshot, Prediction, Match, MatchStatus, Team, Competition, Odds, ModelRun, RunStatus, TicketType
 from app.config import cat_day_bounds_utc, cat_today
 from app.services.accumulator_builder import AccumulatorBuilder
@@ -24,6 +25,58 @@ from app.services.parameter_sweep import get_or_capture_parameter_sweep, paramet
 from app.services.settlement import evaluate_selection
 
 router = APIRouter(prefix="/selections", tags=["selections"])
+
+
+class MatchFixtureOut(BaseModel):
+    match_id: int
+    home_team: str
+    away_team: str
+    competition: str
+    kickoff_at: str
+    status: str
+    live_phase: str | None = None
+    elapsed_minutes: int | None = None
+    home_goals: int | None = None
+    away_goals: int | None = None
+
+
+@router.get("/fixtures", response_model=list[MatchFixtureOut])
+async def get_match_fixtures(
+    date: Optional[date] = Query(default=None, description="Target date (default: today)"),
+    db: AsyncSession = Depends(get_db),
+    _user=Depends(require_authenticated_user),
+):
+    """Return fixture and result information without exposing model selections."""
+    target = date or cat_today()
+    home_team = aliased(Team)
+    away_team = aliased(Team)
+    rows = await db.execute(
+        select(Match, home_team.name, away_team.name, Competition.name)
+        .join(home_team, Match.home_team_id == home_team.id)
+        .join(away_team, Match.away_team_id == away_team.id)
+        .join(Competition, Match.competition_id == Competition.id)
+        .where(
+            Match.kickoff_at >= cat_day_bounds_utc(target)[0],
+            Match.kickoff_at < cat_day_bounds_utc(target)[1],
+        )
+        .order_by(Match.kickoff_at, Competition.name, home_team.name)
+        .limit(500)
+    )
+    return [
+        MatchFixtureOut(
+            match_id=match.id,
+            home_team=home_name,
+            away_team=away_name,
+            competition=competition_name,
+            kickoff_at=match.kickoff_at.isoformat(),
+            status=match.status.value,
+            live_phase=match.live_phase,
+            elapsed_minutes=match.elapsed_minutes,
+            home_goals=match.home_goals,
+            away_goals=match.away_goals,
+        )
+        for match, home_name, away_name, competition_name in rows.all()
+    ]
 
 
 def _finished_selection_result(match: Match, market: str) -> str | None:
@@ -54,8 +107,10 @@ class SelectionOut(BaseModel):
     q_score: float
     q_grade: str
     best_odds: float | None
+    source_bookmaker: str | None = None
     bookmaker_count: int | None
     avg_implied: float | None
+    source_implied_probability: float | None = None
     match_status: str
     home_goals: int | None
     away_goals: int | None
@@ -167,7 +222,7 @@ class MatchIntelligenceOut(BaseModel):
     evidence_note: str
 
 
-@router.get("/qualified", response_model=list[SelectionOut], dependencies=[Depends(require_research_access)])
+@router.get("/qualified", response_model=list[SelectionOut], dependencies=[Depends(require_pro_access)])
 async def get_qualified_selections(
     date: Optional[date] = Query(default=None, description="Target date (default: today)"),
     min_qscore: float = Query(default=75.0, ge=0, le=100),
@@ -240,20 +295,14 @@ async def get_qualified_selections(
         if market and pred.market != market:
             continue
 
-        # Load best odds for this market
-        odds_q = await db.execute(
-            select(Odds)
-            .where(Odds.match_id == match.id, Odds.market == pred.market)
-            .order_by(Odds.decimal_odds.desc())
-            .limit(20)
-        )
-        all_odds = odds_q.scalars().all()
-        best_odds_val = max((o.decimal_odds for o in all_odds), default=None)
-        bk_count = len(set(o.bookmaker for o in all_odds))
-        avg_implied = (
-            sum(o.implied_probability for o in all_odds) / len(all_odds)
-            if all_odds else None
-        )
+        # Keep the price, implied chance and timestamp paired to the exact
+        # immutable quote used by this prediction. A fresh Odds-table lookup
+        # can mix selections or newer quotes with the old prediction edge.
+        odds_provenance = pred.source_odds_provenance
+        if not isinstance(odds_provenance, dict):
+            odds_provenance = {}
+        quote_bookmaker = odds_provenance.get("bookmaker")
+        quote_bookmaker_count = odds_provenance.get("bookmaker_count")
 
         output.append(SelectionOut(
             prediction_id=pred.id,
@@ -270,9 +319,11 @@ async def get_qualified_selections(
             expected_value=pred.expected_value,
             q_score=pred.q_score,
             q_grade=pred.q_grade.value,
-            best_odds=best_odds_val,
-            bookmaker_count=bk_count if bk_count > 0 else None,
-            avg_implied=round(avg_implied, 4) if avg_implied else None,
+            best_odds=pred.source_decimal_odds,
+            source_bookmaker=quote_bookmaker,
+            bookmaker_count=quote_bookmaker_count or None,
+            avg_implied=pred.source_implied_probability,
+            source_implied_probability=pred.source_implied_probability,
             match_status=match.status.value,
             home_goals=match.home_goals,
             away_goals=match.away_goals,

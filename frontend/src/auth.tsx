@@ -81,16 +81,17 @@ export function useAuth() {
   return value
 }
 
-export function AuthControls({ onSignedOut }: { onSignedOut?: () => void }) {
+export function AuthControls({ onSignIn, onSignedOut }: { onSignIn?: () => void; onSignedOut?: () => void }) {
   const { user, loading, logout } = useAuth()
   if (loading) return <span className="auth-status">Checking session…</span>
   if (user) {
     return (
       <div className="auth-session">
-        <span className="auth-status">{user.plan === 'pro' ? 'Pro' : 'Free'} · {user.email}</span>
+        <span className="auth-status">{user.username?.trim() || user.email}</span>
+        <span className={`auth-plan-badge auth-plan-${user.plan}`}>{user.plan === 'pro' ? 'Pro' : 'Free'}</span>
         <button className="theme-btn auth-signout" onClick={async () => { await logout(); onSignedOut?.() }}>Sign out</button>
       </div>
     )
   }
-  return <span className="auth-status">Public workspace</span>
+  return <button className="auth-status auth-signin" onClick={onSignIn}>Sign in</button>
 }

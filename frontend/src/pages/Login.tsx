@@ -21,22 +21,12 @@ export default function LoginPage({ onSuccess }: { onSuccess: () => void }) {
     <section className="auth-page" aria-labelledby="auth-page-title">
       <div className="auth-card">
         <div className="auth-card-body">
-        <div className="auth-benefits">
-          <span className="auth-kicker">Lohela intelligence</span>
-          <h1>Make every match<br /><em>more readable.</em></h1>
-          <p>One workspace for disciplined football research, evidence, and decisions you can explain.</p>
-          <div className="auth-benefit-list">
-            <span><b>01</b> Daily published research</span>
-            <span><b>02</b> Evidence-led performance views</span>
-            <span><b>03</b> Access matched to your plan</span>
-          </div>
-        </div>
         <div className="auth-form-panel">
           <a className="auth-card-brand" href="/" aria-label="Lohela home">
             <img src="/lohela-primary.png" alt="Lohela — Intelligence beyond numbers" />
           </a>
-          <h2 id="auth-page-title">{mode === 'login' ? 'Sign in to Lohela' : 'Create your free account'}</h2>
-          <p>{mode === 'login' ? 'Continue to your research workspace.' : 'Start with the free research view. Upgrade access can be applied by an administrator.'}</p>
+          <h2 id="auth-page-title">{mode === 'login' ? 'Welcome back' : 'Create your account'}</h2>
+          <p>{mode === 'login' ? 'Sign in to your Lohela workspace.' : 'Create an account to get started with Lohela.'}</p>
           <form onSubmit={submit}>
             {mode === 'register' && <label>Username<input autoComplete="username" value={username} onChange={event => setUsername(event.target.value)} required /></label>}
             <label>Email<input type="email" autoComplete="email" value={email} onChange={event => setEmail(event.target.value)} required /></label>

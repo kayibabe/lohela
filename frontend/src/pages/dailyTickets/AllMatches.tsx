@@ -12,14 +12,39 @@ import {
 } from "./helpers";
 import type { MatchDisplayState } from "./types";
 
+function quoteFreshness(row: SelectionSummary) {
+  if (!row.source_odds_at) return { label: "Quote time unavailable", state: "unknown" };
+  const capturedAt = Date.parse(row.source_odds_at);
+  const kickoffAt = Date.parse(row.kickoff_at);
+  if (!Number.isFinite(capturedAt)) return { label: "Quote time invalid", state: "unknown" };
+  if (Number.isFinite(kickoffAt) && capturedAt >= kickoffAt) return { label: "After kickoff", state: "blocked" };
+  const ageHours = (Date.now() - capturedAt) / 3_600_000;
+  if (ageHours < 0) return { label: "Future timestamp", state: "unknown" };
+  if (ageHours <= 2) return { label: "Fresh", state: "fresh" };
+  if (ageHours <= 8) return { label: "Aging", state: "aging" };
+  return { label: "Historical", state: "stale" };
+}
+
+function percent(value: number | null | undefined) {
+  return value == null || !Number.isFinite(value) ? "Unavailable" : `${(value * 100).toFixed(1)}%`;
+}
+
+function quoteTime(value: string | null | undefined) {
+  if (!value) return "Time unavailable";
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? "Time unavailable" : date.toLocaleString();
+}
+
 export function AllMatches({
   rows,
   onSelect,
   onAdd,
+  allowAdd = true,
 }: {
   rows: [number, SelectionSummary[]][];
   onSelect: (row: SelectionSummary) => void;
   onAdd: (row: SelectionSummary) => void;
+  allowAdd?: boolean;
 }) {
   const [statusFilter, setStatusFilter] = useState<"all" | MatchDisplayState>("all");
   const [query, setQuery] = useState("");
@@ -30,6 +55,12 @@ export function AllMatches({
     direction: "asc" | "desc";
   }>({ key: "kickoff", direction: "asc" });
   const leagues = [...new Set(rows.map(([, selections]) => selections[0]?.competition).filter(Boolean))].sort();
+  const leagueCounts = rows.reduce<Record<string, number>>((counts, [, selections]) => {
+    const league = selections[0]?.competition;
+    if (league) counts[league] = (counts[league] ?? 0) + 1;
+    return counts;
+  }, {});
+  const topLeagues = Object.entries(leagueCounts).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).slice(0, 8);
   const markets = [...new Set(rows.flatMap(([, selections]) => selections.map((row) => formatMarket(row.market))))].sort();
   const queryText = query.trim().toLocaleLowerCase();
   const discoveredRows = rows.flatMap(([id, selections]) => {
@@ -124,7 +155,25 @@ export function AllMatches({
           No Q ≥75 model candidates are available for this date.
         </p>
       ) : (
-        <>
+        <div className="matches-workspace">
+          <aside className="match-insights-column" aria-label="Match overview">
+            <section className="match-sidebar-card">
+              <h3>Predictions</h3>
+              <p className="match-sidebar-caption">Qualified candidates for this date</p>
+              <div className="match-sidebar-stat"><span>Matches</span><strong>{discoveredRows.length}</strong></div>
+              <div className="match-sidebar-stat"><span>Upcoming</span><strong>{statusCounts.scheduled}</strong></div>
+              <div className="match-sidebar-stat"><span>In play</span><strong>{statusCounts.live}</strong></div>
+            </section>
+            <section className="match-sidebar-card">
+              <div className="match-sidebar-heading"><h3>Top leagues</h3><button onClick={() => setLeagueFilter("all")}>All</button></div>
+              {topLeagues.length === 0 ? <p className="match-sidebar-caption">No competition data</p> : topLeagues.map(([league, count]) => (
+                <button key={league} className={`top-league-option${leagueFilter === league ? " active" : ""}`} onClick={() => setLeagueFilter(league)}>
+                  <span>{league}</span><b>{count}</b>
+                </button>
+              ))}
+            </section>
+          </aside>
+          <div className="matches-browser">
           <div className="match-toolbar">
             <div className="match-explorer-controls">
               <label className="match-search"><span className="sr-only">Search team or competition</span><input type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Team or competition" /></label>
@@ -159,11 +208,13 @@ export function AllMatches({
                   selections={selections}
                   onSelect={onSelect}
                   onAdd={onAdd}
+                  allowAdd={allowAdd}
                 />
               ))}
             </div>
           )}
-        </>
+          </div>
+        </div>
       )}
     </section>
   );
@@ -173,10 +224,12 @@ function MatchMarketGroup({
   selections,
   onSelect,
   onAdd,
+  allowAdd,
 }: {
   selections: SelectionSummary[];
   onSelect: (row: SelectionSummary) => void;
   onAdd: (row: SelectionSummary) => void;
+  allowAdd: boolean;
 }) {
   const [sort, setSort] = useState<{
     key: "market" | "q" | "odds" | "spread" | "edge";
@@ -264,12 +317,13 @@ function MatchMarketGroup({
           <span className="market-sort-label">Sort markets</span>
           {button("market", "Market")}
           {button("q", "Q-score")}
-          {button("odds", "Odds")}
+          {button("odds", "Captured odds")}
           {button("spread", "Spread")}
           {button("edge", "Edge")}
         </div>
         {sorted.map((row) => {
           const blockers = accumulatorBlockers(row);
+          const freshness = quoteFreshness(row);
           return <div className={`market-row${blockers.length > 0 ? " blocked" : ""}`} key={row.prediction_id}>
             <div>
               <strong>{formatMarket(row.market)}</strong>
@@ -280,14 +334,19 @@ function MatchMarketGroup({
                 </b>
                 <b className={`market-result ${row.result ?? "pending"}`}>{row.result === "won" ? "Won" : row.result === "lost" ? "Lost" : row.result === "void" ? "Void" : "Pending"}</b>
               </small>
+              <div className="market-chance-evidence">
+                <span>Model chance <b>{percent(row.model_probability)}</b></span>
+                <span>Bookmaker implied <b>{percent(row.source_implied_probability ?? row.avg_implied)}</b> <em>margin included</em></span>
+              </div>
             </div>
             <span className="market-stat">
               <small>Q-score</small>
               <b>Q {row.q_score.toFixed(1)}</b>
             </span>
             <span className="market-stat">
-              <small>Odds</small>
+              <small>Captured odds</small>
               <b>{row.best_odds ? `${row.best_odds.toFixed(2)}×` : "—"}</b>
+              <small className="market-quote-meta">{row.source_bookmaker ?? "Bookmaker unavailable"} · {quoteTime(row.source_odds_at)} · <b className={freshness.state}>{freshness.label}</b></small>
             </span>
             <span
               className={`market-stat spread-cell ${spreadTone(row.model_agreement)}`}
@@ -305,14 +364,14 @@ function MatchMarketGroup({
               <b>{row.edge != null ? `${(row.edge * 100).toFixed(1)}%` : "—"}</b>
             </span>
             <div className="market-row-actions">
-              <button
+              {allowAdd && <button
                 className="btn-ghost btn-sm"
                 onClick={() => onAdd(row)}
                 disabled={blockers.length > 0}
                 title={blockers.length > 0 ? `Unavailable: ${blockers.map(reasonLabel).join(", ")}` : "Add to personal accumulator"}
               >
                 {blockers.length > 0 ? "Unavailable" : "Add"}
-              </button>
+              </button>}
               <button className="btn-ghost btn-sm" onClick={() => onSelect(row)}>
                 Details
               </button>

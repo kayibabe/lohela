@@ -8,11 +8,12 @@ import ToolsPage from './pages/Tools'
 import AdminPage from './pages/Admin'
 import UpgradePage from './pages/Upgrade'
 import MatchIntelligencePage from './pages/MatchIntelligencePage'
+import LoginPage from './pages/Login'
 import { AuthControls, useAuth } from './auth'
 
 type Theme = 'dark' | 'light' | 'system'
 type ModulePage = 'tickets' | 'matches' | 'research' | 'tracker' | 'analytics' | 'tools' | 'admin'
-type Page = ModulePage | 'match' | 'upgrade'
+type Page = ModulePage | 'match' | 'upgrade' | 'login'
 
 // Until account ownership is implemented for the ledgers, the customer shell
 // exposes only published recommendations. Research and system controls stay internal.
@@ -67,7 +68,20 @@ export default function App() {
   }, [])
 
   useEffect(() => {
-    if (authLoading || isInternal || !isInternalPage(page)) return
+    if (authLoading) return
+    const path = window.location.pathname
+    if (!user && path !== '/login') {
+      window.history.replaceState({}, '', '/login')
+      setPage('login')
+      setMatchId(null)
+    } else if (user && path === '/login') {
+      window.history.replaceState({}, '', '/tickets')
+      setPage('tickets')
+    }
+  }, [authLoading, user])
+
+  useEffect(() => {
+    if (authLoading || !user || isInternal || !isInternalPage(page)) return
     setPage('tickets')
     setMatchId(null)
     window.history.replaceState({}, '', '/tickets')
@@ -103,6 +117,14 @@ export default function App() {
 
   const nav = (n: number) => setDate(d => addDays(d, n))
 
+  if (authLoading) {
+    return <div className="auth-standalone" role="status" aria-live="polite">Checking your session…</div>
+  }
+
+  if (!user) {
+    return <div className="auth-standalone"><LoginPage onSuccess={() => navigate('tickets', undefined, true)} /></div>
+  }
+
   return (
     <div className="app">
       <aside className="app-sidebar">
@@ -110,7 +132,7 @@ export default function App() {
           <img className="brand-logo" src="/lohela-compact.png" alt="Lohela — Intelligence beyond numbers" />
         </a>
         <nav className="sidebar-nav" aria-label="Primary navigation">
-          <span className="sidebar-label">Workspace</span>
+          <span className="sidebar-label">Tools</span>
           {NAV.map(n => (
             <button key={n.id} className={`nav-tab${page === n.id ? ' active' : ''}`} onClick={() => goTo(n.id)} title={NAV_META[n.id].hint}>
               <span className="nav-icon"><NavIcon name={NAV_META[n.id].icon} /></span>{n.label}
@@ -126,10 +148,13 @@ export default function App() {
           </>}
         </nav>
         <div className="sidebar-account">
-          <AuthControls onSignedOut={() => navigate('tickets', undefined, true)} />
+          <AuthControls onSignIn={() => navigate('login')} onSignedOut={() => navigate('login', undefined, true)} />
         </div>
       </aside>
       <header className="app-header">
+        <a className="topbar-brand" href="/tickets" aria-label="Lohela home" onClick={(event) => { event.preventDefault(); goTo('tickets') }}>
+          <span className="topbar-mark" aria-hidden="true">L</span><span>LOHELA</span>
+        </a>
         {(page === 'tickets' || (isInternalPage(page) && isInternal)) && (page === 'tickets' || page === 'matches' || page === 'research') && (
           <div className="date-nav">
             <button className="date-btn" onClick={() => nav(-1)} title="Previous day" aria-label="Previous day">‹</button>
@@ -146,18 +171,22 @@ export default function App() {
           </div>
         )}
         <div className="header-page-title">
-        <span className="research-status"><span className="status-dot" /> {page === 'tickets' ? 'Decision workspace' : page === 'match' ? 'Match intelligence' : page === 'upgrade' ? 'System' : NAV_META[page].hint}</span>
+        <span className="research-status"><span className="status-dot" /> {page === 'tickets' ? 'Decision workspace' : page === 'match' ? 'Match intelligence' : page === 'upgrade' ? 'System' : page === 'login' ? 'Account' : NAV_META[page].hint}</span>
           <button className="theme-btn" onClick={cycleTheme} title={`Theme: ${theme}`} aria-label={`Theme: ${theme}. Change theme`}>
             <span className="theme-auto">{theme === 'system' ? 'Auto' : theme}</span>
           </button>
         </div>
         <div className="header-refresh">
+          <AuthControls onSignIn={() => navigate('login')} onSignedOut={() => navigate('login', undefined, true)} />
+          <button className="premium-button" onClick={() => navigate('upgrade')}>{user?.plan === 'pro' ? 'Pro account' : 'Go Premium'}</button>
+          <button className="theme-btn settings-btn" onClick={cycleTheme} title={`Theme: ${theme}`} aria-label={`Theme: ${theme}. Change theme`}>⚙</button>
           <span className="global-updated">Refreshed {lastUpdated.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
           <button className="global-refresh" onClick={() => { setLastUpdated(new Date()); window.location.reload() }} title="Refresh current page" aria-label="Refresh current page">↻ <span>Refresh</span></button>
         </div>
       </header>
 
       <main className="main" id="main-content" tabIndex={-1}>
+        {page === 'login' && <LoginPage onSuccess={() => navigate('tickets', undefined, true)} />}
         {page === 'upgrade' && <UpgradePage onBack={() => goTo('tickets')} />}
         {page === 'tickets' && <DailyTicketsPage key={`${date}-${page}`} date={date} initialTab="tickets" onOpenMatch={navigateToMatch} />}
         {isInternal && page === 'matches' && <DailyTicketsPage key={`${date}-${page}`} date={date} initialTab="matches" onOpenMatch={navigateToMatch} />}
@@ -189,7 +218,7 @@ export default function App() {
 
 function routePage(pathname: string): Page {
   const path = pathname.replace(/\/$/, '')
-  if (path === '/login') return 'tickets'
+  if (path === '/login') return 'login'
   if (path === '/upgrade') return 'upgrade'
   if (/^\/match\/\d+$/.test(path)) return 'match'
   if (path === '/tickets' || path === '/matches' || path === '/research') return path.slice(1) as ModulePage

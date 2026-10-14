@@ -12,6 +12,7 @@ interface Props {
   research?: boolean
   onSelectLeg?: (leg: Leg, ticket: Ticket) => void
   suggestedStake?: number | null
+  showMarketSelections?: boolean
 }
 
 const PCT = (n: number) => `${n >= 0 ? '+' : ''}${(n * 100).toFixed(1)}%`
@@ -42,11 +43,12 @@ function matchStateLabel(leg: Leg): string {
   return 'Pending'
 }
 
-export default function TicketCard({ ticket, tierName, tierDesc, color, research, onSelectLeg, suggestedStake }: Props) {
-  const [expanded, setExpanded] = useState(false)
+export default function TicketCard({ ticket, tierName, tierDesc, color, research, onSelectLeg, suggestedStake, showMarketSelections = true }: Props) {
+  const [legsExpanded, setLegsExpanded] = useState(false)
+  const [showAllLegs, setShowAllLegs] = useState(false)
   if (!ticket) {
     return (
-      <div className="ticket-card">
+      <div className="ticket-card" style={{ borderLeftColor: color }}>
         <div className="ticket-header">
           <div className="ticket-tier-row">
             <div className="tier-dot" style={{ background: color }} />
@@ -70,7 +72,7 @@ export default function TicketCard({ ticket, tierName, tierDesc, color, research
   const evPositive = (ticket.expected_value ?? 0) > 0
   // Value review flags model/odds gaps; a market-priced leg has no model gap.
   const flaggedLegs = marketPriced ? [] : ticket.legs.filter(leg => leg.edge != null && leg.edge > 0.30)
-  const visibleLegs = expanded ? ticket.legs : ticket.legs.slice(0, 4)
+  const visibleLegs = showAllLegs ? ticket.legs : ticket.legs.slice(0, 4)
   const resultCounts = ticket.legs.reduce<Record<string, number>>((counts, leg) => { const result = leg.result || 'pending'; counts[result] = (counts[result] ?? 0) + 1; return counts }, {})
   const settlementPending = ticket.legs.some(leg => leg.home_goals != null && leg.away_goals != null && (leg.result === 'pending' || !leg.result))
   const pendingLegs = resultCounts.pending ?? 0
@@ -99,7 +101,7 @@ export default function TicketCard({ ticket, tierName, tierDesc, color, research
   })
 
   return (
-    <div className="ticket-card">
+    <div className="ticket-card" style={{ borderLeftColor: color }}>
       <div className="ticket-header">
         <div className="ticket-tier-row">
           <div className="ticket-tier-identity">
@@ -195,14 +197,21 @@ export default function TicketCard({ ticket, tierName, tierDesc, color, research
             </div>
           </div>
         )}
-        <div className="ticket-summary">
-          <strong>{ticket.legs.length} legs</strong>
+        <button
+          className="ticket-summary"
+          type="button"
+          aria-expanded={legsExpanded}
+          aria-controls={`ticket-leg-list-${tierName.toLowerCase().replace(/\s+/g, '-')}`}
+          onClick={() => setLegsExpanded((open) => !open)}
+        >
+          <span className="ticket-summary-label"><strong>{ticket.legs.length} legs</strong><span>{legsExpanded ? 'Hide legs' : 'Show legs'}</span></span>
           <div className="ticket-result-counts" aria-label="Leg outcomes">
             {(['won', 'lost', 'void', 'pending'] as const).filter(result => resultCounts[result]).map(result => (
               <span className={`ticket-result-chip ${result}`} key={result}><b>{resultCounts[result]}</b> {result}</span>
             ))}
           </div>
-        </div>
+          <span className={`ticket-summary-chevron ${legsExpanded ? 'expanded' : ''}`} aria-hidden="true" />
+        </button>
         {ticket.settled_at && <div className="ticket-settlement-meta">Settled {new Date(ticket.settled_at).toLocaleString()} · {ticket.settlement_source ?? 'system'} · settlement revision {ticket.settlement_version ?? '—'}{ticket.settlement_version && ticket.settlement_version > 1 && <span className="settlement-correction">Corrected settlement</span>}</div>}
         {learningReady && (
           <div className={`ticket-learning-status ${roiLearningReady ? 'eligible' : 'limited'}`}>
@@ -215,7 +224,7 @@ export default function TicketCard({ ticket, tierName, tierDesc, color, research
         {suggestedStake != null && !marketPriced && <div className="ticket-stake-suggestion"><div><span>What-if · half Kelly</span><strong>{suggestedStake > 0 && ticket.combined_odds != null ? `${fmt(suggestedStake)} stake` : 'No positive edge'}</strong></div>{suggestedStake > 0 && ticket.combined_odds != null && <div className="ticket-stake-outcomes"><span>Potential return <b>{fmt(suggestedStake * ticket.combined_odds)}</b></span><span>Potential P&amp;L <b className="positive">+{fmt(suggestedStake * (ticket.combined_odds - 1))}</b></span></div>}</div>}
       </div>
 
-      <ul className="leg-list">
+      <ul hidden={!legsExpanded} className="leg-list" id={`ticket-leg-list-${tierName.toLowerCase().replace(/\s+/g, '-')}`}>
         {visibleLegs.map((leg) => (
           <li key={leg.prediction_id} className="leg-item">
             <button className="leg-detail-trigger" onClick={() => onSelectLeg?.(leg, ticket)} disabled={!onSelectLeg}>
@@ -237,7 +246,7 @@ export default function TicketCard({ ticket, tierName, tierDesc, color, research
                     {matchStateLabel(leg)}
                   </span>
                   {leg.home_goals != null && leg.away_goals != null && <span className="live-score-badge" aria-label={`Score ${leg.home_goals} to ${leg.away_goals}`}>{leg.home_goals}–{leg.away_goals}</span>}
-                  <span className="leg-market">{leg.market.startsWith('double_chance_') ? formatSelection(leg.selection) : formatMarket(leg.market)}</span>
+                  {showMarketSelections && <span className="leg-market">{leg.market.startsWith('double_chance_') ? formatSelection(leg.selection) : formatMarket(leg.market)}</span>}
                 </div>
                 <div className={`leg-outcome ${leg.result}`}>
                   <span className="leg-outcome-label">Pick</span>
@@ -262,10 +271,10 @@ export default function TicketCard({ ticket, tierName, tierDesc, color, research
           </li>
         ))}
       </ul>
-      {ticket.legs.length > 4 && (
-        <button className="ticket-expand" onClick={() => setExpanded(value => !value)} aria-expanded={expanded}>
-          {expanded ? 'Show fewer legs' : `View all ${ticket.legs.length} legs`}
-          <span aria-hidden="true">{expanded ? '↑' : '↓'}</span>
+      {legsExpanded && ticket.legs.length > 4 && (
+        <button className="ticket-expand" onClick={() => setShowAllLegs(value => !value)} aria-expanded={showAllLegs}>
+          {showAllLegs ? 'Show fewer legs' : `View all ${ticket.legs.length} legs`}
+          <span aria-hidden="true">{showAllLegs ? '↑' : '↓'}</span>
         </button>
       )}
       <div className="ticket-audit">

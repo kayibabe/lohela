@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useState } from "react";
 import { useAuth } from "../../auth";
-import type { CustomAccumulator as ApiCustomAccumulator, DailyTickets, Leg, SelectionSummary, Ticket } from "../../lib/api";
+import type { CustomAccumulator as ApiCustomAccumulator, DailyTickets, Leg, MatchFixture, SelectionSummary, Ticket } from "../../lib/api";
 import {
   createCustomAccumulator,
   deleteCustomAccumulator,
   fetchDailyTickets,
+  fetchMatchFixtures,
   fetchQualifiedSelections,
   fetchRejectedSelections,
   fetchCustomAccumulators,
@@ -25,6 +26,7 @@ import { ParameterSweepPicks } from "./ParameterSweepPicks";
 import { CustomAccumulatorPanel } from "./CustomAccumulatorPanel";
 import { TicketGridSkeleton } from "./TicketGridSkeleton";
 import { AllMatches } from "./AllMatches";
+import { FixtureExplorer } from "./FixtureExplorer";
 import {
   accumulatorBlockers,
   apiAccumulatorToUi,
@@ -38,9 +40,11 @@ import type { CustomAccumulator, DailyTab, DailyTicketsPageProps } from "./types
 export default function DailyTicketsPage({ date, initialTab = "tickets", onOpenMatch }: DailyTicketsPageProps & { onOpenMatch?: (matchId: number) => void }) {
   const { user } = useAuth();
   const isAdmin = user?.role === "admin";
+  const canExploreMarkets = isAdmin || user?.plan === "pro";
   const [data, setData] = useState<DailyTickets | null>(null);
   const [rejected, setRejected] = useState<SelectionSummary[]>([]);
   const [matches, setMatches] = useState<SelectionSummary[]>([]);
+  const [fixtures, setFixtures] = useState<MatchFixture[]>([]);
   const [tab, setTab] = useState<DailyTab>(initialTab);
   const [custom, setCustom] = useState<CustomAccumulator[]>(() => {
     return [];
@@ -74,14 +78,16 @@ export default function DailyTicketsPage({ date, initialTab = "tickets", onOpenM
     setLoading(true);
     setError(null);
     try {
-      const [tickets, allRows, rejectedRows, customRows] = await Promise.all([
+      const [tickets, fixtureRows, allRows, rejectedRows, customRows] = await Promise.all([
         fetchDailyTickets(targetDate),
-        isAdmin ? fetchQualifiedSelections(targetDate) : Promise.resolve([]),
+        fetchMatchFixtures(targetDate).catch(() => []),
+        canExploreMarkets ? fetchQualifiedSelections(targetDate) : Promise.resolve([]),
         isAdmin ? fetchRejectedSelections(targetDate) : Promise.resolve([]),
         isAdmin ? fetchCustomAccumulators(targetDate) : Promise.resolve([]),
       ]);
       const evidencedRows = withRejectionEvidence(allRows, rejectedRows);
       setData(tickets);
+      setFixtures(fixtureRows);
       setMatches(evidencedRows);
       setRejected(rejectedRows);
       setCustom(customRows.map(apiAccumulatorToUi));
@@ -92,7 +98,7 @@ export default function DailyTicketsPage({ date, initialTab = "tickets", onOpenM
     } finally {
       setLoading(false);
     }
-  }, [isAdmin]);
+  }, [canExploreMarkets, isAdmin]);
 
   useEffect(() => {
     load(date);
@@ -241,8 +247,8 @@ export default function DailyTicketsPage({ date, initialTab = "tickets", onOpenM
   const canUseAccumulator = isAdmin;
   const dailyTabs: [DailyTab, string][] = [
     ["tickets", "Recommendations"],
+    ["matches", "Match explorer"],
     ...(isAdmin ? [
-      ["matches", "Matches"],
       ["best-mix", "Best-mix picks"],
       ["odds-policy", "Research policy"],
       ["passed", "Passed / why"],
@@ -462,8 +468,9 @@ export default function DailyTicketsPage({ date, initialTab = "tickets", onOpenM
             </div>
           */}
           {tab === "tickets" && <div className="settlement-legend" aria-label="Settlement legend"><span><b>Score</b> = match result</span><span><b>Market</b> = selected outcome</span><span><b>Ticket</b> = accumulator result</span></div>}
-          {isAdmin && tab === "matches" && <div className="view-intro"><div><span className="eyebrow">Internal candidate explorer</span><h2 className="section-title">Qualified matches</h2></div><p>Search candidate markets for analysis. This view does not represent every scheduled fixture or a release-approved recommendation.</p></div>}
-          {isAdmin && tab === "matches" && <AllMatches rows={matchGroups} onSelect={openSelection} onAdd={addToAccumulator} />}
+          {tab === "matches" && canExploreMarkets && <div className="view-intro"><div><span className="eyebrow">Model-screened research</span><h2 className="section-title">Qualified match markets</h2></div><p>Explore current candidate markets and their evidence. Candidate scores are research signals; publication still depends on the existing price, freshness, quality and timing gates.</p></div>}
+          {tab === "matches" && canExploreMarkets && <AllMatches rows={matchGroups} onSelect={openSelection} onAdd={addToAccumulator} allowAdd={isAdmin} />}
+          {tab === "matches" && !canExploreMarkets && <FixtureExplorer fixtures={fixtures} />}
           {tab === "tickets" && (
             <div className="view-intro">
               <div>
@@ -568,8 +575,9 @@ export default function DailyTicketsPage({ date, initialTab = "tickets", onOpenM
                   tierName={tier.name}
                   tierDesc={tier.desc}
                   color={tier.color}
-                  onSelectLeg={openTicketLeg}
+                  onSelectLeg={canExploreMarkets ? openTicketLeg : undefined}
                   suggestedStake={suggestedStake(data?.[tier.key] ?? null)}
+                  showMarketSelections={user?.plan === "pro" || isAdmin}
                 />
               ))}
             </div>}

@@ -14,7 +14,7 @@ from sqlalchemy import case, func, select
 from sqlalchemy.orm import selectinload
 
 from app.config import cat_today, settings
-from app.api.security import get_optional_current_user, require_pro_access, require_research_access
+from app.api.security import get_optional_current_user, require_authenticated_user, require_pro_access, require_research_access
 from app.database import get_db
 from app.models import (
     AccumulatorTicket,
@@ -269,7 +269,7 @@ async def get_daily_tickets(
     db: AsyncSession = Depends(get_db),
     include_internal: bool = Query(default=False),
     _: None = Depends(require_internal_ticket_access),
-    user=Depends(get_optional_current_user),
+    user=Depends(require_authenticated_user),
 ):
     """Return latest persisted versions. This endpoint never regenerates tickets."""
     target = date or cat_today()
@@ -433,7 +433,7 @@ async def get_ticket_history(
     ),
     db: AsyncSession = Depends(get_db),
     _: None = Depends(require_internal_ticket_access),
-    user=Depends(get_optional_current_user),
+    user=Depends(require_authenticated_user),
 ):
     """Return immutable ticket history, latest cohorts by default."""
     ticket_types = list(TicketType) if include_internal else PUBLIC_TICKET_TYPES
@@ -551,7 +551,7 @@ async def get_ticket(
     request: Request,
     x_research_key: str | None = Header(default=None),
     db: AsyncSession = Depends(get_db),
-    user=Depends(get_optional_current_user),
+    user=Depends(require_authenticated_user),
 ):
     ticket = await get_ticket_by_id(db, ticket_id)
     if ticket is None:
@@ -664,8 +664,8 @@ def _leg(selection: TicketSelection, *, reveal: bool = True) -> LegOut:
         away_team=match.away_team.name,
         competition=match.competition.name if match.competition else str(match.competition_id),
         kickoff_at=match.kickoff_at.isoformat(),
-        market=selection.market,
-        selection=selection.selection,
+        market=selection.market if reveal else "Pro only",
+        selection=selection.selection if reveal else "Pro only",
         model_probability=selection.probability_snapshot if reveal else None,
         model_agreement=selection.prediction.model_agreement if selection.prediction else None,
         best_odds=selection.odds_snapshot if reveal else None,
@@ -687,7 +687,7 @@ def _leg(selection: TicketSelection, *, reveal: bool = True) -> LegOut:
         elapsed_minutes=match.elapsed_minutes,
         selection_settled_at=selection.settled_at.isoformat() if selection.settled_at else None,
         locked_fields=[] if reveal else [
-            "probability", "odds", "q_score", "edge", "expected_value", "decision_snapshot"
+            "market_selection", "probability", "odds", "q_score", "edge", "expected_value", "decision_snapshot"
         ],
     )
 
