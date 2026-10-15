@@ -1,6 +1,6 @@
 import { useState } from "react";
 import type { SelectionSummary } from "../../lib/api";
-import { formatKickoff, formatMarket, formatSelection } from "../../lib/api";
+import { formatDate, formatKickoff, formatMarket, formatSelection, selectionRepeatsMarket } from "../../lib/api";
 import {
   accumulatorBlockers,
   matchDisplayState,
@@ -89,7 +89,7 @@ export function SelectionPanel({
                 disabled={!onSelect}
               >
                 <div className="selection-card-heading">
-                  <span>{row.competition} · {formatKickoff(row.kickoff_at)}</span>
+                  <span>{row.competition} · <span className="event-date">{formatDate(row.kickoff_at)}</span> · <span className="kickoff-time">{formatKickoff(row.kickoff_at)}</span></span>
                   <b className={`summary-match-status ${matchState}`}>{matchStatusText(row)}</b>
                 </div>
                 <div className="selection-card-match">
@@ -97,7 +97,7 @@ export function SelectionPanel({
                     {row.home_team} <span className="leg-match-vs">vs</span>{" "}
                     {row.away_team}
                   </strong>
-                  <span className="market-chip">{formatMarket(row.market)}</span>
+                  {!selectionRepeatsMarket(row.market, row.selection) && <span className="market-chip">{formatMarket(row.market)}</span>}
                 </div>
                   {rejected && (
                     <div className="reason-codes">

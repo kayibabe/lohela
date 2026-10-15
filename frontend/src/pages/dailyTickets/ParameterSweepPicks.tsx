@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import type { ParameterSweepPick, ParameterSweepSelections, SelectionSummary } from "../../lib/api";
-import { fetchParameterSweepSelections, formatKickoff, formatMarket, formatSelection } from "../../lib/api";
+import { fetchParameterSweepSelections, formatKickoff, formatMarket, formatSelection, selectionRepeatsMarket } from "../../lib/api";
 import { useSortableRows } from "../../components/SortableTable";
 import { accumulatorBlockers, gradeTone, reasonLabel } from "./helpers";
 
@@ -115,9 +115,9 @@ function SweepTable({ rows, onSelect, onAdd }: { rows: ParameterSweepPick[]; onS
           const selection = toSelection(row);
           const blockers = accumulatorBlockers(selection);
           return <tr key={row.prediction_id}>
-            <td><strong>{formatKickoff(row.kickoff_at)}</strong></td>
+            <td><strong className="kickoff-time">{formatKickoff(row.kickoff_at)}</strong></td>
             <td><strong>{row.home_team} <span className="match-vs">vs</span> {row.away_team}</strong><small>{row.competition}</small></td>
-            <td><span className="market-chip">{formatMarket(row.market)}</span><strong>{formatSelection(row.selection)}</strong></td>
+            <td>{!selectionRepeatsMarket(row.market, row.selection) && <span className="market-chip">{formatMarket(row.market)}</span>}<strong>{formatSelection(row.selection)}</strong></td>
             <td>{pct(row.model_probability)}</td>
             <td><b>{row.odds.toFixed(2)}</b></td>
             <td><b className={`grade-badge grade-${gradeTone(row.q_grade)}`}>{row.q_grade}</b> {row.q_score.toFixed(1)}</td>

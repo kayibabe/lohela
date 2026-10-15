@@ -1,19 +1,26 @@
-import { useEffect, useState, type ReactNode } from 'react'
+import { lazy, Suspense, useEffect, useState, type ReactNode } from 'react'
 import './App.css'
-import DailyTicketsPage, { TODAY } from './pages/DailyTickets'
+import { TODAY } from './pages/dailyTickets/helpers'
 import { addDays } from './utils'
-import TrackerPage from './pages/Tracker'
-import AnalyticsPage from './pages/Analytics'
-import ToolsPage from './pages/Tools'
-import AdminPage from './pages/Admin'
-import UpgradePage from './pages/Upgrade'
-import MatchIntelligencePage from './pages/MatchIntelligencePage'
-import LoginPage from './pages/Login'
-import InsightsPage from './pages/Insights'
 import { AuthControls, useAuth } from './auth'
 
+const DailyTicketsPage = lazy(() => import('./pages/DailyTickets'))
+const TrackerPage = lazy(() => import('./pages/Tracker'))
+const AnalyticsPage = lazy(() => import('./pages/Analytics'))
+const ToolsPage = lazy(() => import('./pages/Tools'))
+const AdminPage = lazy(() => import('./pages/Admin'))
+const UpgradePage = lazy(() => import('./pages/Upgrade'))
+const MatchIntelligencePage = lazy(() => import('./pages/MatchIntelligencePage'))
+const LoginPage = lazy(() => import('./pages/Login'))
+const InsightsPage = lazy(() => import('./pages/Insights'))
+const LiveMonitorPage = lazy(() => import('./pages/LiveMonitor'))
+
+function PageLoading() {
+  return <div className="route-loading" role="status" aria-live="polite">Loading page…</div>
+}
+
 type Theme = 'dark' | 'light' | 'system'
-type ModulePage = 'tickets' | 'matches' | 'insights' | 'research' | 'tracker' | 'analytics' | 'tools' | 'admin'
+type ModulePage = 'tickets' | 'matches' | 'live' | 'insights' | 'research' | 'tracker' | 'analytics' | 'tools' | 'admin'
 type Page = ModulePage | 'match' | 'upgrade' | 'login'
 
 function dateFromSearch(search: string): string {
@@ -33,6 +40,7 @@ function datePath(path: string, date: string): string {
 const NAV: { id: ModulePage; label: string }[] = [
   { id: 'tickets', label: 'Today' },
   { id: 'matches', label: 'Matches' },
+  { id: 'live', label: 'Live' },
   { id: 'insights', label: 'Stats & trends' },
 ]
 const INTERNAL_NAV: { id: ModulePage; label: string }[] = [
@@ -46,6 +54,7 @@ const INTERNAL_NAV: { id: ModulePage; label: string }[] = [
 const NAV_META: Record<ModulePage, { icon: string; hint: string }> = {
   tickets: { icon: 'sparkles', hint: 'Published recommendations' },
   matches: { icon: 'search', hint: 'Browse fixtures and qualified match markets' },
+  live: { icon: 'activity', hint: 'Live scores and match phases' },
   insights: { icon: 'chart', hint: 'League results and team trends' },
   research: { icon: 'flask', hint: 'Research models and selection policies' },
   tracker: { icon: 'list', hint: 'Evidence and personal journal' },
@@ -59,6 +68,7 @@ function NavIcon({ name }: { name: string }) {
     sparkles: <><path d="m12 3-1.2 4.1L7 8.3l3.8 1.2L12 13l1.2-3.5L17 8.3l-3.8-1.2L12 3Z" /><path d="m5 14-.7 2.3L2 17l2.3.7L5 20l.7-2.3L8 17l-2.3-.7L5 14Z" /></>,
     list: <><path d="m4 6 1.5 1.5L8 5" /><path d="M11 6h9M11 12h9M11 18h9" /><path d="m4 12 1.5 1.5L8 11" /><path d="m4 18 1.5 1.5L8 17" /></>,
     chart: <><path d="M5 20V10M12 20V4M19 20v-7" /></>,
+    activity: <><path d="M3 12h4l3-8 4 16 3-8h4" /></>,
     search: <><circle cx="10.8" cy="10.8" r="6.6" /><path d="m16 16 4.5 4.5" /></>,
     flask: <><path d="M9 3h6M10 3v6l-5.2 8.5A2.3 2.3 0 0 0 6.8 21h10.4a2.3 2.3 0 0 0 2-3.5L14 9V3" /><path d="M7.7 15h8.6" /></>,
     wrench: <><path d="m14.7 6.3 3-3a5 5 0 0 0-6.4 6.4L3 18a2 2 0 1 0 3 3l8.3-8.3a5 5 0 0 0 6.4-6.4l-3 3-3-3Z" /></>,
@@ -148,7 +158,7 @@ export default function App() {
   }
 
   if (!user) {
-    return <div className="auth-standalone"><LoginPage onSuccess={() => navigate('tickets', undefined, true)} /></div>
+    return <div className="auth-standalone"><Suspense fallback={<PageLoading />}><LoginPage onSuccess={() => navigate('tickets', undefined, true)} /></Suspense></div>
   }
 
   return (
@@ -160,14 +170,14 @@ export default function App() {
         <nav className="sidebar-nav" aria-label="Primary navigation">
           <span className="sidebar-label">Football</span>
           {NAV.map(n => (
-            <button key={n.id} className={`nav-tab${page === n.id ? ' active' : ''}`} onClick={() => goTo(n.id)} title={NAV_META[n.id].hint}>
+            <button key={n.id} className={`nav-tab${page === n.id ? ' active' : ''}`} onClick={() => goTo(n.id)} title={NAV_META[n.id].hint} aria-current={page === n.id ? 'page' : undefined}>
               <span className="nav-icon"><NavIcon name={NAV_META[n.id].icon} /></span>{n.label}
             </button>
           ))}
           {isInternal && <>
             <span className="sidebar-label sidebar-label-evidence">Internal workspace</span>
             {INTERNAL_NAV.map(n => (
-              <button key={n.id} className={`nav-tab${page === n.id ? ' active' : ''}`} onClick={() => goTo(n.id)} title={NAV_META[n.id].hint}>
+              <button key={n.id} className={`nav-tab${page === n.id ? ' active' : ''}`} onClick={() => goTo(n.id)} title={NAV_META[n.id].hint} aria-current={page === n.id ? 'page' : undefined}>
                 <span className="nav-icon"><NavIcon name={NAV_META[n.id].icon} /></span>{n.label}
               </button>
             ))}
@@ -233,10 +243,12 @@ export default function App() {
       </header>
 
       <main className="main" id="main-content" tabIndex={-1}>
+        <Suspense fallback={<PageLoading />}>
         {page === 'login' && <LoginPage onSuccess={() => navigate('tickets', undefined, true)} />}
         {page === 'upgrade' && <UpgradePage onBack={() => goTo('tickets')} />}
         {page === 'tickets' && <DailyTicketsPage key={`${date}-${page}`} date={date} initialTab="tickets" onOpenMatch={navigateToMatch} />}
         {page === 'matches' && <DailyTicketsPage key={`${date}-${page}`} date={date} initialTab="matches" onOpenMatch={navigateToMatch} />}
+        {page === 'live' && <LiveMonitorPage />}
         {page === 'insights' && (user.plan === 'pro' || isInternal
           ? <InsightsPage />
           : <section className="insights-access-card"><h1>Stats &amp; trends</h1><p>League results and team tables are available on Pro.</p><button className="btn-primary" onClick={() => navigate('upgrade')}>View Pro access</button></section>)}
@@ -246,6 +258,7 @@ export default function App() {
         {isInternal && page === 'analytics' && <AnalyticsPage />}
         {isInternal && page === 'tools' && <ToolsPage />}
         {isInternal && page === 'admin' && <AdminPage />}
+        </Suspense>
       </main>
 
 
@@ -271,7 +284,7 @@ function routePage(pathname: string): Page {
   if (path === '/login') return 'login'
   if (path === '/upgrade') return 'upgrade'
   if (/^\/match\/\d+$/.test(path)) return 'match'
-  if (path === '/tickets' || path === '/matches' || path === '/insights' || path === '/research') return path.slice(1) as ModulePage
+  if (path === '/tickets' || path === '/matches' || path === '/live' || path === '/insights' || path === '/research') return path.slice(1) as ModulePage
   if (path === '/tracker' || path === '/analytics' || path === '/tools' || path === '/admin') return path.slice(1) as ModulePage
   return 'tickets'
 }

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { fetchSelectionOdds, formatKickoff, formatMarket, formatSelection, type OddsQuote } from '../lib/api'
+import { fetchSelectionOdds, formatDate, formatKickoff, formatMarket, formatSelection, selectionRepeatsMarket, type OddsQuote } from '../lib/api'
 import GradeBadge from './GradeBadge'
 import { useSortableRows } from './SortableTable'
 
@@ -209,7 +209,7 @@ export default function SelectionDetail({ selection, modelVersion, publishedAt, 
           <div>
             <span className="detail-eyebrow">Selection evidence</span>
             <h2 id="selection-detail-title">{selection.home_team} <span>vs</span> {selection.away_team}</h2>
-            <p>{selection.competition} · <span className="kickoff-time">{formatKickoff(selection.kickoff_at)}</span></p>
+            <p>{selection.competition} · <span className="event-date">{formatDate(selection.kickoff_at)}</span> · <span className="kickoff-time">{formatKickoff(selection.kickoff_at)}</span></p>
           </div>
           <div className="detail-header-actions">{onOpenMatch && <button className="btn-secondary" onClick={() => onOpenMatch(selection.match_id)}>Open match intelligence</button>}<button ref={closeRef} className="detail-close" onClick={onClose} aria-label="Close selection details">×</button></div>
         </div>
@@ -252,7 +252,7 @@ export default function SelectionDetail({ selection, modelVersion, publishedAt, 
         {form && activeTab === 'overview' && <section className="form-evidence-card"><div className="evidence-title"><h3>Recent form</h3><span>Last {Math.max(form.home.matches, form.away.matches)} finished matches</span></div><div className="form-teams"><TeamForm team={form.home} /><span className="form-vs">vs</span><TeamForm team={form.away} /></div></section>}
         {form && activeTab === 'stats' && <section className="form-evidence-card"><div className="evidence-title"><h3>Recent team statistics</h3><span>Last five finished matches</span></div><div className="team-stats-grid"><TeamStats team={form.home} /><TeamStats team={form.away} /></div></section>}
         {form && activeTab === 'h2h' && <section className="form-evidence-card"><div className="evidence-title"><h3>Head-to-head</h3><span>Previous finished meetings</span></div>{form.h2h.length ? <div className="h2h-list">{form.h2h.map(game => <div key={game.date + game.score}><span>{game.date}</span><strong>{game.home_team} {game.score} {game.away_team}</strong></div>)}</div> : <div className="detail-empty-note">No previous meetings found in the persisted data.</div>}</section>}
-        {activeTab === 'signals' && <section className="form-evidence-card"><div className="evidence-title"><h3>Lohela signal</h3><span>Current published selection</span></div><div className="signal-summary"><div><span>Market</span><strong>{formatMarket(selection.market)}</strong></div><div><span>Selection</span><strong>{formatSelection(selection.selection)}</strong></div><div><span>{market ? label.prob : 'Model probability'}</span><strong>{pct(selection.model_probability)}</strong></div><div><span>{market ? label.edge : 'Estimated edge'}</span><strong>{pct(selection.edge, true)}</strong></div><div><span>Q-score</span><strong>{selection.q_score == null ? 'Pro only' : `${selection.q_score.toFixed(1)} · ${selection.q_grade ? 'graded' : '—'}`}</strong></div><div><span>Expected value</span><strong>{pct(selection.expected_value, true)}</strong></div></div></section>}
+        {activeTab === 'signals' && <section className="form-evidence-card"><div className="evidence-title"><h3>Lohela signal</h3><span>Current published selection</span></div><div className="signal-summary">{!selectionRepeatsMarket(selection.market, selection.selection) && <div><span>Market</span><strong>{formatMarket(selection.market)}</strong></div>}<div><span>Selection</span><strong>{formatSelection(selection.selection)}</strong></div><div><span>{market ? label.prob : 'Model probability'}</span><strong>{pct(selection.model_probability)}</strong></div><div><span>{market ? label.edge : 'Estimated edge'}</span><strong>{pct(selection.edge, true)}</strong></div><div><span>Q-score</span><strong>{selection.q_score == null ? 'Pro only' : `${selection.q_score.toFixed(1)} · ${selection.q_grade ? 'graded' : '—'}`}</strong></div><div><span>Expected value</span><strong>{pct(selection.expected_value, true)}</strong></div></div></section>}
 
         {activeTab === 'probability' && <section className="evidence-card">
           <div className="evidence-title"><h3>Probability evidence</h3><span>{label.subtitle}</span></div>

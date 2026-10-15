@@ -1,8 +1,23 @@
-import { useEffect, useState } from 'react'
+import { Fragment, useEffect, useState } from 'react'
 import { fetchLeagueInsights, type LeagueInsights } from '../lib/api'
 
 function percent(value: number | null | undefined) {
   return value == null ? 'Unavailable' : `${value.toFixed(1)}%`
+}
+
+function RecentForm({ form }: { form: string }) {
+  if (!form) return <>—</>
+
+  return (
+    <span className="insights-form-sequence">
+      {[...form].map((result, index) => (
+        <Fragment key={`${result}-${index}`}>
+          {index > 0 && <span className="insights-form-separator" aria-hidden="true">-</span>}
+          <span className={`form-pill ${result.toLowerCase()}`}>{result}</span>
+        </Fragment>
+      ))}
+    </span>
+  )
 }
 
 export default function InsightsPage() {
@@ -76,11 +91,11 @@ export default function InsightsPage() {
             <div className="insights-table-scroll"><table>
               <thead><tr><th>#</th><th>Team</th><th>Pl</th><th>W</th><th>D</th><th>L</th><th>GF</th><th>GA</th><th>GD</th><th>Pts</th><th>Form</th><th>Avg xG</th></tr></thead>
               <tbody>{data.teams.map((team, index) => <tr key={team.team_id}>
-                <td>{index + 1}</td><th scope="row">{team.team}</th><td>{team.played}</td><td>{team.won}</td><td>{team.drawn}</td><td>{team.lost}</td><td>{team.goals_for}</td><td>{team.goals_against}</td><td>{team.goal_difference > 0 ? `+${team.goal_difference}` : team.goal_difference}</td><td><strong>{team.points}</strong></td><td aria-label={`Recent form ${team.recent_form}`}>{team.recent_form || '—'}</td><td>{team.avg_xg == null ? '—' : team.avg_xg.toFixed(2)}</td>
+                <td>{index + 1}</td><th scope="row">{team.team}</th><td>{team.played}</td><td>{team.won}</td><td>{team.drawn}</td><td>{team.lost}</td><td>{team.goals_for}</td><td>{team.goals_against}</td><td>{team.goal_difference > 0 ? `+${team.goal_difference}` : team.goal_difference}</td><td><strong>{team.points}</strong></td><td aria-label={`Recent form ${team.recent_form ? [...team.recent_form].join('-') : 'unavailable'}`}><RecentForm form={team.recent_form} /></td><td><span className="insights-xg-value">{team.avg_xg == null ? '—' : team.avg_xg.toFixed(2)}</span><span className="insights-xg-coverage">{team.xg_matches}/{team.played} matches</span></td>
               </tr>)}</tbody>
             </table></div>
           </section>
-          <p className="insights-footnote">xG is shown only when recorded. Percentages describe this completed-match sample and are not forecasts.</p>
+          <p className="insights-footnote">Avg xG uses only matches where the provider recorded xG; the count beside each average shows its sample size. Percentages describe this completed-match sample and are not forecasts.</p>
         </>
       )}
     </section>

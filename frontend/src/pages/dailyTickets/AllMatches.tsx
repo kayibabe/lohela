@@ -6,6 +6,7 @@ import {
   fetchMatchFilterPresets,
   formatKickoff,
   formatMarket,
+  selectionRepeatsMarket,
   formatSelection,
 } from "../../lib/api";
 import {
@@ -552,7 +553,7 @@ function MatchMarketGroup({
           >★</button>
         </div>
         <div className="match-card-metrics">
-          <span><small>Kickoff</small><b>{formatKickoff(first.kickoff_at)}</b></span>
+          <span><small>Kickoff</small><b className="kickoff-time">{formatKickoff(first.kickoff_at)}</b></span>
           <span><small>Q-score</small><b>Q {best.q_score.toFixed(1)}</b></span>
           <span><small>Markets</small><b>{selections.length}</b></span>
           <span><small>Spread</small><b className={`spread-badge ${spreadTone(best.model_agreement)}`}>{best.model_agreement == null ? "—" : `${(best.model_agreement * 100).toFixed(1)} pp`}</b></span>
@@ -583,7 +584,7 @@ function MatchMarketGroup({
           const freshness = quoteFreshness(row);
           return <div className={`market-row${blockers.length > 0 ? " blocked" : ""}`} key={row.prediction_id}>
             <div>
-              <strong>{formatMarket(row.market)}</strong>
+              {!selectionRepeatsMarket(row.market, row.selection) && <strong>{formatMarket(row.market)}</strong>}
               <small>
                 {formatSelection(row.selection)}{" "}
                 <b className={`grade-badge grade-${gradeTone(row.q_grade)}`}>

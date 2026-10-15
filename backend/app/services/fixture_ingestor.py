@@ -648,8 +648,11 @@ def _build_team_news(injuries_raw: list[dict], coverage_checked: bool = False) -
 
 
 async def _upsert_team_stats(db: AsyncSession, match: Match, stats_raw: list[dict]) -> None:
+    home_xg, away_xg = _extract_xg(stats_raw)
     for i, team_stat in enumerate(stats_raw[:2]):
         is_home = i == 0
+        team_xg = home_xg if is_home else away_xg
+        team_xga = away_xg if is_home else home_xg
         team_api_id = team_stat.get("team", {}).get("id")
         if not team_api_id:
             continue
@@ -682,12 +685,18 @@ async def _upsert_team_stats(db: AsyncSession, match: Match, stats_raw: list[dic
                 match_id=match.id,
                 team_id=team.id,
                 is_home=is_home,
+                xg=team_xg,
+                xga=team_xga,
                 shots=safe_int(statistics.get("Total Shots")),
                 shots_on_target=safe_int(statistics.get("Shots on Goal")),
                 possession=safe_float(str(statistics.get("Ball Possession", "")).replace("%", "")),
             )
             db.add(ts)
         else:
+            if team_xg is not None:
+                ts.xg = team_xg
+            if team_xga is not None:
+                ts.xga = team_xga
             ts.shots = safe_int(statistics.get("Total Shots"))
             ts.shots_on_target = safe_int(statistics.get("Shots on Goal"))
             ts.possession = safe_float(str(statistics.get("Ball Possession", "")).replace("%", ""))

@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { formatKickoff, type MatchFixture } from '../../lib/api'
+import { formatDate, formatKickoff, type MatchFixture } from '../../lib/api'
 import { useFavoriteMatches } from './useFavoriteMatches'
 
 type FixtureStatus = MatchFixture['status'] | 'all'
@@ -114,11 +114,11 @@ export function FixtureExplorer({ fixtures }: { fixtures: MatchFixture[] }) {
                       <span className="fixture-league">{fixture.competition}</span>
                       <strong>{fixture.home_team} <span className="leg-match-vs">vs</span> {fixture.away_team}</strong>
                       <span className={`summary-match-status ${fixture.status}`}>{fixture.status === 'scheduled' ? 'Upcoming' : fixture.status === 'live' ? 'In play' : fixture.status[0].toUpperCase() + fixture.status.slice(1)}</span>
-                      <span className="fixture-kickoff">{formatKickoff(fixture.kickoff_at)}</span>
+                      <span className="fixture-kickoff kickoff-time">{formatKickoff(fixture.kickoff_at)}</span>
                     </summary>
                     <div className="fixture-drilldown">
                       <span><small>Competition</small><b>{fixture.competition}</b></span>
-                      <span><small>Kickoff</small><b>{new Date(fixture.kickoff_at).toLocaleString('en-GB')}</b></span>
+                      <span><small>Kickoff</small><b><span className="event-date">{formatDate(fixture.kickoff_at)}</span> <span className="kickoff-time">{formatKickoff(fixture.kickoff_at)}</span></b></span>
                       <span><small>Status</small><b>{fixture.status === 'live' && fixture.elapsed_minutes != null ? `In play · ${fixture.elapsed_minutes}'` : fixture.status === 'live' && fixture.live_phase ? `In play · ${fixture.live_phase}` : fixture.status}</b></span>
                       {fixture.home_goals != null && fixture.away_goals != null && <span><small>Score</small><b>{fixture.home_goals} – {fixture.away_goals}</b></span>}
                       <span className="fixture-pro-note">Market selections and model analysis are available with Pro.</span>

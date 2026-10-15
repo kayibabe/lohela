@@ -35,6 +35,7 @@ class TeamTrend(BaseModel):
     goal_difference: int
     points: int
     avg_xg: float | None
+    xg_matches: int
     recent_form: str
 
 
@@ -171,6 +172,7 @@ async def get_league_insights(
         goals_for=stats["goals_for"], goals_against=stats["goals_against"],
         goal_difference=stats["goals_for"] - stats["goals_against"], points=stats["points"],
         avg_xg=(stats["xg_total"] / stats["xg_matches"] if stats["xg_matches"] else None),
+        xg_matches=stats["xg_matches"],
         recent_form="".join(stats["recent_form"]),
     ) for team_id, stats in team_rows.items()]
     teams.sort(key=lambda item: (-item.points, -item.goal_difference, -item.goals_for, item.team.casefold()))

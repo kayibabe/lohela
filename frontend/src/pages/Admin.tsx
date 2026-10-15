@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { localDateString } from './DailyTickets'
-import { formatStage } from '../lib/api'
+import { formatMarket, formatSelection, formatStage, selectionRepeatsMarket } from '../lib/api'
 
 interface SystemStats {
   matches: number
@@ -247,7 +247,7 @@ export default function AdminPage() {
           {operational ? (
             <div className="admin-info-list">
               <div className="admin-info-row"><span className="admin-info-label">Observed</span><span className="admin-info-value">{new Date(operational.observed_at).toLocaleString()}</span></div>
-              <div className="admin-info-row"><span className="admin-info-label">Latest pipeline</span><span className={`admin-info-value admin-run-status ${operational.latest_run?.status === 'failed' ? 'negative' : ''}`}>{operational.latest_run ? <><span className={`status-badge status-${operational.latest_run.status}`}>{formatStage(operational.latest_run.status)}</span> · {operational.latest_run.target_date}{operational.latest_run.current_stage ? ` · ${formatStage(operational.latest_run.current_stage)}` : ''}</> : 'No run recorded'}</span></div>
+              <div className="admin-info-row"><span className="admin-info-label">Latest pipeline</span><span className={`admin-info-value admin-run-status ${operational.latest_run?.status === 'failed' ? 'negative' : ''}`}>{operational.latest_run ? <><span className={`status-badge status-${operational.latest_run.status}`}>{formatStage(operational.latest_run.status)}</span> · <span className="event-date">{operational.latest_run.target_date}</span>{operational.latest_run.current_stage ? ` · ${formatStage(operational.latest_run.current_stage)}` : ''}</> : 'No run recorded'}</span></div>
               <div className="admin-info-row"><span className="admin-info-label">Scheduled catch-up</span><span className={`admin-info-value ${operational.latest_due_window?.needs_catchup ? 'negative' : ''}`}>{operational.latest_due_window ? operational.latest_due_window.needs_catchup ? `Required · ${operational.latest_due_window.reason}` : 'Current' : 'No window due'}</span></div>
               <div className="admin-info-row"><span className="admin-info-label">Upcoming price freshness</span><span className={`admin-info-value ${operational.upcoming_stale_odds_predictions ? 'negative' : ''}`}>{operational.upcoming_stale_odds_predictions ? `${operational.upcoming_stale_odds_predictions} stale or missing` : 'Current'}</span></div>
               <div className="admin-info-row"><span className="admin-info-label">Recommendation quote coverage</span><span className={`admin-info-value ${operational.upcoming_recommendation_quote_coverage.eligible > operational.upcoming_recommendation_quote_coverage.covered ? 'negative' : ''}`}>{operational.upcoming_recommendation_quote_coverage.fraction === null ? 'No upcoming recommendations' : `${operational.upcoming_recommendation_quote_coverage.covered}/${operational.upcoming_recommendation_quote_coverage.eligible} fresh (${Math.round(operational.upcoming_recommendation_quote_coverage.fraction * 100)}%)`}</span></div>
@@ -277,7 +277,7 @@ export default function AdminPage() {
                 {(marketPolicyShadow.tickets ?? []).filter((ticket): ticket is MarketPolicyShadowTicket => ticket !== null).map(ticket => (
                   <div className="admin-shadow-ticket" key={ticket.ticket_type}>
                     <strong>{formatStage(ticket.ticket_type)}</strong><span>{ticket.legs.length} legs · {ticket.combined_odds.toFixed(2)} odds · {(ticket.combined_probability * 100).toFixed(1)}% model probability</span>
-                    <small>{ticket.legs.map(leg => `${formatStage(leg.market)}: ${leg.selection} (${leg.odds.toFixed(2)})`).join(' · ')}</small>
+                    <small>{ticket.legs.map(leg => `${selectionRepeatsMarket(leg.market, leg.selection) ? formatSelection(leg.selection) : `${formatMarket(leg.market)}: ${formatSelection(leg.selection)}`} (${leg.odds.toFixed(2)})`).join(' · ')}</small>
                   </div>
                 ))}
               </details>
@@ -342,7 +342,7 @@ export default function AdminPage() {
             <div className="admin-info-row"><span className="admin-info-label">Recent runs</span><span className="admin-info-value">{pipelineRuns.length}</span></div>
             {pipelineRuns.slice(0, 3).map(run => {
               const published = run.stages.find(stage => stage.name === 'publication')?.output_count ?? 0
-              return <div className="admin-info-row" key={run.id}><span className="admin-info-label">#{run.id} · {run.target_date} · {formatStage(run.run_type)}</span><span className={`admin-info-value admin-run-status ${run.status === 'failed' ? 'negative' : ''}`}><span className={`status-badge status-${run.status}`}>{formatStage(run.status)}</span>{run.trigger_source ? ` · ${formatStage(run.trigger_source)}` : ''}{run.scheduled_window ? ` · ${formatStage(run.scheduled_window)} window` : ''}{published ? ` · ${published} published` : ''}{run.current_stage ? ` · ${formatStage(run.current_stage)}` : ''}{run.error_details ? ` · ${run.error_details}` : ''}</span></div>
+              return <div className="admin-info-row" key={run.id}><span className="admin-info-label">#{run.id} · <span className="event-date">{run.target_date}</span> · {formatStage(run.run_type)}</span><span className={`admin-info-value admin-run-status ${run.status === 'failed' ? 'negative' : ''}`}><span className={`status-badge status-${run.status}`}>{formatStage(run.status)}</span>{run.trigger_source ? ` · ${formatStage(run.trigger_source)}` : ''}{run.scheduled_window ? ` · ${formatStage(run.scheduled_window)} window` : ''}{published ? ` · ${published} published` : ''}{run.current_stage ? ` · ${formatStage(run.current_stage)}` : ''}{run.error_details ? ` · ${run.error_details}` : ''}</span></div>
             })}
           </div>
         </div>

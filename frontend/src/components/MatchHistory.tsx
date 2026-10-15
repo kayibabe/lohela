@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { formatMarket, formatSelection, formatTicketType } from '../lib/api'
+import { formatMarket, formatSelection, formatTicketType, selectionRepeatsMarket, selectionTone } from '../lib/api'
 import { groupMatchHistory, type MatchHistoryRow } from '../lib/trackerGrouping'
 
 export default function MatchHistory() {
@@ -56,9 +56,9 @@ export default function MatchHistory() {
           <div className="paper-date-heading"><strong>{group.label}</strong><span>{group.matches.length} match{group.matches.length === 1 ? '' : 'es'}</span></div>
           <div className="match-history-list">{group.matches.map(match => <article className="match-history-row" key={match.match_id}>
             <div><strong>{match.home_team} <span>vs</span> {match.away_team}</strong><small className={`kickoff-time ${match.live_phase ? 'live-kickoff' : ''}`}>{match.live_phase ? `${({ '1st_half': '1st Half', half_time: 'Half Time', '2nd_half': '2nd Half', extra_time: 'Extra Time', penalties: 'Penalties', suspended: 'Suspended', interrupted: 'Interrupted', live: 'Live' } as Record<string, string>)[match.live_phase] ?? 'Live'}${match.elapsed_minutes != null ? ` · ${match.elapsed_minutes}'` : ''}` : 'Kickoff · '}{new Date(match.kickoff_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</small><small>{match.competition}</small></div>
-            <div className="match-history-meta"><span>{match.ticket_types.map(formatTicketType).join(' · ')}</span><small className="market-badges">{match.selections.map(value => <b key={value}>{formatSelection(value)}</b>)}</small></div>
+            <div className="match-history-meta"><span>{match.ticket_types.map(formatTicketType).join(' · ')}</span><small className="market-badges">{match.selections.map(value => <b className={`market-pick ${selectionTone(value)}`} key={value}>{formatSelection(value)}</b>)}</small></div>
             <div className="match-history-evidence"><span className="history-evidence-heading">Projected advisory</span>{match.selection_evidence.map(item => <div key={`${item.market}:${item.selection}`}>
-              <strong className="advisory-market"><span>{formatMarket(item.market)}</span>{formatSelection(item.selection) !== formatMarket(item.market) && formatSelection(item.selection)} <b className="history-metric odds">Odds {item.odds == null ? '—' : item.odds.toFixed(2)}</b></strong>
+              <strong className="advisory-market">{!selectionRepeatsMarket(item.market, item.selection) && <span>{formatMarket(item.market)}</span>} <span className={`market-pick ${selectionTone(item.selection)}`}>{formatSelection(item.selection)}</span> <b className="history-metric odds">Odds {item.odds == null ? '—' : item.odds.toFixed(2)}</b></strong>
               <span className="history-advisory-metrics"><b className="history-metric q">Q {item.q_score.toFixed(1)}</b><b className="history-metric probability">{(item.model_probability * 100).toFixed(1)}% model</b><b className="history-metric spread">{item.model_spread == null ? '—' : `${(item.model_spread * 100).toFixed(1)} pp`} spread</b><b className={`history-metric ${item.edge != null && item.edge > 0 ? 'edge-positive' : 'edge-neutral'}`}>{item.edge == null ? '—' : `${(item.edge * 100).toFixed(1)}%`} edge</b></span>
               <small className={`match-outcome ${item.result}`}>{item.result}</small>
             </div>)}</div>

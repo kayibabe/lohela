@@ -13,6 +13,8 @@ import {
   formatKickoff,
   formatMarket,
   formatSelection,
+  selectionRepeatsMarket,
+  selectionTone,
   updateCustomAccumulator,
   formatStage,
 } from "../../lib/api";
@@ -337,7 +339,7 @@ export default function DailyTicketsPage({ date, initialTab = "tickets", onOpenM
       <div className="meta-bar">
         <div>
           <h1 className="meta-date">
-            {data ? formatDate(data.target_date) : formatDate(date)}
+            <span className="event-date">{data ? formatDate(data.target_date) : formatDate(date)}</span>
           </h1>
           <p className="research-disclaimer">
             {isAdmin
@@ -651,7 +653,7 @@ function PassedMatches({ rows, onSelect }: { rows: SelectionSummary[]; onSelect:
             : (row.match_status?.toLowerCase() === "finished" ? "Unavailable" : "Pending");
           return <tr key={row.prediction_id}>
             <td><button className="decision-match" onClick={() => onSelect(row)}>{row.home_team} vs {row.away_team}<small>{row.competition} · <span className="match-date">{formatDate(row.kickoff_at)}</span> · <span className="match-kickoff">{formatKickoff(row.kickoff_at)}</span></small></button></td>
-            <td><span className="decision-market">{formatMarket(row.market)}</span><strong>{formatSelection(row.selection)}</strong></td>
+            <td>{!selectionRepeatsMarket(row.market, row.selection) && <span className="decision-market">{formatMarket(row.market)}</span>}<span className={`market-pick ${selectionTone(row.selection)}`}>{formatSelection(row.selection)}</span></td>
             <td><div className="passed-match-metrics"><span><small>Q-score</small><b>{row.q_score.toFixed(1)}</b></span><span><small>Odds</small><b>{row.best_odds == null ? "Unavailable" : row.best_odds.toFixed(2)}</b></span><span><small>Edge</small><b>{row.edge == null ? "Unavailable" : `${(row.edge * 100).toFixed(1)}%`}</b></span></div></td>
             <td className="passed-match-reason-cell">{(row.reason_codes?.length ? row.reason_codes : ["Publication gate did not pass"]).map(reasonLabel).join(" · ")}</td>
             <td><span className={`result-pill ${row.result ?? "pending"}`}>{resultLabel}</span>{score && <small className="result-score">{score}</small>}</td>
@@ -733,14 +735,14 @@ function DecisionSummary({
         <div className="decision-lead">
           <div>
             <strong>{top.home_team} <span>vs</span> {top.away_team}</strong>
-            <small>{top.competition} · {new Date(top.kickoff_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</small>
+            <small>{top.competition} · <span className="kickoff-time">{formatKickoff(top.kickoff_at)}</span></small>
             {topFinished && <small className="decision-final-result">
               {topScore ? `Full time · ${topScore}` : "Full time · Score unavailable"}
               {pickOutcome && <b className={`decision-pick-outcome ${pickOutcome}`}>Pick {pickOutcome}</b>}
             </small>}
           </div>
           <div className="decision-lead-selection">
-            <span>{formatMarket(top.market)}</span>
+            {!selectionRepeatsMarket(top.market, top.selection) && <span>{formatMarket(top.market)}</span>}
             <b>{formatSelection(top.selection)}</b>
           </div>
           <button className="btn-ghost btn-sm" onClick={() => onSelect(top)}>Why this?</button>
@@ -768,7 +770,7 @@ function DecisionSummary({
                 : null;
               return <tr key={`${row.match_id}-${row.prediction_id}`}>
                 <td><button className="decision-match" onClick={() => onSelect(row)}>{row.home_team} vs {row.away_team}<small>{row.competition} · <span className="match-date">{formatDate(row.kickoff_at)}</span> · <span className="match-kickoff">{formatKickoff(row.kickoff_at)}</span></small></button></td>
-                <td><span className="decision-market">{formatMarket(row.market)}</span><strong>{formatSelection(row.selection)}</strong></td>
+                <td>{!selectionRepeatsMarket(row.market, row.selection) && <span className="decision-market">{formatMarket(row.market)}</span>}<span className={`market-pick ${selectionTone(row.selection)}`}>{formatSelection(row.selection)}</span></td>
                 <td><span className={`result-pill ${result}`}>{resultLabel}</span>{score && <small className="result-score">{score}</small>}</td>
                 <td>{row.model_probability == null ? "—" : `${(row.model_probability * 100).toFixed(1)}%`}</td>
                 <td>{row.best_odds == null ? "—" : row.best_odds.toFixed(2)}</td>

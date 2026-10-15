@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { formatDate, formatKickoff, formatMarket } from "../../lib/api";
+import { formatDate, formatKickoff, formatSelection, selectionTone } from "../../lib/api";
 import { fmt } from "../../utils/currency";
 import type { CustomAccumulator, DailyTab } from "./types";
 
@@ -130,8 +130,8 @@ export function CustomAccumulatorPanel({
                 <div className="custom-ticket-header">
                   <div>
                     <strong>{ticket.name}</strong>
-                    {ticket.automatic && <div className="automatic-ticket-badges"><span className="custom-status-badge automatic">My accumulator</span><span className="relaxed-badge">Includes games to {formatDate(latestKickoff)}</span></div>}
-                    <span>{formatDate(ticket.date)} · {ticket.legs.length} leg{ticket.legs.length === 1 ? "" : "s"}</span>
+                    {ticket.automatic && <div className="automatic-ticket-badges"><span className="custom-status-badge automatic">My accumulator</span><span className="relaxed-badge">Includes games to <span className="event-date">{formatDate(latestKickoff)}</span></span></div>}
+                    <span><span className="event-date">{formatDate(ticket.date)}</span> · {ticket.legs.length} leg{ticket.legs.length === 1 ? "" : "s"}</span>
                   </div>
                   <span className={`custom-status-badge ${ticket.status}`}>{statusLabel}</span>
                 </div>
@@ -169,7 +169,7 @@ export function CustomAccumulatorPanel({
                             <span className="custom-leg-competition">{leg.competition}</span>
                             <span className="custom-leg-date" aria-label={`Match date ${formatDate(leg.kickoff_at)}`}>{formatDate(leg.kickoff_at)}</span>
                             <span className="custom-leg-time" aria-label={`Kickoff time ${formatKickoff(leg.kickoff_at)}`}>{formatKickoff(leg.kickoff_at)}</span>
-                            <span className="custom-leg-market">{formatMarket(leg.market)}</span>
+                            <span className={`custom-leg-market market-pick ${selectionTone(leg.selection)}`}>{formatSelection(leg.selection)}</span>
                           </small>
                         </div>
                         <div className="custom-ticket-leg-evidence">

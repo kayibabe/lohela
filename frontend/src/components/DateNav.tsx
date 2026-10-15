@@ -28,7 +28,7 @@ export function DateNav({ date, onChange, loading }: Props) {
           onChange={e => onChange(e.target.value)}
           disabled={loading}
         />
-        <span className="date-label">{formatDate(date)}</span>
+        <span className="date-label event-date">{formatDate(date)}</span>
         {!isToday && (
           <button
             className="today-btn"

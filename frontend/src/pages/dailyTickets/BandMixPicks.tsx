@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import type { BandMix, BandMixPick, BandMixSelections, SelectionSummary } from "../../lib/api";
-import { fetchBandMixSelections, formatKickoff, formatMarket, formatSelection } from "../../lib/api";
+import { fetchBandMixSelections, formatKickoff, formatMarket, formatSelection, selectionRepeatsMarket, selectionTone } from "../../lib/api";
 import { bandSortValue, useSortableRows } from "../../components/SortableTable";
 import { accumulatorBlockers, gradeTone, matchStatusText, reasonLabel, withRejectionEvidence } from "./helpers";
 
@@ -242,9 +242,9 @@ function PickTable({
             const blockers = accumulatorBlockers(selection);
             return (
               <tr key={row.prediction_id}>
-                <td><strong>{formatKickoff(row.kickoff_at)}</strong></td>
+                <td><strong className="kickoff-time">{formatKickoff(row.kickoff_at)}</strong></td>
                 <td><strong>{row.home_team} <span className="match-vs">vs</span> {row.away_team}</strong><small>{row.competition}</small></td>
-                <td><span className="market-chip">{formatMarket(row.market)}</span><strong>{formatSelection(row.selection)}</strong></td>
+                <td>{!selectionRepeatsMarket(row.market, row.selection) && <span className="market-chip">{formatMarket(row.market)}</span>}<span className={`market-pick ${selectionTone(row.selection)}`}>{formatSelection(row.selection)}</span></td>
                 <td>{pct(row.model_probability)}</td>
                 <td>{pct(row.market_probability)}{!row.pre_kickoff_quote && <small>Post-kickoff quote</small>}</td>
                 <td>{row.odds.toFixed(2)}</td>

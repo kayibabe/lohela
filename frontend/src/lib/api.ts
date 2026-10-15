@@ -426,6 +426,7 @@ export interface LeagueInsights {
     goal_difference: number
     points: number
     avg_xg: number | null
+    xg_matches: number
     recent_form: string
   }>
 }
@@ -703,13 +704,20 @@ export function formatSelection(selection: string): string {
   return labels[selection] ?? selection.replace(/_/g, ' ').replace(/\b\w/g, character => character.toUpperCase())
 }
 
+export function selectionRepeatsMarket(market: string, selection: string): boolean {
+  const marketLabel = formatMarket(market).trim().toLowerCase()
+  const selectionLabel = formatSelection(selection).trim().toLowerCase()
+  return selectionLabel === marketLabel || selectionLabel.startsWith(`${marketLabel} (`)
+}
+
 export function selectionTone(selection: string): string {
   const value = selection.trim().toLowerCase().replace(/[\s-]+/g, '_')
-  if (value.startsWith('over') || value.includes('_over') || value === 'btts_yes' || value === 'yes') return 'market-pick-over'
+  if (value.startsWith('over') || value.includes('_over')) return 'market-pick-over'
   if (value.startsWith('under') || value.includes('_under')) return 'market-pick-under'
   if (value === 'home' || value === 'home_win' || value === 'dnb_home') return 'market-pick-home'
   if (value === 'draw') return 'market-pick-draw'
   if (value === 'away' || value === 'away_win' || value === 'dnb_away') return 'market-pick-away'
+  if (value === 'btts_yes' || value === 'yes') return 'market-pick-yes'
   if (value === 'btts_no' || value === 'no') return 'market-pick-no'
   if (value.includes('double_chance')) return 'market-pick-cover'
   return 'market-pick-other'

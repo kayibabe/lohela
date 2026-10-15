@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import type { Leg, Ticket } from '../lib/api'
-import { formatKickoff, formatMarket, formatSelection } from '../lib/api'
+import { formatKickoff, formatMarket, formatSelection, selectionRepeatsMarket, selectionTone } from '../lib/api'
 import GradeBadge from './GradeBadge'
 import { fmt } from '../utils/currency'
 
@@ -121,7 +121,7 @@ export default function TicketCard({ ticket, tierName, tierDesc, color, research
                 className="relaxed-badge horizon-badge"
                 title={`Too few fixtures on the ticket date (e.g. an international break), so this ticket also uses games up to ${ticket.horizon_days} day(s) later. Check each leg's kickoff time.`}
               >
-                Includes games to {formatHorizonEnd(ticket.legs.map(leg => leg.kickoff_at))}
+                Includes games to <span className="event-date">{formatHorizonEnd(ticket.legs.map(leg => leg.kickoff_at))}</span>
               </span>
             )}
           </div>
@@ -246,7 +246,7 @@ export default function TicketCard({ ticket, tierName, tierDesc, color, research
                     {matchStateLabel(leg)}
                   </span>
                   {leg.home_goals != null && leg.away_goals != null && <span className="live-score-badge" aria-label={`Score ${leg.home_goals} to ${leg.away_goals}`}>{leg.home_goals}–{leg.away_goals}</span>}
-                  {showMarketSelections && <span className="leg-market">{leg.market.startsWith('double_chance_') ? formatSelection(leg.selection) : formatMarket(leg.market)}</span>}
+                  {showMarketSelections && <span className={`leg-market market-pick ${selectionTone(leg.selection)}`}>{selectionRepeatsMarket(leg.market, leg.selection) ? formatSelection(leg.selection) : `${formatMarket(leg.market)}: ${formatSelection(leg.selection)}`}</span>}
                 </div>
                 <div className={`leg-outcome ${leg.result}`}>
                   <span className="leg-outcome-label">Pick</span>
