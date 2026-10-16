@@ -1,9 +1,9 @@
 """Q-score candidate selections for the daily research workspace."""
 
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from typing import Optional
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 from sqlalchemy.orm import aliased
@@ -18,6 +18,7 @@ from app.services.band_mix_picks import (
     band_mix_candidates,
     band_mix_ledger_rows,
     band_mix_lifecycle_history,
+    band_mix_performance_report,
     get_or_capture_scan,
     summarize_picks,
 )
@@ -79,8 +80,48 @@ async def get_match_fixtures(
     ]
 
 
+@router.get("/public-fixtures", response_model=list[MatchFixtureOut])
+async def get_public_match_fixtures(
+    date: Optional[date] = Query(default=None, description="Target date (default: today)"),
+    db: AsyncSession = Depends(get_db),
+):
+    """Return public fixture metadata without model selections or user data."""
+    target = date or cat_today()
+    home_team = aliased(Team)
+    away_team = aliased(Team)
+    rows = await db.execute(
+        select(Match, home_team.name, away_team.name, Competition.name)
+        .join(home_team, Match.home_team_id == home_team.id)
+        .join(away_team, Match.away_team_id == away_team.id)
+        .join(Competition, Match.competition_id == Competition.id)
+        .where(
+            Match.kickoff_at >= cat_day_bounds_utc(target)[0],
+            Match.kickoff_at < cat_day_bounds_utc(target)[1],
+        )
+        .order_by(Match.kickoff_at, Competition.name, home_team.name)
+        .limit(500)
+    )
+    return [
+        MatchFixtureOut(
+            match_id=match.id,
+            home_team=home_name,
+            away_team=away_name,
+            competition=competition_name,
+            kickoff_at=match.kickoff_at.isoformat(),
+            status=match.status.value,
+            live_phase=match.live_phase,
+            elapsed_minutes=match.elapsed_minutes,
+            home_goals=match.home_goals,
+            away_goals=match.away_goals,
+        )
+        for match, home_name, away_name, competition_name in rows.all()
+    ]
+
+
 def _finished_selection_result(match: Match, market: str) -> str | None:
-    """Return an outcome only when the provider marks the match as finished."""
+    """Return the settled pick outcome, including postponed/cancelled voids."""
+    if match.status in (MatchStatus.POSTPONED, MatchStatus.CANCELLED):
+        return "void"
     if (
         match.status != MatchStatus.FINISHED
         or match.home_goals is None
@@ -492,6 +533,20 @@ async def get_band_mix_lifecycle(
             "last_reason": state.last_reason,
         } for state in states],
     }
+
+
+@router.get("/band-mix/performance", dependencies=[Depends(require_research_access)])
+async def get_band_mix_performance(
+    date_from: Optional[date] = Query(default=None),
+    date_to: Optional[date] = Query(default=None),
+    db: AsyncSession = Depends(get_db),
+):
+    """Summarize only frozen daily ledger picks, excluding reconstructed history."""
+    end = date_to or cat_today()
+    start = date_from or (end - timedelta(days=29))
+    if start > end:
+        raise HTTPException(status_code=422, detail="date_from must be on or before date_to")
+    return await band_mix_performance_report(db, start, end)
 
 
 @router.get("/market-policy-shadow", dependencies=[Depends(require_research_access)])

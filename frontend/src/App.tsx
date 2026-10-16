@@ -14,6 +14,7 @@ const MatchIntelligencePage = lazy(() => import('./pages/MatchIntelligencePage')
 const LoginPage = lazy(() => import('./pages/Login'))
 const InsightsPage = lazy(() => import('./pages/Insights'))
 const LiveMonitorPage = lazy(() => import('./pages/LiveMonitor'))
+const PublicHome = lazy(() => import('./pages/PublicHome'))
 
 function PageLoading() {
   return <div className="route-loading" role="status" aria-live="polite">Loading page…</div>
@@ -21,7 +22,7 @@ function PageLoading() {
 
 type Theme = 'dark' | 'light' | 'system'
 type ModulePage = 'tickets' | 'matches' | 'live' | 'insights' | 'research' | 'tracker' | 'analytics' | 'tools' | 'admin'
-type Page = ModulePage | 'match' | 'upgrade' | 'login'
+type Page = ModulePage | 'home' | 'match' | 'upgrade' | 'login'
 
 function dateFromSearch(search: string): string {
   const value = new URLSearchParams(search).get('date')
@@ -106,11 +107,11 @@ export default function App() {
   useEffect(() => {
     if (authLoading) return
     const path = window.location.pathname
-    if (!user && path !== '/login') {
+    if (!user && path !== '/' && path !== '/login') {
       window.history.replaceState({}, '', '/login')
       setPage('login')
       setMatchId(null)
-    } else if (user && path === '/login') {
+    } else if (user && (path === '/login' || path === '/')) {
       window.history.replaceState({}, '', '/tickets')
       setPage('tickets')
     }
@@ -123,9 +124,15 @@ export default function App() {
     window.history.replaceState({}, '', '/tickets')
   }, [authLoading, isInternal, page])
 
+  useEffect(() => {
+    const isPublicLanding = !authLoading && !user && page === 'home'
+    document.documentElement.classList.toggle('public-page-scroll', isPublicLanding)
+    return () => document.documentElement.classList.remove('public-page-scroll')
+  }, [authLoading, page, user])
+
   function navigate(next: Page, _requested?: ModulePage, replace = false) {
     setPage(next)
-    const path = next === 'upgrade' ? '/upgrade' : `/${next}`
+    const path = next === 'home' ? '/' : next === 'upgrade' ? '/upgrade' : `/${next}`
     window.history[replace ? 'replaceState' : 'pushState']({}, '', datePath(path, date))
   }
 
@@ -158,7 +165,14 @@ export default function App() {
   }
 
   if (!user) {
+    if (page === 'home') {
+      return <Suspense fallback={<PageLoading />}><PublicHome date={date} onDateChange={setDate} onSignIn={() => navigate('login')} onCreateAccount={() => { setPage('login'); window.history.pushState({}, '', '/login?mode=register') }} /></Suspense>
+    }
     return <div className="auth-standalone"><Suspense fallback={<PageLoading />}><LoginPage onSuccess={() => navigate('tickets', undefined, true)} /></Suspense></div>
+  }
+
+  if (page === 'home' || page === 'login') {
+    return <div className="auth-standalone" role="status" aria-live="polite">Opening your workspace...</div>
   }
 
   return (
@@ -228,7 +242,7 @@ export default function App() {
           </div>
         )}
         <div className="header-page-title">
-        <span className="research-status"><span className="status-dot" /> {page === 'tickets' ? 'Decision workspace' : page === 'match' ? 'Match intelligence' : page === 'upgrade' ? 'System' : page === 'login' ? 'Account' : NAV_META[page].hint}</span>
+        <span className="research-status"><span className="status-dot" /> {page === 'tickets' ? 'Decision workspace' : page === 'match' ? 'Match intelligence' : page === 'upgrade' ? 'System' : NAV_META[page].hint}</span>
           <button className="theme-btn" onClick={cycleTheme} title={`Theme: ${theme}`} aria-label={`Theme: ${theme}. Change theme`}>
             <span className="theme-auto">{theme === 'system' ? 'Auto' : theme}</span>
           </button>
@@ -244,17 +258,16 @@ export default function App() {
 
       <main className="main" id="main-content" tabIndex={-1}>
         <Suspense fallback={<PageLoading />}>
-        {page === 'login' && <LoginPage onSuccess={() => navigate('tickets', undefined, true)} />}
         {page === 'upgrade' && <UpgradePage onBack={() => goTo('tickets')} />}
         {page === 'tickets' && <DailyTicketsPage key={`${date}-${page}`} date={date} initialTab="tickets" onOpenMatch={navigateToMatch} />}
-        {page === 'matches' && <DailyTicketsPage key={`${date}-${page}`} date={date} initialTab="matches" onOpenMatch={navigateToMatch} />}
+        {page === 'matches' && <DailyTicketsPage key={`${date}-${page}`} date={date} initialTab="matches" onOpenMatch={navigateToMatch} onOpenTracker={() => goTo('tracker')} />}
         {page === 'live' && <LiveMonitorPage />}
         {page === 'insights' && (user.plan === 'pro' || isInternal
           ? <InsightsPage />
           : <section className="insights-access-card"><h1>Stats &amp; trends</h1><p>League results and team tables are available on Pro.</p><button className="btn-primary" onClick={() => navigate('upgrade')}>View Pro access</button></section>)}
         {isInternal && page === 'research' && <DailyTicketsPage key={`${date}-${page}`} date={date} initialTab="odds-policy" onOpenMatch={navigateToMatch} />}
         {page === 'match' && matchId != null && (isInternal || authLoading) && <MatchIntelligencePage matchId={matchId} onBack={() => navigate('tickets')} />}
-        {isInternal && page === 'tracker' && <TrackerPage onOpenTickets={(targetDate) => { if (targetDate) setDate(targetDate); goTo('tickets') }} />}
+        {isInternal && page === 'tracker' && <TrackerPage onOpenTickets={(targetDate) => { if (targetDate) setDate(targetDate); goTo('tickets') }} onOpenResearch={() => goTo('research')} onOpenValidation={() => goTo('analytics')} />}
         {isInternal && page === 'analytics' && <AnalyticsPage />}
         {isInternal && page === 'tools' && <ToolsPage />}
         {isInternal && page === 'admin' && <AdminPage />}
@@ -281,6 +294,7 @@ export default function App() {
 
 function routePage(pathname: string): Page {
   const path = pathname.replace(/\/$/, '')
+  if (!path) return 'home'
   if (path === '/login') return 'login'
   if (path === '/upgrade') return 'upgrade'
   if (/^\/match\/\d+$/.test(path)) return 'match'

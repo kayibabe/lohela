@@ -1,9 +1,13 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { formatMarket, formatSelection, formatTicketType, selectionRepeatsMarket } from '../lib/api'
+import { createCustomAccumulator, deleteCustomAccumulator, fetchCustomAccumulators, formatMarket, formatSelection, formatTicketType, selectionRepeatsMarket, updateCustomAccumulator, type CustomAccumulator as ApiCustomAccumulator } from '../lib/api'
 import { fmt, fmtPnl } from '../utils/currency'
 import PaperLedger from '../components/PaperLedger'
 import MatchHistory from '../components/MatchHistory'
 import { groupJournalBets, type Bet } from '../lib/trackerGrouping'
+import { CustomAccumulatorPanel } from './dailyTickets/CustomAccumulatorPanel'
+import { apiAccumulatorToUi, TODAY } from './dailyTickets/helpers'
+import type { CustomAccumulator } from './dailyTickets/types'
+import { accumulatorPerformance, roiFromTotals, type AccumulatorPerformanceSummary } from '../components/PaperLedger'
 
 interface BetPeriod {
   label: string; bets: number; settled: number; wins: number; losses: number; staked: number; returned: number
@@ -23,8 +27,8 @@ async function responseError(response: Response) {
   try { const body = await response.json(); return body.detail || body.message || `Request failed (${response.status})` } catch { return `Request failed (${response.status})` }
 }
 
-export default function TrackerPage({ onOpenTickets }: { onOpenTickets?: (date?: string) => void }) {
-  const [view, setView] = useState<'paper' | 'matches' | 'manual'>('paper')
+export default function TrackerPage({ onOpenTickets, onOpenResearch, onOpenValidation }: { onOpenTickets?: (date?: string) => void; onOpenResearch?: () => void; onOpenValidation?: () => void }) {
+  const [view, setView] = useState<'paper' | 'matches' | 'accumulators' | 'manual'>('paper')
   const [bets, setBets] = useState<Bet[]>([])
   const [summary, setSummary] = useState<BetSummary | null>(null)
   const [loading, setLoading] = useState(true)
@@ -34,6 +38,41 @@ export default function TrackerPage({ onOpenTickets }: { onOpenTickets?: (date?:
   const [filterStatus, setFilterStatus] = useState('all')
   const [form, setForm] = useState({ label: '', odds: '', stake: '', ticket_type: '', ticket_date: '', notes: '' })
   const [settleForm, setSettleForm] = useState({ status: 'won', actual_return: '' })
+  const [accumulators, setAccumulators] = useState<CustomAccumulator[]>([])
+  const [accumulatorDate, setAccumulatorDate] = useState(TODAY)
+  const [accumulatorsLoading, setAccumulatorsLoading] = useState(false)
+  const [accumulatorError, setAccumulatorError] = useState<string | null>(null)
+  const [accumulatorSummary, setAccumulatorSummary] = useState<AccumulatorPerformanceSummary | null>(null)
+
+  const loadAccumulators = useCallback(async () => {
+    setAccumulatorsLoading(true)
+    setAccumulatorError(null)
+    try {
+      const rows = await fetchCustomAccumulators()
+      setAccumulatorSummary(accumulatorPerformance(rows))
+      setAccumulators(rows.map(apiAccumulatorToUi))
+    } catch (reason) {
+      setAccumulatorError(reason instanceof Error ? reason.message : 'Accumulators unavailable')
+    } finally { setAccumulatorsLoading(false) }
+  }, [])
+
+  useEffect(() => { if (view === 'accumulators') void loadAccumulators() }, [view, loadAccumulators])
+
+  const saveAccumulator = async (ticket: CustomAccumulator | null, update: Partial<CustomAccumulator>, name = ticket?.name ?? 'Accumulator') => {
+    const legs = update.legs ?? ticket?.legs ?? []
+    const saved: ApiCustomAccumulator = ticket
+      ? await updateCustomAccumulator(ticket.id, {
+          name: update.name ?? ticket.name,
+          target_date: ticket.date,
+          prediction_ids: legs.map((leg) => leg.prediction_id),
+          stake: update.stake === undefined ? ticket.stake : update.stake,
+          status: update.status === 'placed' || update.status === 'draft' ? update.status : ticket.status === 'placed' ? 'placed' : 'draft',
+        })
+      : await createCustomAccumulator({ name, target_date: accumulatorDate, prediction_ids: [], stake: null, status: 'draft' })
+    const uiRow = apiAccumulatorToUi(saved)
+    setAccumulators((current) => [...current.filter((item) => item.id !== uiRow.id), uiRow].sort((a, b) => b.date.localeCompare(a.date) || b.id - a.id))
+    await loadAccumulators()
+  }
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -75,17 +114,32 @@ export default function TrackerPage({ onOpenTickets }: { onOpenTickets?: (date?:
     setMessage({ tone: 'success', text: 'Journal entry deleted.' }); await load()
   }
 
-  const badge = view === 'paper' ? 'Production paper evidence' : view === 'matches' ? 'Published selection evidence' : 'Confirmed and manual journal'
+  const accumulatorRoi = accumulatorSummary ? roiFromTotals(accumulatorSummary.profitLoss, accumulatorSummary.settledStake) : null
+  const badge = view === 'paper' ? 'Production paper evidence' : view === 'matches' ? 'Published selection evidence' : view === 'accumulators' ? 'Personal accumulators' : 'Confirmed and manual journal'
 
   return <div className="page-content tracker-page">
     <div className="analytics-hero tracker-hero"><div><span className="eyebrow">Auditable portfolio</span><h1>Tracker</h1><p>Keep production paper evidence, published match outcomes and personal journal records in clearly separated views.</p></div><span className={`ledger-chip tracker-chip ${view}`}><span /> {badge}</span></div>
     <div className="analytics-tabs tracker-view-tabs" role="tablist" aria-label="Tracker views">
       <button role="tab" aria-selected={view === 'paper'} className={view === 'paper' ? 'active' : ''} onClick={() => setView('paper')}>Paper ledger</button>
       <button role="tab" aria-selected={view === 'matches'} className={view === 'matches' ? 'active' : ''} onClick={() => setView('matches')}>Match history</button>
+      <button role="tab" aria-selected={view === 'accumulators'} className={view === 'accumulators' ? 'active' : ''} onClick={() => setView('accumulators')}>My accumulators</button>
       <button role="tab" aria-selected={view === 'manual'} className={view === 'manual' ? 'active' : ''} onClick={() => setView('manual')}>My journal</button>
     </div>
 
-    {view === 'paper' ? <PaperLedger /> : view === 'matches' ? <MatchHistory /> : <>
+    {view === 'paper' ? <PaperLedger onOpenValidation={onOpenValidation} /> : view === 'matches' ? <MatchHistory /> : view === 'accumulators' ? <>
+      <div className="journal-note"><strong>Personal accumulators</strong><span>Draft and placed accumulators stay separate from the production paper ledger and personal journal totals.</span></div>
+      {accumulatorSummary && accumulatorSummary.tickets > 0 && <section className="accumulator-performance-card"><div className="accumulator-performance-heading"><div><span className="eyebrow">All personal accumulators</span><strong>Performance</strong><p>Open stakes remain exposure; settled returns count only after every leg finishes.</p></div><span className="accumulator-performance-count">{accumulatorSummary.tickets} ticket{accumulatorSummary.tickets === 1 ? '' : 's'}</span></div><div className="accumulator-performance-grid"><AccumulatorMetric label="Open" value={accumulatorSummary.open.toString()} note={accumulatorSummary.exposure ? `${fmt(accumulatorSummary.exposure)} exposed` : 'No open exposure'} /><AccumulatorMetric label="Settled" value={accumulatorSummary.settled.toString()} note={`${accumulatorSummary.won} won · ${accumulatorSummary.lost} lost · ${accumulatorSummary.void} void`} /><AccumulatorMetric label="Settled P&L" value={accumulatorSummary.settled ? fmtPnl(accumulatorSummary.profitLoss) : '—'} note={accumulatorSummary.settled ? `${fmt(accumulatorSummary.returned)} returned` : 'Settles after all legs finish'} tone={accumulatorSummary.profitLoss >= 0 ? 'positive' : 'negative'} /><AccumulatorMetric label="Settled ROI" value={accumulatorRoi == null ? '—' : `${(accumulatorRoi * 100).toFixed(1)}%`} note={accumulatorSummary.settled ? `${fmt(accumulatorSummary.settledStake)} settled stake` : 'No settled stake yet'} tone={accumulatorRoi == null ? undefined : accumulatorRoi >= 0 ? 'positive' : 'negative'} /></div></section>}
+      <div className="tracker-toolbar"><label className="form-group"><span>Accumulator date</span><input type="date" value={accumulatorDate} onChange={(event) => setAccumulatorDate(event.target.value)} /></label><button className="btn-ghost btn-sm" onClick={() => void loadAccumulators()} disabled={accumulatorsLoading}>Refresh</button></div>
+      {accumulatorError && <div className="tracker-message error" role="alert">{accumulatorError}</div>}
+      {accumulatorsLoading && !accumulators.length ? <div className="empty-state" aria-busy="true">Loading accumulators…</div> : <CustomAccumulatorPanel
+        date={accumulatorDate}
+        tickets={accumulators.filter((ticket) => ticket.date === accumulatorDate)}
+        onCreate={async (name) => saveAccumulator(null, {}, name)}
+        onUpdate={async (ticket, update) => saveAccumulator(ticket, update)}
+        onDelete={async (ticket) => { await deleteCustomAccumulator(ticket.id); setAccumulators((current) => current.filter((item) => item.id !== ticket.id)); await loadAccumulators() }}
+        onOpenPicks={onOpenResearch}
+      />}
+    </> : <>
       <div className="journal-note"><strong>Personal journal</strong><span>Confirmed selections retain system provenance; free-form entries remain clearly labelled. Neither changes the immutable system paper ledger.</span></div>
       {message && <div className={`tracker-message ${message.tone}`} role={message.tone === 'error' ? 'alert' : 'status'}>{message.text}</div>}
       <div className="journal-summary-heading"><div><span className="eyebrow">All journal records</span><strong>Portfolio totals</strong></div><span>Totals remain stable when the list is filtered.</span></div>
@@ -124,4 +178,5 @@ export default function TrackerPage({ onOpenTickets }: { onOpenTickets?: (date?:
 }
 
 function JournalMetric({ label, value, note, tone }: { label: string; value: string; note: string; tone?: 'positive' | 'negative' }) { return <div className={`stat-card${tone ? ` ${tone}` : ''}`}><div className="kpi-label">{label}</div><div className="kpi-value">{value}</div><div className="kpi-note">{note}</div></div> }
+function AccumulatorMetric({ label, value, note, tone }: { label: string; value: string; note: string; tone?: 'positive' | 'negative' }) { return <div className={`metric-card${tone ? ` ${tone}` : ''}`}><div className="kpi-label">{label}</div><div className="kpi-value">{value}</div><div className="kpi-note">{note}</div></div> }
 function PeriodColumn({ title, rows }: { title: string; rows: BetPeriod[] }) { return <section><h3>{title}</h3>{rows.length ? rows.map(row => <div className="journal-period-row" key={row.label}><span><strong>{row.label}</strong><small>{row.settled}/{row.bets} settled</small></span><span><strong className={row.profit_loss >= 0 ? 'positive' : 'negative'}>{fmtPnl(row.profit_loss)}</strong><small>{row.roi == null ? 'ROI —' : `${(row.roi * 100).toFixed(1)}% ROI`}</small></span></div>) : <p>No settled periods yet.</p>}</section> }

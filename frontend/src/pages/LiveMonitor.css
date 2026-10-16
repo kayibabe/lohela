@@ -10,6 +10,13 @@
 .live-monitor-actions button:disabled { opacity: .55; cursor: progress; }
 .live-monitor-count { margin: 16px 0 10px; color: var(--muted); font-size: .85rem; }
 .live-monitor-count strong { color: var(--text); }
+.live-monitor-controls { display: flex; align-items: end; gap: 8px; flex-wrap: wrap; margin: 15px 0 8px; padding: 11px 12px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); }
+.live-monitor-controls label { display: grid; gap: 4px; color: var(--muted); font-size: .7rem; font-weight: 600; }
+.live-monitor-controls select, .live-monitor-controls button { min-height: 36px; padding: 6px 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); color: var(--text); font: inherit; }
+.live-monitor-controls select { min-width: 190px; }
+.live-monitor-controls button { cursor: pointer; }
+.live-monitor-controls button.active { border-color: var(--accent); background: var(--accent-bg); color: var(--accent); }
+.live-monitor-controls button:disabled { opacity: .5; cursor: not-allowed; }
 .live-monitor-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 360px), 1fr)); gap: 12px; }
 .live-monitor-card { min-width: 0; padding: 11px 14px; border: 1px solid var(--border); border-top: 3px solid var(--negative); border-radius: 12px; background: var(--surface); }
 .live-monitor-card-top { display: flex; align-items: center; justify-content: space-between; gap: 10px; color: var(--muted); font-size: .72rem; line-height: 1.2; }
@@ -25,7 +32,9 @@
 .live-monitor-scoreline b { padding: 4px 8px; border: 1px solid var(--border); border-radius: 7px; background: var(--surface-2); font-size: 1.05rem; white-space: nowrap; }
 .live-monitor-scoreline b span { color: var(--muted); }
 .live-monitor-scoreline strong:first-child { text-align: left; }
-.live-monitor-empty, .live-monitor-message { margin: 16px 0; padding: 18px; border: 1px solid var(--border); border-radius: 11px; background: var(--surface); color: var(--muted); }
+.live-monitor-match-link { display: inline-flex; align-items: center; gap: 5px; margin-top: 10px; color: var(--accent); font-size: .73rem; font-weight: 600; }
+.live-monitor-match-link:hover { text-decoration: underline; }
+.live-monitor-empty, .live-monitor-message, .live-monitor-alert-message { margin: 12px 0; padding: 12px 14px; border: 1px solid var(--border); border-radius: 11px; background: var(--surface); color: var(--muted); }
 .live-monitor-message { border-color: color-mix(in srgb, var(--negative) 35%, var(--border)); color: var(--negative); }
 .live-monitor-footnote { margin: 14px 0; }
 @media (max-width: 700px) {

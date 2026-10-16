@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
-import type { BandMix, BandMixPick, BandMixSelections, SelectionSummary } from "../../lib/api";
-import { fetchBandMixSelections, formatKickoff, formatMarket, formatSelection, selectionRepeatsMarket, selectionTone } from "../../lib/api";
+import type { BandMix, BandMixPick, BandMixPerformanceReport, BandMixSelections, SelectionSummary } from "../../lib/api";
+import { fetchBandMixPerformance, fetchBandMixSelections, formatKickoff, formatMarket, formatSelection, selectionRepeatsMarket, selectionTone } from "../../lib/api";
 import { bandSortValue, useSortableRows } from "../../components/SortableTable";
 import { accumulatorBlockers, gradeTone, matchStatusText, reasonLabel, withRejectionEvidence } from "./helpers";
 
@@ -138,6 +138,110 @@ export function BandMixPicks({
           </p>
         </>
       )}
+      <PerformanceReport date={date} />
+    </section>
+  );
+}
+
+function shiftDate(date: string, days: number): string {
+  const [year, month, day] = date.split("-").map(Number);
+  const value = new Date(Date.UTC(year, month - 1, day + days));
+  return `${value.getUTCFullYear()}-${String(value.getUTCMonth() + 1).padStart(2, "0")}-${String(value.getUTCDate()).padStart(2, "0")}`;
+}
+
+function PerformanceReport({ date }: { date: string }) {
+  const [dateFrom, setDateFrom] = useState(() => shiftDate(date, -29));
+  const [dateTo, setDateTo] = useState(date);
+  const [report, setReport] = useState<BandMixPerformanceReport | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    setDateFrom(shiftDate(date, -29));
+    setDateTo(date);
+  }, [date]);
+
+  useEffect(() => {
+    if (!dateFrom || !dateTo || dateFrom > dateTo) return;
+    let active = true;
+    setLoading(true);
+    fetchBandMixPerformance(dateFrom, dateTo)
+      .then((value) => { if (active) { setReport(value); setError(null); } })
+      .catch((cause) => { if (active) setError(cause instanceof Error ? cause.message : "Unable to load range report"); })
+      .finally(() => { if (active) setLoading(false); });
+    return () => { active = false; };
+  }, [dateFrom, dateTo]);
+
+  const visibleReport = report?.date_from === dateFrom && report.date_to === dateTo ? report : null;
+  const metrics = visibleReport?.summary;
+  return (
+    <section className="band-mix-performance" aria-labelledby="band-mix-performance-title">
+      <div className="section-heading">
+        <div>
+          <h3 id="band-mix-performance-title">Prospective performance</h3>
+          <span className="section-note">Frozen daily ledger picks captured before kickoff; retrospective reconstructions are excluded.</span>
+        </div>
+        <div className="band-mix-date-range">
+          <label>From <input aria-label="Performance start date" type="date" value={dateFrom} max={dateTo || undefined} onChange={(event) => setDateFrom(event.target.value)} /></label>
+          <label>To <input aria-label="Performance end date" type="date" value={dateTo} min={dateFrom || undefined} onChange={(event) => setDateTo(event.target.value)} /></label>
+        </div>
+      </div>
+      {error && <p className="error-bar" role="alert">Range report unavailable: {error}</p>}
+      {loading && !visibleReport && <p className="panel-empty">Loading prospective results…</p>}
+      {metrics && (
+        <>
+          <div className="band-mix-kpis" aria-label="Date-range prospective performance">
+            <span><small>Settled / pending</small><b>{metrics.settled} / {metrics.pending}</b></span>
+            <span><small>Unique matches</small><b>{metrics.matches}</b></span>
+            <span><small>Won / lost / void</small><b>{metrics.wins} / {metrics.losses} / {metrics.voids}</b></span>
+            <span><small>Settled stake</small><b>{metrics.settled_stake_units.toFixed(0)}u</b></span>
+            <span><small>Gross returns</small><b>{metrics.gross_returns_units.toFixed(2)}u</b></span>
+            <span><small>Net P&amp;L</small><b className={metrics.net_pnl_units >= 0 ? "positive" : "negative"}>{metrics.net_pnl_units >= 0 ? "+" : ""}{metrics.net_pnl_units.toFixed(2)}u</b></span>
+            <span><small>ROI</small><b>{pct(metrics.roi)}</b></span>
+            <span><small>Hit rate</small><b>{pct(metrics.hit_rate)}</b></span>
+            <span><small>Longest losing streak</small><b>{metrics.longest_losing_streak}</b></span>
+            <span><small>Max drawdown</small><b>{metrics.max_drawdown_units.toFixed(2)}u</b></span>
+          </div>
+          <p className="matrix-note">Accounting uses a hypothetical flat 1u per settled win/loss. {metrics.pending_stake_units}u remains pending; void picks are excluded from stake and ROI. {visibleReport.excluded_late_or_unknown_capture} ledger rows captured after kickoff or with unknown timing were excluded. This is research tracking, not actual placed-bet accounting.</p>
+          {visibleReport.by_model_version.length > 0 && (
+            <div className="analytics-table-wrap">
+              <table className="analytics-table">
+                <caption className="sr-only">Prospective performance by model version</caption>
+                <thead><tr><th>Model version</th><th>Settled / pending</th><th>Matches</th><th>Net P&amp;L</th><th>ROI</th><th>Max drawdown</th></tr></thead>
+                <tbody>{visibleReport.by_model_version.map((group) => (
+                  <tr key={group.model_version}>
+                    <td>{group.model_version === "unknown" ? "Unknown (older capture)" : group.model_version}</td>
+                    <td>{group.settled} / {group.pending}</td><td>{group.matches}</td>
+                    <td className={group.net_pnl_units >= 0 ? "positive" : "negative"}>{group.net_pnl_units >= 0 ? "+" : ""}{group.net_pnl_units.toFixed(2)}u</td>
+                    <td>{pct(group.roi)}</td><td>{group.max_drawdown_units.toFixed(2)}u</td>
+                  </tr>
+                ))}</tbody>
+              </table>
+            </div>
+          )}
+          {visibleReport.by_target_date.length > 0 && (
+            <details className="band-mix-daily-breakdown">
+              <summary>Daily breakdown ({visibleReport.by_target_date.length} days)</summary>
+              <div className="analytics-table-wrap">
+                <table className="analytics-table">
+                  <caption className="sr-only">Prospective performance by target date</caption>
+                  <thead><tr><th>Date</th><th>Settled / pending</th><th>Matches</th><th>Won / lost / void</th><th>Net P&amp;L</th><th>ROI</th><th>Hit rate</th></tr></thead>
+                  <tbody>{visibleReport.by_target_date.map((day) => (
+                    <tr key={day.target_date}>
+                      <td>{day.target_date}</td><td>{day.settled} / {day.pending}</td><td>{day.matches}</td>
+                      <td>{day.wins} / {day.losses} / {day.voids}</td>
+                      <td className={day.net_pnl_units >= 0 ? "positive" : "negative"}>{day.net_pnl_units >= 0 ? "+" : ""}{day.net_pnl_units.toFixed(2)}u</td>
+                      <td>{pct(day.roi)}</td><td>{pct(day.hit_rate)}</td>
+                    </tr>
+                  ))}</tbody>
+                </table>
+              </div>
+            </details>
+          )}
+        </>
+      )}
+      {!loading && metrics?.picks === 0 && <p className="panel-empty">No frozen daily ledger picks were captured in this date range.</p>}
+      {dateFrom > dateTo && <p className="panel-empty">Choose a start date on or before the end date.</p>}
     </section>
   );
 }
@@ -226,7 +330,7 @@ function PickTable({
           <tr>
             {header("kickoff", "Kickoff")}
             {header("match", "Match / league")}
-            {header("market", "Market / selection")}
+            {header("market", "Market / pick")}
             {header("lohela", "Lohela")}
             {header("marketProb", "Market")}
             {header("odds", "Odds")}
@@ -243,12 +347,12 @@ function PickTable({
             return (
               <tr key={row.prediction_id}>
                 <td><strong className="kickoff-time">{formatKickoff(row.kickoff_at)}</strong></td>
-                <td><strong>{row.home_team} <span className="match-vs">vs</span> {row.away_team}</strong><small>{row.competition}</small></td>
-                <td>{!selectionRepeatsMarket(row.market, row.selection) && <span className="market-chip">{formatMarket(row.market)}</span>}<span className={`market-pick ${selectionTone(row.selection)}`}>{formatSelection(row.selection)}</span></td>
+                <td title={`${row.home_team} vs ${row.away_team} · ${row.competition}`}><strong>{row.home_team} <span className="match-vs">vs</span> {row.away_team}</strong><small>{row.competition}</small></td>
+                <td title={`${formatMarket(row.market)} · ${formatSelection(row.selection)}`}>{!selectionRepeatsMarket(row.market, row.selection) && <span className="market-chip">{formatMarket(row.market)}</span>}<span className={`market-pick ${selectionTone(row.selection)}`}>{formatSelection(row.selection)}</span></td>
                 <td>{pct(row.model_probability)}</td>
                 <td>{pct(row.market_probability)}{!row.pre_kickoff_quote && <small>Post-kickoff quote</small>}</td>
                 <td>{row.odds.toFixed(2)}</td>
-                <td><strong>{row.lohela_band} × {row.market_band}</strong><small>Dynamic group{row.mix_rank ? ` · ROI rank #${row.mix_rank}` : ""}</small></td>
+                <td title={`Dynamic group${row.mix_rank ? ` · ROI rank #${row.mix_rank}` : ""}`}><strong>{row.lohela_band} × {row.market_band}</strong><small>{row.mix_rank ? `ROI rank #${row.mix_rank}` : "Dynamic group"}</small></td>
                 <td className={row.mix_roi != null && row.mix_roi > 0 ? "positive" : "negative"}>{pct(row.mix_roi)}<small>N {row.mix_sample_size} · {pct(row.mix_hit_rate)} hit</small></td>
                 <td><b className={`grade-badge grade-${gradeTone(row.q_grade)}`}>{row.q_grade}</b> {row.q_score.toFixed(1)}</td>
                 <td>

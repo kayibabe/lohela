@@ -47,6 +47,11 @@ class MatchFilterPresetCreate(BaseModel):
     criteria: MatchFilterCriteria
 
 
+class MatchFilterPresetUpdate(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=80)
+    criteria: MatchFilterCriteria
+
+
 class MatchFilterPresetOut(BaseModel):
     id: int
     name: str
@@ -84,6 +89,32 @@ async def save_match_filter_preset(
         criteria=payload.criteria.model_dump(),
     )
     db.add(row)
+    await db.flush()
+    await db.refresh(row)
+    return row
+
+
+@router.patch("/{preset_id}", response_model=MatchFilterPresetOut)
+async def update_match_filter_preset(
+    preset_id: int,
+    payload: MatchFilterPresetUpdate,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require_authenticated_user),
+):
+    row = await db.scalar(
+        select(UserMatchFilterPreset).where(
+            UserMatchFilterPreset.id == preset_id,
+            UserMatchFilterPreset.user_id == user.id,
+        )
+    )
+    if row is None:
+        raise HTTPException(status_code=404, detail="Saved filter not found")
+    if payload.name is not None:
+        name = payload.name.strip()
+        if not name:
+            raise HTTPException(status_code=422, detail="A filter name is required")
+        row.name = name
+    row.criteria = payload.criteria.model_dump()
     await db.flush()
     await db.refresh(row)
     return row

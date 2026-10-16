@@ -5,9 +5,6 @@ import GradeBadge from '../components/GradeBadge'
 import { SortableTh, bandSortValue, useSortableRows } from '../components/SortableTable'
 import './Analytics.css'
 
-interface Summary { total_bets: number; settled: number; pending: number; won: number; lost: number; total_staked: number; total_returned: number; pnl: number; roi_pct: number; hit_rate_pct: number; avg_odds: number | null }
-interface ByType { label: string; bets: number; won: number; staked: number; returned: number; pnl: number; roi_pct: number; hit_rate_pct: number }
-interface ByMonth extends Omit<ByType, 'label'> { month: string }
 interface ResearchBreakdown { ticket_type: string; tickets: number; wins: number; hit_rate: number; roi: number; profit_loss: number }
 interface TicketOverlap { target_date: string; left_ticket_type: string; right_ticket_type: string; shared_matches: number; left_legs: number; right_legs: number; overlap_ratio_of_smaller: number }
 interface ResearchSummary {
@@ -48,7 +45,8 @@ interface BacktestMetrics {
 }
 interface BacktestResult { backtest_run_id: number; status: string; leakage_checks_passed: boolean; error_details: string | null; metrics: BacktestMetrics }
 interface PipelineRun { id: number; target_date: string; status: string; current_stage: string | null; completed_at: string | null; started_at: string | null }
-type View = 'research' | 'individual' | 'auto' | 'calibration' | 'backtest' | 'journal'
+type View = 'performance' | 'ledger' | 'methods'
+type ResearchView = 'calibration' | 'market' | 'backtest'
 
 interface ProbabilityBucketRow { band: string; sample_size: number; wins: number; losses: number; hit_rate: number | null; roi: number | null; avg_probability: number; calibration_gap: number }
 interface CombinedMatrixRow { lohela_band: string; market_band: string; sample_size: number; wins: number; losses: number; hit_rate: number | null; roi: number | null; avg_lohela_probability: number; avg_market_probability: number }
@@ -72,11 +70,9 @@ const isoDate = (date: Date) => `${date.getFullYear()}-${String(date.getMonth() 
 function initialBacktestDates(modelVersion: string) { const end = new Date(); const start = new Date(end); start.setFullYear(start.getFullYear() - 1); return { period_start: isoDate(start), period_end: isoDate(end), model_version: modelVersion, simulations: '10000' } }
 
 export default function AnalyticsPage() {
-  const [view, setView] = useState<View>('research')
+  const [view, setView] = useState<View>('performance')
+  const [researchView, setResearchView] = useState<ResearchView>('calibration')
   const [research, setResearch] = useState<ResearchSummary | null>(null)
-  const [summary, setSummary] = useState<Summary | null>(null)
-  const [byType, setByType] = useState<ByType[]>([])
-  const [byMonth, setByMonth] = useState<ByMonth[]>([])
   const [autoResearch, setAutoResearch] = useState<IndividualSummary | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(false)
@@ -88,12 +84,9 @@ export default function AnalyticsPage() {
   useEffect(() => {
     Promise.all([
       fetch(`/api/v1/performance/summary?${new URLSearchParams({ ...(dateFrom ? { date_from: dateFrom } : {}), ...(dateTo ? { date_to: dateTo } : {}), ...(modelVersion ? { model_version: modelVersion } : {}) })}`).then(r => r.ok ? r.json() : null).catch(() => null),
-      fetch('/api/v1/analytics/summary').then(r => r.ok ? r.json() : null).catch(() => null),
-      fetch('/api/v1/analytics/by-ticket-type').then(r => r.ok ? r.json() : []).catch(() => []),
-      fetch('/api/v1/analytics/by-month').then(r => r.ok ? r.json() : []).catch(() => []),
       fetch('/api/v1/admin/pipeline/status').then(r => r.ok ? r.json() : null).catch(() => null),
-    ]).then(([paper, manual, types, months, pipeline]) => {
-      setResearch(paper); setSummary(manual); setByType(types); setByMonth(months); setLatestRun(pipeline?.runs?.[0] ?? null); setError(!paper && !manual)
+    ]).then(([paper, pipeline]) => {
+      setResearch(paper); setLatestRun(pipeline?.runs?.[0] ?? null); setError(!paper)
     }).finally(() => setLoading(false))
   }, [dateFrom, dateTo, modelVersion])
 
@@ -104,18 +97,20 @@ export default function AnalyticsPage() {
         <span className="ledger-chip"><span /> Immutable research ledger</span>
       </div>
       <div className="analytics-tabs" role="tablist" aria-label="Analytics views">
-        {([['research', 'Performance'], ['individual', 'Recommendation ledger'], ['calibration', 'Probability calibration'], ['auto', 'Market research'], ['backtest', 'Backtest lab'], ['journal', 'Journal']] as [View, string][]).map(([id, label]) => <button key={id} role="tab" aria-selected={view === id} className={view === id ? 'active' : ''} onClick={() => setView(id)}>{label}</button>)}
+        {([['performance', 'Performance'], ['ledger', 'Recommendation ledger'], ['methods', 'Research methods']] as [View, string][]).map(([id, label]) => <button key={id} role="tab" aria-selected={view === id} className={view === id ? 'active' : ''} onClick={() => setView(id)}>{label}</button>)}
       </div>
       <DataFreshness run={latestRun} />
-      {view === 'research' && <div className="analytics-filters shared-analytics-filters" aria-label="Analytics scope filters"><span className="filter-scope-label">Scope</span><label>From<input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} /></label><label>To<input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} /></label><label>Model<input placeholder="All models" value={modelVersion} onChange={e => setModelVersion(e.target.value)} /></label>{(dateFrom || dateTo || modelVersion) && <button className="btn-ghost btn-sm" onClick={() => { setDateFrom(''); setDateTo(''); setModelVersion('') }}>Reset scope</button>}<span className="filter-summary">Applies to immutable published-ticket performance.</span></div>}
+      {view === 'methods' && <div className="analytics-tabs analytics-subtabs" role="tablist" aria-label="Research methods">
+        {([['calibration', 'Probability calibration'], ['market', 'Market research'], ['backtest', 'Backtest lab']] as [ResearchView, string][]).map(([id, label]) => <button key={id} role="tab" aria-selected={researchView === id} className={researchView === id ? 'active' : ''} onClick={() => setResearchView(id)}>{label}</button>)}
+      </div>}
+      {view === 'performance' && <div className="analytics-filters shared-analytics-filters" aria-label="Analytics scope filters"><span className="filter-scope-label">Scope</span><label>From<input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} /></label><label>To<input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} /></label><label>Model<input placeholder="All models" value={modelVersion} onChange={e => setModelVersion(e.target.value)} /></label>{(dateFrom || dateTo || modelVersion) && <button className="btn-ghost btn-sm" onClick={() => { setDateFrom(''); setDateTo(''); setModelVersion('') }}>Reset scope</button>}<span className="filter-summary">Applies to immutable published-ticket performance.</span></div>}
       {loading && <AnalyticsSkeleton />}
-      {!loading && error && <AnalyticsEmpty title="Analytics are unavailable" body="Check the API connection and try again." />}
-      {!loading && view === 'research' && <ResearchPerformance data={research} />}
-      {!loading && view === 'individual' && <PickLedger />}
-      {!loading && view === 'auto' && <AutoMarketResearch data={autoResearch} setData={setAutoResearch} />}
-      {!loading && view === 'calibration' && <ProbabilityCalibration />}
-      {!loading && view === 'backtest' && <BacktestPanel currentModelVersion={research?.current_model_version ?? ''} />}
-      {!loading && view === 'journal' && <ManualJournal summary={summary} byType={byType} byMonth={byMonth} />}
+      {!loading && error && view === 'performance' && <AnalyticsEmpty title="Performance data is unavailable" body="Check the API connection and try again. Other research views may still be available." />}
+      {!loading && view === 'performance' && <ResearchPerformance data={research} />}
+      {!loading && view === 'ledger' && <PickLedger />}
+      {!loading && view === 'methods' && researchView === 'market' && <AutoMarketResearch data={autoResearch} setData={setAutoResearch} />}
+      {!loading && view === 'methods' && researchView === 'calibration' && <ProbabilityCalibration />}
+      {!loading && view === 'methods' && researchView === 'backtest' && <BacktestPanel currentModelVersion={research?.current_model_version ?? ''} />}
     </div>
   )
 }
@@ -529,7 +524,7 @@ function ResearchPerformance({ data }: { data: ResearchSummary | null }) {
   const hasSettled = data.settled_tickets > 0
   const coverage = data.published_tickets ? data.settled_tickets / data.published_tickets : 0
   const [ciLow, ciHigh] = data.hit_rate_confidence_interval_95
-  const portfolioRows = [...data.by_ticket_type, data.my_accumulators]
+  const portfolioRows = data.by_ticket_type
   return <>
     <div className="validation-strip"><div><span className={`validation-dot ${hasSettled ? 'ready' : ''}`} /><strong>{hasSettled ? 'Settlement evidence available' : 'Paper-trading evidence accumulating'}</strong></div><span>Model {data.current_model_version} · {data.settled_tickets} of {data.published_tickets} tickets settled · {pct(coverage)} coverage</span></div>
     <div className="research-kpis">
@@ -542,8 +537,9 @@ function ResearchPerformance({ data }: { data: ResearchSummary | null }) {
     </div>
     <div className="analytics-insight-grid">
       <section className="analytics-card">
-        <div className="section-header"><div><span className="eyebrow">Portfolio lens</span><h2 className="section-title">By ticket type</h2></div><span className="section-subtitle">Latest settlement version</span></div>
+        <div className="section-header"><div><span className="eyebrow">Portfolio lens</span><h2 className="section-title">By ticket type</h2></div><span className="section-subtitle">Published ticket tiers only</span></div>
         {portfolioRows.length === 0 ? <AnalyticsEmpty title="No settled ticket cohorts yet" body="Breakdowns appear after result ingestion." compact /> : <div className="cohort-list">{portfolioRows.map(row => <div className="cohort-row" key={row.ticket_type}><div><span className="badge badge-type">{row.ticket_type === 'my_accumulators' ? 'My Accumulators' : formatTicketType(row.ticket_type)}</span><small>{row.wins}/{row.tickets} won</small></div><div><span>Hit rate</span><strong>{pct(row.hit_rate)}</strong></div><div><span>ROI</span><strong className={row.roi >= 0 ? 'positive' : 'negative'}>{pct(row.roi)}</strong></div><div><span>P&amp;L</span><strong className={row.profit_loss >= 0 ? 'positive' : 'negative'}>{fmtPnl(row.profit_loss)}</strong></div></div>)}</div>}
+        <p className="matrix-note">Personal accumulator performance is tracked separately in Track → My accumulators.</p>
       </section>
       <section className="analytics-card methodology-card">
         <div className="section-header"><div><span className="eyebrow">Interpretation</span><h2 className="section-title">Evidence quality</h2></div></div>
@@ -613,25 +609,7 @@ function BacktestReport({ result }: { result: BacktestResult }) {
   </div>
 }
 
-function ManualJournal({ summary, byType, byMonth }: { summary: Summary | null; byType: ByType[]; byMonth: ByMonth[] }) {
-  if (!summary) return <AnalyticsEmpty title="Manual journal unavailable" body="The optional bet journal did not return data." />
-  const hasBets = summary.settled > 0
-  return <>
-    <div className="journal-note"><strong>Personal journal</strong><span>Manual entries are separate from the immutable system-published paper-ticket ledger.</span></div>
-    <div className="stat-row"><MetricCard label="Hit rate" value={hasBets ? `${summary.hit_rate_pct.toFixed(1)}%` : '—'} /><MetricCard label="Avg odds" value={summary.avg_odds?.toFixed(2) ?? '—'} /><MetricCard label="Total staked" value={fmt(summary.total_staked)} /><MetricCard label="Net P&L" value={fmtPnl(summary.pnl)} tone={summary.pnl >= 0 ? 'positive' : 'negative'} /><MetricCard label="ROI" value={hasBets ? `${summary.roi_pct.toFixed(1)}%` : '—'} tone={summary.roi_pct >= 0 ? 'positive' : 'negative'} /><MetricCard label="Won / lost" value={`${summary.won} / ${summary.lost}`} note={`${summary.pending} pending`} /></div>
-    {!hasBets && <AnalyticsEmpty title="No settled journal entries" body="Settle manually logged bets in Tracker to populate this view." />}
-    {hasBets && byType.length > 0 && <JournalTable title="By ticket type" rows={byType} />}
-    {hasBets && byMonth.length > 0 && <><JournalTable title="Monthly breakdown" rows={[...byMonth].reverse().map(row => ({ ...row, label: row.month }))} /><div className="section-header spaced"><h2 className="section-title">P&amp;L by month</h2></div><PnlChart data={byMonth} /></>}
-  </>
-}
-
-function JournalTable({ title, rows }: { title: string; rows: ByType[] }) {
-  const { sorted, header } = useSortableRows(rows, { label: row => row.label, bets: row => row.bets, hit: row => row.hit_rate_pct, staked: row => row.staked, pnl: row => row.pnl, roi: row => row.roi_pct })
-  return <section className="analytics-card journal-table-card"><div className="section-header"><h2 className="section-title">{title}</h2></div><div className="analytics-table-wrap"><table className="analytics-table"><thead><tr>{header('label', 'Group')}{header('bets', 'Bets')}{header('hit', 'Hit rate')}{header('staked', 'Staked')}{header('pnl', 'P&L')}{header('roi', 'ROI')}</tr></thead><tbody>{sorted.map(row => <tr key={row.label}><td><strong>{row.label}</strong></td><td>{row.bets}</td><td>{row.hit_rate_pct.toFixed(1)}%</td><td>{fmt(row.staked)}</td><td className={row.pnl >= 0 ? 'positive' : 'negative'}>{fmtPnl(row.pnl)}</td><td className={row.roi_pct >= 0 ? 'positive' : 'negative'}>{row.roi_pct.toFixed(1)}%</td></tr>)}</tbody></table></div></section>
-}
-
 function MetricCard({ label, value, note, tone }: { label: string; value: string; note?: string; tone?: 'positive' | 'negative' | 'warning' }) { return <div className={`stat-card metric-card${tone ? ` ${tone}` : ''}`}><div className="kpi-label">{label}</div><div className="kpi-value">{value}</div>{note && <div className="kpi-note">{note}</div>}</div> }
 function EvidenceRow({ label, value, detail }: { label: string; value: string; detail: string }) { return <div className="evidence-row"><div><strong>{label}</strong><span>{detail}</span></div><b>{value}</b></div> }
 function AnalyticsEmpty({ title, body, compact = false }: { title: string; body: string; compact?: boolean }) { return <div className={`analytics-empty${compact ? ' compact' : ''}`}><strong>{title}</strong><span>{body}</span></div> }
 function AnalyticsSkeleton() { return <div className="research-kpis" aria-busy="true" aria-label="Loading analytics">{Array.from({ length: 6 }, (_, index) => <div className="stat-card skeleton-metric" key={index}><span className="skeleton-block" /><span className="skeleton-block" /></div>)}</div> }
-function PnlChart({ data }: { data: ByMonth[] }) { const max = Math.max(...data.map(d => Math.abs(d.pnl)), 1); return <div className="pnl-chart">{data.map(d => <div key={d.month} className="pnl-bar-wrap"><div className="pnl-bar-label">{d.month.slice(5)}</div><div className="pnl-bar-track"><div className={`pnl-bar ${d.pnl >= 0 ? 'positive' : 'negative'}`} style={{ width: `${Math.abs(d.pnl) / max * 80}%` }} /></div><div className={`pnl-bar-val ${d.pnl >= 0 ? 'positive' : 'negative'}`}>{fmtPnl(d.pnl)}</div></div>)}</div> }

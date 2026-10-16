@@ -324,6 +324,13 @@ export async function fetchMatchFixtures(date: string): Promise<MatchFixture[]> 
   return res.json()
 }
 
+export async function fetchPublicMatchFixtures(date: string): Promise<MatchFixture[]> {
+  const params = new URLSearchParams({ date })
+  const res = await fetch(`/api/v1/selections/public-fixtures?${params}`)
+  if (!res.ok) throw new Error(`API error ${res.status}`)
+  return res.json()
+}
+
 export async function fetchMatchFavoriteIds(): Promise<number[]> {
   const res = await fetch('/api/v1/match-favorites')
   if (!res.ok) throw new Error(`API error ${res.status}`)
@@ -380,6 +387,16 @@ export async function fetchMatchFilterPresets(): Promise<MatchFilterPreset[]> {
 export async function createMatchFilterPreset(name: string, criteria: MatchFilterCriteria): Promise<MatchFilterPreset> {
   const res = await fetch('/api/v1/match-filters', {
     method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name, criteria }),
+  })
+  if (!res.ok) throw new Error(`API error ${res.status}`)
+  return res.json()
+}
+
+export async function updateMatchFilterPreset(presetId: number, name: string, criteria: MatchFilterCriteria): Promise<MatchFilterPreset> {
+  const res = await fetch(`/api/v1/match-filters/${presetId}`, {
+    method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ name, criteria }),
   })
@@ -496,6 +513,7 @@ export interface BandMixScan {
 
 export interface BandMixPick {
   prediction_id: number
+  model_version?: string
   match_id: number
   home_team: string
   away_team: string
@@ -550,6 +568,33 @@ export interface BandMixSelections {
 
 export async function fetchBandMixSelections(date: string): Promise<BandMixSelections> {
   const res = await fetch(`/api/v1/selections/band-mix?${new URLSearchParams({ date })}`)
+  if (!res.ok) throw new Error(`API error ${res.status}`)
+  return res.json()
+}
+
+export interface BandMixPerformanceMetrics {
+  picks: number; matches: number; settled: number; pending: number
+  wins: number; losses: number; voids: number
+  settled_stake_units: number; pending_stake_units: number
+  gross_returns_units: number; net_pnl_units: number
+  roi: number | null; hit_rate: number | null
+  longest_losing_streak: number; max_drawdown_units: number
+}
+
+export interface BandMixPerformanceReport {
+  date_from: string
+  date_to: string
+  cohort: string
+  accounting: string
+  excluded_late_or_unknown_capture: number
+  summary: BandMixPerformanceMetrics
+  by_model_version: (BandMixPerformanceMetrics & { model_version: string })[]
+  by_target_date: (BandMixPerformanceMetrics & { target_date: string })[]
+}
+
+export async function fetchBandMixPerformance(dateFrom: string, dateTo: string): Promise<BandMixPerformanceReport> {
+  const params = new URLSearchParams({ date_from: dateFrom, date_to: dateTo })
+  const res = await fetch(`/api/v1/selections/band-mix/performance?${params}`)
   if (!res.ok) throw new Error(`API error ${res.status}`)
   return res.json()
 }
@@ -705,9 +750,17 @@ export function formatSelection(selection: string): string {
 }
 
 export function selectionRepeatsMarket(market: string, selection: string): boolean {
-  const marketLabel = formatMarket(market).trim().toLowerCase()
-  const selectionLabel = formatSelection(selection).trim().toLowerCase()
-  return selectionLabel === marketLabel || selectionLabel.startsWith(`${marketLabel} (`)
+  const normalize = (value: string) => value.trim().toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim()
+  const aliases: Record<string, string> = {
+    'btts yes': 'both teams to score yes',
+    'btts no': 'both teams to score no',
+    'dnb home': 'draw no bet home',
+    'dnb away': 'draw no bet away',
+  }
+  const canonicalize = (value: string) => aliases[value] ?? value
+  const marketLabel = canonicalize(normalize(formatMarket(market)))
+  const selectionLabel = canonicalize(normalize(formatSelection(selection)))
+  return selectionLabel === marketLabel || selectionLabel.startsWith(`${marketLabel} `)
 }
 
 export function selectionTone(selection: string): string {

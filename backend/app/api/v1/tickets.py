@@ -26,11 +26,90 @@ from app.models import (
     TicketType,
     RunStatus,
 )
+from app.models.research import BandMixScan
+from app.services.band_mix_picks import band_mix_ledger_rows
 from app.services.accumulator_builder import PUBLIC_TICKET_TYPES as BUILDER_PUBLIC_TICKET_TYPES
 from app.services.ticket_publisher import get_latest_published_tickets, get_ticket_by_id
 from app.services.pipeline_tracker import infer_pipeline_run_type
 
 router = APIRouter(prefix="/tickets", tags=["tickets"])
+
+
+@router.get("/portfolio-band-mix")
+async def export_portfolio_band_mix(
+    target_date: date = Query(alias="date"),
+    x_portfolio_token: str | None = Header(default=None),
+    db: AsyncSession = Depends(get_db),
+):
+    """Read-only export of Lohela's captured Best-mix picks for Portfolio."""
+    expected = os.environ.get("PORTFOLIO_EXPORT_TOKEN", "")
+    if not expected or not x_portfolio_token or not hmac.compare_digest(expected, x_portfolio_token):
+        raise HTTPException(status_code=401, detail="Invalid portfolio service credential")
+
+    scan = (await db.execute(
+        select(BandMixScan).where(BandMixScan.target_date == target_date)
+    )).scalar_one_or_none()
+    if scan is None:
+        return {
+            "app": "lohela",
+            "target_date": target_date.isoformat(),
+            "captured": False,
+            "captured_at": None,
+            "policy_version": None,
+            "evidence_through": None,
+            "rows": [],
+        }
+
+    # Use the insert-only ledger. Reconstructing candidates from today's mutable
+    # prediction rows would make a historical daily page look prospective.
+    rows = await band_mix_ledger_rows(db, target_date)
+    return {
+        "app": "lohela",
+        "target_date": target_date.isoformat(),
+        "captured": True,
+        "captured_at": scan.captured_at.isoformat() if scan.captured_at else None,
+        "policy_version": scan.payload.get("policy_version", "dynamic-roi-v1"),
+        "evidence_through": scan.evidence_through.isoformat(),
+        "capture_source": scan.capture_source,
+        "rows": [
+            {
+                "source_id": str(row.get("ledger_id") or row.get("prediction_id")),
+                "source_group_id": str(scan.id),
+                "match_id": row.get("match_id"),
+                "home_team": row.get("home_team"),
+                "away_team": row.get("away_team"),
+                "competition": row.get("competition"),
+                "kickoff_at": row.get("kickoff_at"),
+                "market": row.get("market"),
+                "selection": row.get("selection"),
+                "line": row.get("line"),
+                "odds": row.get("odds"),
+                "probability": row.get("model_probability"),
+                "market_probability": row.get("market_probability"),
+                "status": row.get("match_status"),
+                "score": (
+                    f"{row.get('home_goals')}-{row.get('away_goals')}"
+                    if row.get("home_goals") is not None and row.get("away_goals") is not None
+                    else None
+                ),
+                "outcome": row.get("result"),
+                "qualification_status": "qualified",
+                "qualification_reason": None,
+                "evidence": {
+                    "lohela_band": row.get("lohela_band"),
+                    "market_band": row.get("market_band"),
+                    "mix_rank": row.get("mix_rank"),
+                    "mix_sample_size": row.get("mix_sample_size"),
+                    "mix_hit_rate": row.get("mix_hit_rate"),
+                    "mix_roi": row.get("mix_roi"),
+                    "pre_kickoff_quote": row.get("pre_kickoff_quote"),
+                    "ledger_captured_at": row.get("ledger_captured_at"),
+                    "ledger_settled_at": row.get("ledger_settled_at"),
+                },
+            }
+            for row in rows
+        ],
+    }
 
 
 @router.get("/portfolio-export")

@@ -11,6 +11,7 @@ from app.config import CURRENT_MODEL_VERSION
 from app.services.performance import performance_summary, individual_selection_summary, market_reliability_matrix, all_market_research_summary, clv_summary, totals_calibration_review, probability_calibration_analysis
 from app.services.performance_export import probability_calibration_workbook
 from app.services.recommendation_ledger import recommendation_pick_ledger
+from app.services.market_roi_daily import daily_market_roi
 
 router = APIRouter(
     prefix="/performance",
@@ -60,6 +61,12 @@ async def probability_calibration_export(date_from: date | None = None, date_to:
 @router.get("/all-markets")
 async def all_markets(stake: float = Query(1.0, gt=0, le=100000), date_from: date | None = None, date_to: date | None = None, model_version: str | None = None, db: AsyncSession = Depends(get_db)):
     return await all_market_research_summary(db, stake, date_from, date_to, model_version)
+
+
+@router.get("/market-roi-daily")
+async def market_roi_daily(target_date: date | None = Query(None, alias="date"), db: AsyncSession = Depends(get_db)):
+    """Daily research shortlist based on prior settled markets with fresh prices."""
+    return await daily_market_roi(db, target_date)
 
 
 @router.get("/clv")

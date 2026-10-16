@@ -3,7 +3,7 @@ import { useAuth } from '../auth'
 
 export default function LoginPage({ onSuccess }: { onSuccess: () => void }) {
   const { login, register, error } = useAuth()
-  const [mode, setMode] = useState<'login' | 'register'>('login')
+  const [mode, setMode] = useState<'login' | 'register'>(() => new URLSearchParams(window.location.search).get('mode') === 'register' ? 'register' : 'login')
   const [username, setUsername] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -37,6 +37,7 @@ export default function LoginPage({ onSuccess }: { onSuccess: () => void }) {
           <button className="btn-ghost auth-switch" type="button" onClick={() => setMode(value => value === 'login' ? 'register' : 'login')}>
             {mode === 'login' ? 'Need an account? Create one' : 'Already have an account? Sign in'}
           </button>
+          <a className="auth-home-link" href="/">Back to home</a>
         </div>
         </div>
       </div>

@@ -8,6 +8,7 @@ import {
   formatMarket,
   selectionRepeatsMarket,
   formatSelection,
+  updateMatchFilterPreset,
 } from "../../lib/api";
 import {
   accumulatorBlockers,
@@ -215,6 +216,20 @@ export function AllMatches({
     const result = first < second ? -1 : first > second ? 1 : 0;
     return sort.direction === "asc" ? result : -result;
   });
+  const filteredResults = filteredRows.flatMap(([matchId, selections]) =>
+    selections
+      .filter((row) => row.result === "won" || row.result === "lost" || row.result === "void")
+      .map((row) => ({ matchId, result: row.result as "won" | "lost" | "void" })),
+  );
+  const filteredResultCounts = filteredResults.reduce(
+    (counts, row) => {
+      counts[row.result] += 1;
+      counts.matches.add(row.matchId);
+      return counts;
+    },
+    { won: 0, lost: 0, void: 0, matches: new Set<number>() },
+  );
+  const decidedCount = filteredResultCounts.won + filteredResultCounts.lost;
   const changeSort = (key: MatchSortKey) =>
     setSort((current) =>
       current.key === key
@@ -276,6 +291,21 @@ export function AllMatches({
       setPresetMessage("Filter saved to your account.");
     } catch {
       setPresetMessage("Could not save this filter. Check your connection and try again.");
+    }
+  };
+  const selectedPreset = presets.find((item) => String(item.id) === presetId);
+  const selectedPresetChanged = Boolean(selectedPreset && Object.entries(currentCriteria).some(([key, value]) =>
+    selectedPreset.criteria[key as keyof MatchFilterCriteria] !== value,
+  ));
+  const updatePreset = async () => {
+    if (!selectedPreset || !selectedPresetChanged) return;
+    setPresetMessage("");
+    try {
+      const updated = await updateMatchFilterPreset(selectedPreset.id, selectedPreset.name, currentCriteria);
+      setPresets((current) => current.map((item) => item.id === updated.id ? updated : item));
+      setPresetMessage("Saved filter updated.");
+    } catch {
+      setPresetMessage("Could not update this filter. Check your connection and try again.");
     }
   };
   const removePreset = async () => {
@@ -428,7 +458,8 @@ export function AllMatches({
                 {presets.map((preset) => <option key={preset.id} value={preset.id}>{preset.name}</option>)}
               </select></label>
               <label><span className="sr-only">Name this filter</span><input value={presetName} onChange={(event) => setPresetName(event.target.value)} maxLength={80} placeholder="Name this filter" /></label>
-              <button className="match-copy-link" onClick={savePreset} disabled={!presetName.trim()}>Save filter</button>
+              <button className="match-copy-link" onClick={savePreset} disabled={!presetName.trim()}>Save as new filter</button>
+              <button className="match-copy-link" onClick={updatePreset} disabled={!selectedPresetChanged}>Update selected filter</button>
               <button className="match-clear-filters" onClick={removePreset} disabled={!presetId}>Delete saved filter</button>
               {presetMessage && <span className="match-filter-message" role="status">{presetMessage}</span>}
             </div>
@@ -442,6 +473,16 @@ export function AllMatches({
               <label><span>Q-score max</span><input type="number" min="0" max="100" step="1" value={maxQScore} onChange={(event) => setMaxQScore(event.target.value)} placeholder="Any" /></label>
             </div>
           </div>
+          {filteredResults.length > 0 && <section className="match-scan-outcomes" aria-label="Settled results for this filtered match date">
+            <div className="match-scan-outcomes-heading"><strong>Settled picks in this view</strong><span>{filteredResultCounts.matches.size} matches with settled picks · selected date only</span></div>
+            <div className="match-scan-outcomes-metrics">
+              <span><small>Won</small><b>{filteredResultCounts.won}</b></span>
+              <span><small>Lost</small><b>{filteredResultCounts.lost}</b></span>
+              <span><small>Void</small><b>{filteredResultCounts.void}</b></span>
+              <span><small>Hit rate</small><b>{decidedCount > 0 ? `${((filteredResultCounts.won / decidedCount) * 100).toFixed(1)}%` : "—"}</b></span>
+            </div>
+            <p>Void picks are excluded from hit rate. This one-date result summary is not a strategy backtest or a profitability claim.</p>
+          </section>}
           {sortedRows.length === 0 ? (
             <p className="panel-empty">{favoriteOnly && favorites.length === 0 ? "No favourites yet. Select a star beside a match to save it here." : "No qualified matches match these filters."}</p>
           ) : (

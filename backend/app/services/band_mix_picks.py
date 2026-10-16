@@ -260,6 +260,111 @@ async def band_mix_ledger_rows(db: AsyncSession, target_date: date) -> list[dict
     return sorted(output, key=lambda item: (item.get("kickoff_at", ""), item.get("prediction_id", 0)))
 
 
+def _prospective_metrics(rows: list[dict]) -> dict:
+    """Summarize frozen ledger picks at one flat unit per settled decision."""
+    wins = sum(row.get("result") == "won" for row in rows)
+    losses = sum(row.get("result") == "lost" for row in rows)
+    voids = sum(row.get("result") == "void" for row in rows)
+    pending = sum(row.get("result") not in {"won", "lost", "void"} for row in rows)
+    settled = wins + losses
+    gross_returns = sum(float(row.get("odds") or 0) for row in rows if row.get("result") == "won")
+    net = gross_returns - settled
+    current_streak = max_streak = 0
+    running = peak = max_drawdown = 0.0
+    ordered = sorted(rows, key=lambda row: (
+        row.get("target_date", ""), row.get("kickoff_at", ""), row.get("ledger_id", 0),
+    ))
+    for row in ordered:
+        result = row.get("result")
+        if result not in {"won", "lost"}:
+            continue
+        profit = float(row.get("odds") or 0) - 1 if result == "won" else -1.0
+        running += profit
+        peak = max(peak, running)
+        max_drawdown = max(max_drawdown, peak - running)
+        current_streak = current_streak + 1 if result == "lost" else 0
+        max_streak = max(max_streak, current_streak)
+    return {
+        "picks": len(rows),
+        "matches": len({row.get("match_id") for row in rows}),
+        "settled": settled,
+        "pending": pending,
+        "wins": wins,
+        "losses": losses,
+        "voids": voids,
+        "settled_stake_units": settled,
+        "pending_stake_units": pending,
+        "gross_returns_units": gross_returns,
+        "net_pnl_units": net,
+        "roi": net / settled if settled else None,
+        "hit_rate": wins / settled if settled else None,
+        "longest_losing_streak": max_streak,
+        "max_drawdown_units": max_drawdown,
+    }
+
+
+def _captured_before_kickoff(pick: BandMixDailyPick, payload: dict) -> bool:
+    """Require a persisted capture timestamp strictly before the fixture starts."""
+    try:
+        kickoff = datetime.fromisoformat(str(payload["kickoff_at"]).replace("Z", "+00:00"))
+    except (KeyError, TypeError, ValueError):
+        return False
+    captured = pick.captured_at
+    if captured is None:
+        return False
+    # Some SQLite-backed local histories return UTC timestamps without tzinfo.
+    if captured.tzinfo is None:
+        captured = captured.replace(tzinfo=timezone.utc)
+    if kickoff.tzinfo is None:
+        return False
+    return captured.astimezone(timezone.utc) < kickoff.astimezone(timezone.utc)
+
+
+async def band_mix_performance_report(
+    db: AsyncSession, date_from: date, date_to: date,
+) -> dict:
+    """Report only immutable, day-of-capture ledger picks (prospective cohort)."""
+    picks = (await db.execute(select(BandMixDailyPick).where(
+        BandMixDailyPick.target_date >= date_from,
+        BandMixDailyPick.target_date <= date_to,
+    ))).scalars().all()
+    rows = []
+    excluded = 0
+    for pick in picks:
+        row = dict(pick.payload)
+        if not _captured_before_kickoff(pick, row):
+            excluded += 1
+            continue
+        row.update({
+            "target_date": pick.target_date.isoformat(),
+            "match_id": pick.match_id,
+            "result": pick.result,
+            "ledger_id": pick.id,
+        })
+        rows.append(row)
+    by_version: dict[str, list[dict]] = {}
+    by_day: dict[str, list[dict]] = {}
+    for row in rows:
+        by_version.setdefault(row.get("model_version") or "unknown", []).append(row)
+        by_day.setdefault(row["target_date"], []).append(row)
+    return {
+        "date_from": date_from.isoformat(),
+        "date_to": date_to.isoformat(),
+        "cohort": "prospective_daily_ledger",
+        "excluded_late_or_unknown_capture": excluded,
+        "accounting": "flat 1-unit stake per settled win/loss; pending shown separately; voids excluded from stake and ROI",
+        "summary": _prospective_metrics(rows),
+        "by_model_version": [
+            {"model_version": version, **_prospective_metrics(version_rows)}
+            for version, version_rows in sorted(by_version.items())
+        ],
+        "by_target_date": [
+            {"target_date": day, **_prospective_metrics(day_rows)}
+            for day, day_rows in sorted(by_day.items())
+        ],
+    }
+
+
 async def band_mix_lifecycle_history(
     db: AsyncSession,
     date_from: date | None = None,
@@ -485,6 +590,7 @@ async def band_mix_candidates(db: AsyncSession, target_date: date, scan: dict) -
         match = prediction.match
         candidates.append(({
             "prediction_id": prediction.id,
+            "model_version": prediction.model_version,
             "match_id": match.id,
             "home_team": match.home_team.name,
             "away_team": match.away_team.name,

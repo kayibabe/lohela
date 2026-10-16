@@ -127,8 +127,7 @@ export default function TicketCard({ ticket, tierName, tierDesc, color, research
           </div>
           <div className="ticket-tier-badges">
             <span className={`ticket-status-badge ${ticketStatusTone}`}>{ticketStatusLabel}</span>
-            <span className="version-badge" title="Latest published ticket version">v{ticket.version}</span>
-            {marketPriced ? <span className="fair-price-badge">Fair-priced</span> : <GradeBadge grade={ticket.legs[0]?.q_grade ?? 'C'} />}
+            {marketPriced ? <span className="market-pricing-badge">Market-priced</span> : <GradeBadge grade={ticket.legs[0]?.q_grade ?? 'C'} />}
             {flaggedLegs.length > 0 && <span className="review-badge">Value review · {flaggedLegs.length}</span>}
           </div>
         </div>
@@ -148,27 +147,15 @@ export default function TicketCard({ ticket, tierName, tierDesc, color, research
               )}
             </span>
           </div>
-          <div className="stat" title="Higher scores indicate a riskier accumulator">
-            <span className="stat-label">Risk score</span>
-            <span className={`stat-value risk-${riskTone}`}>{ticket.risk_score == null ? 'Pro only' : `${ticket.risk_score.toFixed(0)}/100`}</span>
-          </div>
           {marketPriced ? (
-            <div className="stat" title="Average long-run return per unit staked at these odds. Negative means the bookmaker's margin outweighs any price advantage.">
-              <span className="stat-label">Expected return</span>
+            <div className="stat" title="Estimated long-run return per unit staked at the recorded odds. Negative means below break-even.">
+              <span className="stat-label">Return / unit</span>
               {/* Never styled as a win: any small positive figure is price noise, not claimed value. */}
               <span className="stat-value neutral">
                 {ticket.expected_value == null ? 'Pro only' : PCT(ticket.expected_value)}
               </span>
             </div>
           ) : (<>
-          <div className="stat" title="Average Q-score across all ticket legs">
-            <span className="stat-label">Avg Q-score</span>
-            <span className="stat-value neutral">{ticket.avg_q_score == null ? 'Pro only' : ticket.avg_q_score.toFixed(1)}</span>
-          </div>
-          <div className="stat" title="Average model edge across all ticket legs">
-            <span className="stat-label">Avg edge</span>
-            <span className={flaggedLegs.length > 0 ? 'stat-value review' : ticket.avg_edge == null ? 'stat-value neutral' : 'stat-value positive'}>{flaggedLegs.length > 0 ? 'Review' : ticket.avg_edge == null ? '—' : PCT(ticket.avg_edge)}</span>
-          </div>
           <div className="stat" title={flaggedLegs.length > 0 ? 'Provisional expected value: one or more legs require a value review' : 'Expected value based on the recorded model probabilities and odds'}>
             <span className="stat-label">Ticket EV</span>
             <span className={`stat-value ${flaggedLegs.length > 0 ? 'review' : evPositive ? 'positive' : 'neutral'}`}>
@@ -177,12 +164,6 @@ export default function TicketCard({ ticket, tierName, tierDesc, color, research
           </div>
           </>)}
         </div>
-        {marketPriced && (
-          <p className="fair-price-note">
-            Built for the best chance of winning at these odds, not for value. Chances come from bookmaker prices
-            with their margin removed. Over many tickets, expect to lose roughly the margin shown above.
-          </p>
-        )}
         {(flaggedLegs.length > 0 || settlementPending) && (
           <div className="ticket-alerts">
             {flaggedLegs.length > 0 && <div className="value-review-note"><strong>Value check</strong><span>{flaggedLegs.length} leg{flaggedLegs.length === 1 ? '' : 's'} show unusually large model/odds gaps. Treat edge and EV as provisional until market mapping and odds freshness are checked.</span></div>}
@@ -221,6 +202,29 @@ export default function TicketCard({ ticket, tierName, tierDesc, color, research
               : 'Probability evidence can enter future offline challenger windows; ROI learning is excluded where pre-kickoff odds provenance is incomplete.'}</span>
           </div>
         )}
+        <details className="ticket-secondary-details">
+          <summary>Risk, model and publication details</summary>
+          <div className="ticket-secondary-metrics">
+            <div className="stat" title="Higher scores indicate a riskier accumulator">
+              <span className="stat-label">Risk score</span>
+              <span className={`stat-value risk-${riskTone}`}>{ticket.risk_score == null ? 'Pro only' : `${ticket.risk_score.toFixed(0)}/100`}</span>
+            </div>
+            {!marketPriced && <>
+              <div className="stat" title="Average Q-score across all ticket legs">
+                <span className="stat-label">Average Q-score</span>
+                <span className="stat-value neutral">{ticket.avg_q_score == null ? 'Pro only' : ticket.avg_q_score.toFixed(1)}</span>
+              </div>
+              <div className="stat" title="Average model edge across all ticket legs">
+                <span className="stat-label">Average edge</span>
+                <span className={flaggedLegs.length > 0 ? 'stat-value review' : ticket.avg_edge == null ? 'stat-value neutral' : 'stat-value positive'}>{flaggedLegs.length > 0 ? 'Review' : ticket.avg_edge == null ? '—' : PCT(ticket.avg_edge)}</span>
+              </div>
+            </>}
+          </div>
+          <div className="ticket-audit">
+            <span>Version {ticket.version} · model {ticket.model_version}</span>
+            <span title={ticket.publication_hash}>Publication hash {ticket.publication_hash.slice(0, 10)}…</span>
+          </div>
+        </details>
         {suggestedStake != null && !marketPriced && <div className="ticket-stake-suggestion"><div><span>What-if · half Kelly</span><strong>{suggestedStake > 0 && ticket.combined_odds != null ? `${fmt(suggestedStake)} stake` : 'No positive edge'}</strong></div>{suggestedStake > 0 && ticket.combined_odds != null && <div className="ticket-stake-outcomes"><span>Potential return <b>{fmt(suggestedStake * ticket.combined_odds)}</b></span><span>Potential P&amp;L <b className="positive">+{fmt(suggestedStake * (ticket.combined_odds - 1))}</b></span></div>}</div>}
       </div>
 
@@ -277,10 +281,6 @@ export default function TicketCard({ ticket, tierName, tierDesc, color, research
           <span aria-hidden="true">{showAllLegs ? '↑' : '↓'}</span>
         </button>
       )}
-      <div className="ticket-audit">
-        <span>v{ticket.version} · model {ticket.model_version}</span>
-        <span title={ticket.publication_hash}>Hash {ticket.publication_hash.slice(0, 10)}…</span>
-      </div>
     </div>
   )
 }

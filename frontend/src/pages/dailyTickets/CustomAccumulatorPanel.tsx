@@ -19,14 +19,17 @@ export function CustomAccumulatorPanel({
   onUpdate,
   onDelete,
   onNavigate,
+  onOpenPicks,
 }: {
   date: string;
   tickets: CustomAccumulator[];
   onCreate: (name: string) => Promise<void>;
   onUpdate: (ticket: CustomAccumulator, update: Partial<CustomAccumulator>) => Promise<void>;
   onDelete: (ticket: CustomAccumulator) => Promise<void>;
-  onNavigate: (tab: DailyTab) => void;
+  onNavigate?: (tab: DailyTab) => void;
+  onOpenPicks?: () => void;
 }) {
+  const openPicks = () => onOpenPicks ? onOpenPicks() : onNavigate?.("best-mix");
   const [name, setName] = useState("");
   const [stakeDrafts, setStakeDrafts] = useState<Record<number, string>>({});
   const create = async () => {
@@ -95,10 +98,10 @@ export function CustomAccumulatorPanel({
       </div>
       {tickets.length === 0 ? (
         <div className="custom-empty-state">
-          <strong>No drafts yet</strong>
+          <strong>No accumulators for this date</strong>
           <p>Create a draft, then add selections from qualifying Best-mix picks.</p>
           <div className="custom-empty-actions">
-            <button className="btn-ghost btn-sm" onClick={() => onNavigate("best-mix")}>View qualifying picks</button>
+            <button className="btn-ghost btn-sm" onClick={openPicks}>{onOpenPicks ? "Open Research" : "View qualifying picks"}</button>
           </div>
         </div>
       ) : (
@@ -156,7 +159,7 @@ export function CustomAccumulatorPanel({
                     <strong>No selections yet</strong>
                     <span>Add at least two selections before marking this accumulator placed.</span>
                     <div className="custom-empty-actions">
-                      <button className="btn-ghost btn-sm" onClick={() => onNavigate("best-mix")}>Add qualifying picks</button>
+                      <button className="btn-ghost btn-sm" onClick={openPicks}>{onOpenPicks ? "Open Research" : "Add qualifying picks"}</button>
                     </div>
                   </div>
                 ) : (
