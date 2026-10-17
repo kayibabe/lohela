@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import "./MarketRoiDaily.css";
 
 interface MarketRoiRow {
@@ -73,6 +73,8 @@ const localDateTime = (value: string) => new Intl.DateTimeFormat(undefined, {
 }).format(new Date(value));
 
 export function MarketRoiDaily({ data, error }: { data: MarketRoiDailyData | null; error: string | null }) {
+  const [minimumQuality, setMinimumQuality] = useState("all");
+  const [grade, setGrade] = useState("all");
   const fixtures = useMemo(() => {
     const grouped = new Map<number, MarketCandidate[]>();
     for (const candidate of data?.candidates ?? []) {
@@ -83,6 +85,11 @@ export function MarketRoiDaily({ data, error }: { data: MarketRoiDailyData | nul
     }
     return [...grouped.values()];
   }, [data?.candidates]);
+  const filteredFixtures = useMemo(() => fixtures
+    .map((rows) => rows.filter((row) =>
+      (minimumQuality === "all" || row.q_score >= Number(minimumQuality)) &&
+      (grade === "all" || row.q_grade.trim().toUpperCase() === grade)))
+    .filter((rows) => rows.length > 0), [fixtures, minimumQuality, grade]);
 
   return (
     <section className="market-roi-panel">
@@ -141,8 +148,24 @@ export function MarketRoiDaily({ data, error }: { data: MarketRoiDailyData | nul
 
         <div className="market-roi-table-wrap market-roi-candidates">
           <h3>Today’s qualified picks and results</h3>
+          <div className="market-roi-filters">
+            <label>Quality Score (Q)
+              <select value={minimumQuality} onChange={(event) => setMinimumQuality(event.target.value)}>
+                <option value="all">All</option>
+                {[50, 60, 70, 80, 90].map((score) => <option key={score} value={score}>{score} and above</option>)}
+              </select>
+            </label>
+            <label>Grade
+              <select value={grade} onChange={(event) => setGrade(event.target.value)}>
+                <option value="all">All</option>
+                {["A+", "A", "B+", "B", "C"].map((value) => <option key={value} value={value}>{value}</option>)}
+              </select>
+            </label>
+            <span role="status">Showing {filteredFixtures.length} of {fixtures.length} matches · {filteredFixtures.reduce((count, rows) => count + rows.length, 0)} selections</span>
+          </div>
           {fixtures.length === 0 ? <p className="panel-empty">No upcoming match currently clears the historical ROI and recommendation gates with a valid pre-kickoff quote.</p> : (
-            <div className="market-roi-fixtures">{fixtures.map((rows) => {
+            filteredFixtures.length === 0 ? <p className="panel-empty">No selections match these filters. Choose All or lower the Quality Score threshold.</p> :
+            <div className="market-roi-fixtures">{filteredFixtures.map((rows) => {
               const fixture = rows[0];
               return <article className="market-roi-fixture" key={fixture.match_id}>
                 <div className="market-roi-fixture-title">

@@ -4362,6 +4362,30 @@ body { line-height: 1.6; }
 .match-card .match-card-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; overflow: visible; }
 .match-card .match-card-metrics > span { display: grid; align-content: start; gap: 4px; min-width: 0; }
 .match-card .match-card-metrics small { display: block !important; margin: 0 !important; white-space: normal; }
+
+/* Keep published ticket cards comfortably readable on narrow screens. */
+.public-ticket-grid .ticket-name,
+.research-ticket-wrap .ticket-name { font-size: 15px; }
+.public-ticket-grid .ticket-card .stat-label,
+.research-ticket-wrap .ticket-card .stat-label { font-size: 12px; line-height: 1.35; }
+.public-ticket-grid .stat-value,
+.research-ticket-wrap .stat-value { font-size: 16px; line-height: 1.35; }
+.public-ticket-grid .stat-sub,
+.research-ticket-wrap .stat-sub { font-size: 12px; }
+.public-ticket-grid .version-badge,
+.research-ticket-wrap .version-badge,
+.public-ticket-grid .ticket-status-badge,
+.research-ticket-wrap .ticket-status-badge { font-size: 11px; }
+.public-ticket-grid .ticket-summary,
+.research-ticket-wrap .ticket-summary { min-height: 40px; font-size: 12px; }
+.public-ticket-grid .ticket-summary-label > span,
+.research-ticket-wrap .ticket-summary-label > span { font-size: 12px; }
+.public-ticket-grid .ticket-result-chip,
+.research-ticket-wrap .ticket-result-chip { padding: 3px 7px; font-size: 11px; }
+.public-ticket-grid .ticket-secondary-details,
+.research-ticket-wrap .ticket-secondary-details { font-size: 12px; }
+.public-ticket-grid .ticket-audit,
+.research-ticket-wrap .ticket-audit { font-size: 11px; }
 .match-card .match-card-metrics b { display: block; overflow-wrap: anywhere; white-space: normal; }
 .match-card .market-stat { display: grid; grid-template-columns: max-content minmax(0, 1fr); align-items: baseline; gap: 3px 6px; }
 .match-card .market-stat > small:not(.market-quote-meta) { display: inline-flex !important; margin: 0 !important; white-space: nowrap; }

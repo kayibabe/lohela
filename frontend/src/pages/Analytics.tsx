@@ -73,7 +73,6 @@ export default function AnalyticsPage() {
   const [view, setView] = useState<View>('performance')
   const [researchView, setResearchView] = useState<ResearchView>('calibration')
   const [research, setResearch] = useState<ResearchSummary | null>(null)
-  const [autoResearch, setAutoResearch] = useState<IndividualSummary | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(false)
   const [latestRun, setLatestRun] = useState<PipelineRun | null>(null)
@@ -108,25 +107,36 @@ export default function AnalyticsPage() {
       {!loading && error && view === 'performance' && <AnalyticsEmpty title="Performance data is unavailable" body="Check the API connection and try again. Other research views may still be available." />}
       {!loading && view === 'performance' && <ResearchPerformance data={research} />}
       {!loading && view === 'ledger' && <PickLedger />}
-      {!loading && view === 'methods' && researchView === 'market' && <AutoMarketResearch data={autoResearch} setData={setAutoResearch} />}
+      {!loading && view === 'methods' && researchView === 'market' && <AutoMarketResearch />}
       {!loading && view === 'methods' && researchView === 'calibration' && <ProbabilityCalibration />}
       {!loading && view === 'methods' && researchView === 'backtest' && <BacktestPanel currentModelVersion={research?.current_model_version ?? ''} />}
     </div>
   )
 }
 
-function AutoMarketResearch({ data, setData }: { data: IndividualSummary | null; setData: (value: IndividualSummary | null) => void }) {
+function AutoMarketResearch() {
+  const [data, setData] = useState<IndividualSummary | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [failed, setFailed] = useState(false)
+  const [retry, setRetry] = useState(0)
   const [dateFrom, setDateFrom] = useState('')
   const [dateTo, setDateTo] = useState('')
   useEffect(() => {
+    const controller = new AbortController()
+    setLoading(true)
+    setFailed(false)
     const params = new URLSearchParams({ stake: '1' })
     if (dateFrom) params.set('date_from', dateFrom)
     if (dateTo) params.set('date_to', dateTo)
-    fetch(`/api/v1/performance/all-markets?${params}`)
-      .then(response => response.ok ? response.json() : null)
-      .then(setData)
-      .catch(() => setData(null))
-  }, [dateFrom, dateTo, setData])
+    fetch(`/api/v1/performance/all-markets?${params}`, { signal: controller.signal })
+      .then(response => response.ok ? response.json() : Promise.reject(new Error(`API ${response.status}`)))
+      .then(value => { setData(value); setFailed(false) })
+      .catch(error => { if (error.name !== 'AbortError') { setData(null); setFailed(true) } })
+      .finally(() => { if (!controller.signal.aborted) setLoading(false) })
+    return () => controller.abort()
+  }, [dateFrom, dateTo, retry])
+  if (loading) return <AnalyticsSkeleton />
+  if (failed && !data) return <div><AnalyticsEmpty title="Market research unavailable" body="The all-market research request failed. Check the API connection and retry." /><button className="btn-ghost btn-sm" onClick={() => setRetry(value => value + 1)}>Retry market research</button></div>
   if (!data) return <AnalyticsEmpty title="No automatic research data" body="Eligible predictions with frozen odds will appear after model and result ingestion." />
   const excluded = (data.excluded_missing_odds ?? 0) + (data.excluded_post_kickoff_information ?? 0) + (data.excluded_post_kickoff_odds ?? 0)
   return <><div className="journal-note"><strong>Automatic all-market research</strong><span>Every latest prediction with a valid pre-kickoff information timestamp and odds snapshot is evaluated. This does not create bets or alter the paper ledger.</span></div><div className="analytics-filters shared-analytics-filters" aria-label="Automatic research date scope"><span className="filter-scope-label">Scope</span><label>From<input type="date" value={dateFrom} onChange={event => setDateFrom(event.target.value)} /></label><label>To<input type="date" value={dateTo} onChange={event => setDateTo(event.target.value)} /></label>{(dateFrom || dateTo) && <button className="btn-ghost btn-sm" onClick={() => { setDateFrom(''); setDateTo('') }}>Reset scope</button>}<span className="filter-summary">Only predictions and prices available before kickoff are eligible.</span></div><div className="research-kpis"><MetricCard label="Eligible predictions" value={data.eligible_predictions?.toString() ?? '—'} /><MetricCard label="Settled" value={data.settled_predictions?.toString() ?? '—'} /><MetricCard label="Net P&amp;L" value={fmtPnl(data.overall.pnl)} tone={data.overall.pnl >= 0 ? 'positive' : 'negative'} /><MetricCard label="ROI" value={pct(data.overall.roi)} tone={data.overall.roi >= 0 ? 'positive' : 'negative'} /></div>{excluded > 0 && <div className="sample-warning">Evidence exclusions: {excluded} rows omitted ({data.excluded_post_kickoff_information ?? 0} post-kickoff predictions, {data.excluded_post_kickoff_odds ?? 0} post-kickoff quotes, {data.excluded_missing_odds ?? 0} missing/invalid odds).</div>}<SortableIndividualTable title="By day" rows={data.by_date} /><SortableIndividualTable title="By month" rows={data.by_month} /><SortableIndividualTable title="By year" rows={data.by_year} /><SortableIndividualTable title="By market" rows={data.by_market} market /><SortableIndividualTable title="By league" rows={data.by_competition} /><SortableIndividualTable title="By odds band" rows={data.by_odds_band ?? []} /><SortableIndividualTable title="By probability band" rows={data.by_probability_band ?? []} /><SortableIndividualTable title="By grade" rows={data.by_grade ?? []} /><ClvPanel /></>
